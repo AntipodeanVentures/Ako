@@ -3,7 +3,7 @@
 // Request: { subject, topicId, lesson?, mode: 'tutor' | 'student' | 'roleplay', scenario?, messages: [{ role, content }] }
 // Response: ndjson events: text deltas, then { type: 'done', data: { text } }
 
-import { tutorRules, topicById, METHOD, arr, str } from '../../../src/engine/index.js';
+import { tutorRules, topicById, METHOD, arr, str } from '../_shared/engine/index.js';
 import { CORS, errorResponse, requireCaller, HttpError } from '../_shared/auth.ts';
 import { MODELS } from '../_shared/limits.ts';
 import { checkLimit, recordUsage } from '../_shared/metering.ts';
@@ -23,7 +23,7 @@ Deno.serve(async (req) => {
     const topic = body.topicId ? topicById(subject, body.topicId) : null;
     const rules = tutorRules(subject, topic, body.lesson ?? null, body.mode ?? 'tutor', body.scenario ?? null);
     // The transcript is capped so a long role-play cannot run away with tokens.
-    const messages = arr(body.messages).slice(-24).map((m: { role: string; content: string }) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: str(m.content, 4000) }));
+    const messages = arr(body.messages).slice(-24).map((m: { role: string; content: string }) => ({ role: (m.role === 'assistant' ? 'assistant' : 'user') as 'assistant' | 'user', content: str(m.content, 4000) }));
     if (!messages.length || messages[messages.length - 1].role !== 'user') throw new HttpError(400, 'bad_request', 'The last message must be from the learner.');
 
     return ndjsonStream(async (emit) => {

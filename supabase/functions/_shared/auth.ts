@@ -1,7 +1,7 @@
 // Turns the caller's Supabase session token into a profile id, and gives the functions a
 // service-role client for metering and the cache (which clients cannot touch under RLS).
 
-import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 export type Caller = { profileId: string; tier: 'free' | 'pro'; admin: SupabaseClient };
 

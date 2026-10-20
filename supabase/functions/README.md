@@ -14,13 +14,15 @@ Five Deno edge functions, one per kind of call. The model key lives here and now
 (session token to profile id, plus a service-role client), metering against the `usage` table, the lesson
 cache, the limits and the ndjson streaming helper.
 
-They import the engine from `../../../src/engine/index.js`; the Supabase CLI bundles relative imports.
+They import the engine from `_shared/engine/`, a copy of `src/engine` made by `npm run functions:sync`
+(the bundler only sees files under `supabase/functions`). `npm run functions:deploy` syncs and deploys in one step.
+`deno.json` maps the `ts-fsrs` import to its npm package for Deno.
 
 ## Deploy
 
 ```
 supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
-supabase functions deploy plan lesson grade tutor extract
+npm run functions:deploy
 ```
 
 Optional secrets `MODEL_FRONTIER`, `MODEL_MID`, `MODEL_SMALL` override the model names in `_shared/limits.ts`.

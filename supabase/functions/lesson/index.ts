@@ -6,7 +6,7 @@
 
 import {
   lessonPrompt, morePracticePrompt, warmupPrompt, normaliseLesson, normaliseWarm, normQ, topicById, pitchOf, METHOD, arr,
-} from '../../../src/engine/index.js';
+} from '../_shared/engine/index.js';
 import { CORS, errorResponse, requireCaller, HttpError } from '../_shared/auth.ts';
 import { cacheKey, readCache, writeCache } from '../_shared/cache.ts';
 import { MODELS } from '../_shared/limits.ts';

@@ -10,7 +10,10 @@
     "lint": "expo lint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "functions:sync": "node scripts/sync-engine.mjs",
+    "functions:deploy": "npm run functions:sync && supabase functions deploy plan lesson grade tutor extract",
+    "schema:bundle": "(echo '-- Ako schema: all six migrations in order, for one paste into the Supabase SQL editor.'; echo '-- Generated from supabase/migrations/*.sql; run `npm run schema:bundle` to regenerate. Safe to re-run: every statement is idempotent.'; echo; cat supabase/migrations/*.sql) > supabase/schema.sql"
   },
   "dependencies": {
     "@expo-google-fonts/instrument-sans": "^0.4.1",

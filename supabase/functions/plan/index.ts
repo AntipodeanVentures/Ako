@@ -4,7 +4,7 @@
 // Request: { intake: { subject, target, current, hours, background, why, syllabus, role? }, coverTo: 's2' }
 // Response: ndjson events: text deltas, then { type: 'done', data: { plan } }
 
-import { planPrompt, reviewPlanPrompt, normalisePlan, METHOD } from '../../../src/engine/index.js';
+import { planPrompt, reviewPlanPrompt, normalisePlan, METHOD } from '../_shared/engine/index.js';
 import { CORS, errorResponse, requireCaller } from '../_shared/auth.ts';
 import { MODELS } from '../_shared/limits.ts';
 import { checkLimit, recordUsage } from '../_shared/metering.ts';

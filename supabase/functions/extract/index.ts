@@ -8,7 +8,7 @@
 
 import {
   knowPrompt, startPrompt, rolePrompt, modelPrompt, normaliseKnow, normaliseStart, normaliseRole, normaliseModel, topicById, METHOD, str,
-} from '../../../src/engine/index.js';
+} from '../_shared/engine/index.js';
 import { CORS, errorResponse, json, requireCaller, HttpError } from '../_shared/auth.ts';
 import { MODELS } from '../_shared/limits.ts';
 import { checkLimit, recordUsage } from '../_shared/metering.ts';
