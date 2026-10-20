@@ -60,7 +60,7 @@ export async function fetchTopicState(subjectId: string): Promise<TopicStateRow[
   return (data ?? []) as TopicStateRow[];
 }
 
-export async function upsertTopicState(row: Omit<TopicStateRow, 'updated_at'>): Promise<void> {
+export async function upsertTopicState(row: Omit<TopicStateRow, 'updated_at' | 'extra'> & { extra?: Record<string, unknown> }): Promise<void> {
   const { error } = await getSupabase()
     .from('topic_state')
     .upsert({ ...row, updated_at: new Date().toISOString() }, { onConflict: 'subject_id,topic_id' });

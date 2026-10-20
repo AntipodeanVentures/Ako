@@ -49,27 +49,33 @@ export type SubjectRow = {
 
 export type TopicStateRow = {
   subject_id: string;
+  profile_id: string;
   topic_id: string;
-  status: TopicStatus;
+  status: Exclude<TopicStatus, 'locked' | 'available'>;
   correct: number;
   misses: number;
   relearn_days: string[];
   jol: number | null;
   jol_actual: number | null;
   mastered_at: string | null;
+  extra: Record<string, unknown>;
   updated_at: string;
 };
 
 export type StageStateRow = {
   subject_id: string;
+  profile_id: string;
   stage_id: string;
   reached_at: string | null;
   score: number | null;
+  total: number | null;
+  placed: boolean;
   checked_at: string | null;
 };
 
 export type ActivityRow = {
   subject_id: string;
+  profile_id: string;
   day: string; // YYYY-MM-DD
   lesson_minutes: number;
   review_minutes: number;
@@ -82,18 +88,22 @@ export type CardRow = {
   topic_id: string;
   front: string;
   back: string;
-  concept: string | null;
+  concept: number | null;
+  concept_name: string | null;
   due: string;
   stability: number;
   difficulty: number;
   elapsed_days: number;
   scheduled_days: number;
+  learning_steps: number;
   reps: number;
   lapses: number;
   state: number;
   last_review: string | null;
+  learned_day: string | null;
   relearn_days: string[];
-  first_review: Record<string, unknown> | null;
+  first_review: { at: number; ok: boolean } | null;
+  reviews: number;
   created_at: string;
 };
 
@@ -101,6 +111,7 @@ export type ReviewLogRow = {
   id: string;
   card_id: string;
   profile_id: string;
+  subject_id: string;
   rating: number;
   elapsed_days: number;
   scheduled_days: number;
