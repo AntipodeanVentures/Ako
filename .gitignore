@@ -47,3 +47,6 @@ app-example
 # Claude Code local files
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+
+# function bundles (scripts/bundle-functions.sh)
+build/

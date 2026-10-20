@@ -4,9 +4,19 @@ A running list of outstanding tasks. Tick items off as they are done.
 
 ## Before anyone else uses it
 
-- [ ] Supabase project created (UK or EU), migrations applied, `.env` filled.
-- [ ] `ANTHROPIC_API_KEY` set as a function secret with a monthly spend limit
-      on the key; functions deployed and smoke-tested from the command line.
+- [x] Supabase project created (eu-west-1), migrations 0001 to 0007 applied,
+      `.env.development` filled with the public URL and key.
+- [x] All five functions deployed and answering (20 October 2026).
+- [ ] `ANTHROPIC_API_KEY` set as a function secret (Project Settings, Edge
+      Functions, Secrets) with a monthly spend limit on the key, then one
+      signed-in smoke test of `plan`.
+- [ ] `delete_account` was left out of the live 0001 migration (it deletes
+      from `auth.users`, which the migration tool refused). Apply it by hand
+      from `supabase/migrations/0001_initial.sql` before the delete-account
+      screen ships.
+- [ ] Decide on email confirmation. It is on by default, so the first sign-up
+      waits for an email from Supabase's rate-limited sender; turn it off for
+      the beta or set up custom SMTP first.
 - [ ] Icon, splash and adaptive icon art. The files under `assets/images/`
       are Thrive's and must be replaced before any build leaves the laptop.
 - [ ] Custom SMTP for auth emails (Resend, SendGrid or SES); the built-in
