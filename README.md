@@ -23,12 +23,16 @@ TanStack Query feature modules, and EAS builds.
 ## Get started
 
 1. `npm install`
-2. `npx expo install expo-speech expo-image-picker` (adds the speech and
-   camera modules at the versions that match this SDK)
-3. Copy `.env.example` to `.env` and fill in the Supabase values.
-4. Apply `supabase/migrations/*.sql` in order (SQL editor or `supabase db push`).
-5. `supabase secrets set ANTHROPIC_API_KEY=...` then `supabase functions deploy`.
-6. `npx expo start`
+2. `npx expo start` (press `w` for the web preview, or scan the QR code with
+   Expo Go on your phone)
+
+`.env.development` already points at the development Supabase project, whose
+schema and edge functions are deployed. Only the model key is set by hand, as
+a function secret in the Supabase dashboard (`ANTHROPIC_API_KEY`).
+
+For a fresh project: apply `supabase/schema.sql` in the SQL editor, run
+`npm run functions:deploy`, set the secret, and put the new project's URL and
+publishable key in `.env`.
 
 `npm test` runs the engine tests. `npm run typecheck` runs the compiler.
 
