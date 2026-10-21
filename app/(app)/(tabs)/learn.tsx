@@ -12,6 +12,7 @@ export default function LearnScreen() {
 
   const start = (step: ReturnType<typeof nextStep>) => {
     if (step.kind === 'review') router.push('/review');
+    else if (step.kind === 'check') router.push({ pathname: '/check/[subjectId]', params: { subjectId: step.subject.id, stageId: step.stageId } });
     else if (step.kind === 'topic') router.push({ pathname: '/session/[subjectId]', params: { subjectId: step.subject.id, topicId: step.topic.id } });
     else router.push('/goal');
   };

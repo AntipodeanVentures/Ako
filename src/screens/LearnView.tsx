@@ -44,7 +44,15 @@ export function LearnView({ subjects, loading, onStart, onOpenSubject, onAddSubj
         {loading ? <Skeleton height={23} width="80%" /> : <Text variant="body">{todayLine(subjects)}</Text>}
         <View style={{ marginTop: spacing.md }}>
           <Button
-            label={step.kind === 'review' ? 'Start reviews' : step.kind === 'topic' ? 'Start' : 'Add a subject'}
+            label={
+              step.kind === 'review'
+                ? 'Start reviews'
+                : step.kind === 'check'
+                  ? `Take the ${step.stageName} level check`
+                  : step.kind === 'topic'
+                    ? 'Start'
+                    : 'Add a subject'
+            }
             onPress={() => onStart(step)}
             disabled={loading}
           />

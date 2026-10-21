@@ -1,12 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 
-import { Ladder, Text } from '@/src/components/ui';
-import { STAGES } from '@/src/engine/ladder';
-import { estimateText, stagePosition, stageProgress, topicStatus } from '@/src/engine/progress';
+import { Button, Ladder, Text } from '@/src/components/ui';
+import { STAGES, stageName } from '@/src/engine/ladder';
+import { estimateText, levelCheckReady, stagePosition, stageProgress, topicStatus } from '@/src/engine/progress';
 import type { StageId, Topic } from '@/src/engine/types';
-import type { LiveSubject } from '@/src/features/subjects';
+import { aiErrorCopy } from '@/src/features/ai/client';
+import { useInvalidateSubject, type LiveSubject } from '@/src/features/subjects';
+import { extendPlanTo, nextStageToPlan } from '@/src/features/subjects/extend';
 import { subjectLine } from '@/src/features/subjects/summary';
 import { useTheme } from '@/src/theme';
 
@@ -25,6 +28,25 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
   const targetDef = STAGES.find((s) => s.id === target);
   const targetEst = estimateText(subj, target);
   const markers = subj.plan.stages.map((s) => s.equivalent || null);
+  const checkStage = levelCheckReady(subj) as { id: string; name: string } | null;
+  // A level reached but not yet planned (the extension failed, or the target moved).
+  const toPlan = !pos.inPlan && !pos.done ? nextStageToPlan(subj) : null;
+  const invalidate = useInvalidateSubject();
+  const [extending, setExtending] = useState(false);
+  const [extendError, setExtendError] = useState<string | null>(null);
+  const extend = async () => {
+    if (!toPlan) return;
+    setExtending(true);
+    setExtendError(null);
+    try {
+      await extendPlanTo(subj, toPlan);
+      invalidate();
+    } catch (e) {
+      setExtendError(aiErrorCopy(e));
+    } finally {
+      setExtending(false);
+    }
+  };
 
   return (
     <View>
@@ -39,6 +61,32 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
         </Text>
         {def?.means ? <Text variant="body">{def.means}</Text> : null}
       </View>
+
+      {checkStage ? (
+        <View style={{ marginTop: spacing.lg, gap: spacing.sm }}>
+          <Text variant="body" color="textMuted">
+            Every {checkStage.name} topic is learned and three days have passed. The level check is from memory, eight to ten questions.
+          </Text>
+          <Button
+            label={`Take the ${checkStage.name} level check`}
+            onPress={() => router.push({ pathname: '/check/[subjectId]', params: { subjectId: subj.id, stageId: checkStage.id } })}
+          />
+        </View>
+      ) : null}
+
+      {toPlan ? (
+        <View style={{ marginTop: spacing.lg, gap: spacing.sm }}>
+          <Text variant="body" color="textMuted">
+            The {stageName(toPlan)} topics have not been written yet.
+          </Text>
+          <Button label={`Write the ${stageName(toPlan)} topics`} onPress={extend} loading={extending} variant="secondary" />
+          {extendError ? (
+            <Text variant="caption" color="danger">
+              {extendError}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
 
       {def?.outcomes?.length ? (
         <View style={{ marginTop: spacing.xl, gap: spacing.sm }}>

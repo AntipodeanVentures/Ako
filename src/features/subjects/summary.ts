@@ -4,6 +4,7 @@ import {
   dueCards,
   estimateText,
   learnedCount,
+  levelCheckReady,
   nextStageEstimate,
   nextTopic,
   stagePosition,
@@ -18,6 +19,7 @@ import type { LiveSubject } from './context';
 
 export type NextStep =
   | { kind: 'review'; count: number }
+  | { kind: 'check'; subject: LiveSubject; stageId: string; stageName: string }
   | { kind: 'topic'; subject: LiveSubject; topic: Topic }
   | { kind: 'none' };
 
@@ -30,10 +32,15 @@ export function dueCount(subjects: LiveSubject[]): number {
   return subjects.reduce((n, s) => n + dueCards(s.cards ?? []).length, 0);
 }
 
-// The thing to do now: reviews first (they are the evidence), then one new topic.
+// The thing to do now: reviews first (they are the evidence), then a level
+// check that has come due, then one new topic.
 export function nextStep(subjects: LiveSubject[]): NextStep {
   const due = dueCount(subjects);
   if (due > 0) return { kind: 'review', count: due };
+  for (const s of subjects) {
+    const stage = levelCheckReady(s);
+    if (stage) return { kind: 'check', subject: s, stageId: stage.id, stageName: stage.name };
+  }
   // The subject studied least recently gets the new topic, so none goes stale.
   const ordered = [...subjects].sort((a, b) => Number(a.stats.lastStudied || 0) - Number(b.stats.lastStudied || 0));
   for (const s of ordered) {
@@ -56,7 +63,8 @@ export function todayLine(subjects: LiveSubject[]): string {
   })();
   const parts: string[] = [];
   if (due) parts.push(`${due} ${due === 1 ? 'review' : 'reviews'}${subjects.length > 1 ? ' across your subjects' : ''}`);
-  const nt = topicStep ? topicStep.topic : firstTopic?.t;
+  if (step.kind === 'check') parts.push(`${due ? 'then ' : ''}the ${step.stageName} level check in ${step.subject.plan.title}`);
+  const nt = topicStep ? topicStep.topic : step.kind === 'check' ? null : firstTopic?.t;
   if (nt) parts.push(`${due ? 'then ' : ''}one new idea: ${nt.title.toLowerCase()}`);
   if (!parts.length) return 'Nothing due. Add a subject to keep going.';
   const line = parts.join(', ');
