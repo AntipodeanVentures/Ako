@@ -10,6 +10,8 @@ import {
 import { env } from '@/src/lib/env';
 import { getSupabase } from '@/src/lib/supabase';
 
+import { confirmRedirect } from './redirects';
+
 type SignUpParams = {
   email: string;
   password: string;
@@ -54,7 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data, error } = await getSupabase().auth.signUp({
       email,
       password,
-      options: { data: { display_name: displayName } },
+      options: { data: { display_name: displayName }, emailRedirectTo: confirmRedirect() },
     });
     if (error) throw error;
     // When email confirmation is enabled, no session is returned until the

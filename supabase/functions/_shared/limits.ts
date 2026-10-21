@@ -3,6 +3,11 @@
 
 export type Tier = 'free' | 'pro';
 
+// During the private beta (BETA_UNLIMITED unset or "true") every account gets the Pro ceilings, which exist
+// only so a runaway loop cannot run up the bill. Set BETA_UNLIMITED=false as a function secret to turn the
+// free tier on when pricing lands.
+export const BETA_UNLIMITED = (Deno.env.get('BETA_UNLIMITED') ?? 'true') !== 'false';
+
 export const LIMITS: Record<Tier, { lessonsPerWeek: number; gradesPerDay: number; tutorTurnsPerDay: number; plansPerWeek: number }> = {
   free: { lessonsPerWeek: 3, gradesPerDay: 40, tutorTurnsPerDay: 30, plansPerWeek: 2 },
   // Pro has a soft daily cap so a runaway loop cannot run up the bill; the app shows a friendly message.

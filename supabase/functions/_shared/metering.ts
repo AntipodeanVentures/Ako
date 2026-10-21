@@ -2,7 +2,7 @@
 
 import type { Caller } from './auth.ts';
 import { HttpError } from './auth.ts';
-import { LIMITS } from './limits.ts';
+import { BETA_UNLIMITED, LIMITS } from './limits.ts';
 
 export type Kind = 'plan' | 'lesson' | 'grade' | 'tutor' | 'extract';
 
@@ -11,15 +11,16 @@ export async function checkLimit(caller: Caller, kind: Kind): Promise<void> {
   if (error) { console.error(error); return; } // never block a learner on a metering read failure
   const rows = (data ?? []) as { kind: string; today: number; week: number }[];
   const row = rows.find((r) => r.kind === kind) ?? { kind, today: 0, week: 0 };
-  const lim = LIMITS[caller.tier];
+  const lim = LIMITS[BETA_UNLIMITED ? 'pro' : caller.tier];
+  const tier = BETA_UNLIMITED ? 'pro' : caller.tier;
   const over =
     (kind === 'lesson' && row.week >= lim.lessonsPerWeek) ||
     (kind === 'plan' && row.week >= lim.plansPerWeek) ||
     (kind === 'grade' && row.today >= lim.gradesPerDay) ||
     (kind === 'tutor' && row.today >= lim.tutorTurnsPerDay);
   if (over) {
-    throw new HttpError(429, caller.tier === 'free' ? 'free_limit' : 'daily_limit',
-      caller.tier === 'free'
+    throw new HttpError(429, tier === 'free' ? 'free_limit' : 'daily_limit',
+      tier === 'free'
         ? 'You have used this week\'s free lessons. Reviews stay free; Pro removes the limit.'
         : 'You have hit today\'s ceiling. It resets at midnight; reviews are unaffected.');
   }

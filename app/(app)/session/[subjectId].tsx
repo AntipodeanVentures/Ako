@@ -53,8 +53,11 @@ function SessionScreen({ subj, topicId, retention }: { subj: LiveSubject; topicI
   const stepLabel: Record<string, string> = {
     warm: 'Warm-up',
     learn: 'Learn',
+    drill: 'Practise away from the screen',
     recall: 'Recall, from memory',
     practice: 'Practise',
+    teach: 'Teach it back',
+    roleplay: 'Role-play',
     done: 'Done',
   };
 
@@ -80,7 +83,10 @@ function SessionScreen({ subj, topicId, retention }: { subj: LiveSubject; topicI
         {s.step === 'warm' ? <WarmStep S={S} /> : null}
         {s.step === 'learn' && s.lesson ? <LearnStep S={S} /> : null}
         {s.step === 'recall' ? <RecallStep S={S} /> : null}
+        {s.step === 'drill' && s.lesson?.drill ? <DrillStep S={S} /> : null}
         {s.step === 'practice' ? <PracticeStep S={S} item={currentItem} /> : null}
+        {s.step === 'teach' ? <TeachStep S={S} /> : null}
+        {s.step === 'roleplay' ? <RoleplayStep S={S} /> : null}
         {s.step === 'done' ? <DoneStep S={S} onClose={() => router.replace('/learn')} /> : null}
       </View>
     </Screen>
@@ -468,17 +474,21 @@ function DoneStep({ S, onClose }: { S: SessionApi; onClose: () => void }) {
   const sum = s.summary;
   return (
     <View style={{ gap: spacing.xl }}>
-      <Text variant="prose">Learned.</Text>
+      <Text variant="prose">{sum?.motorPending ? 'Learned. Now practise it.' : 'Learned.'}</Text>
       {sum ? (
         <View>
           <Row label="Practice" value={`${sum.correct} of ${sum.asked} right`} />
+          {sum.roleplay ? <Row label="Role-play" value={`${Math.round(sum.roleplay.mean * 100)}% of the criteria`} /> : null}
+          {sum.taught ? <Row label="Taught back" value="Yes" /> : null}
           <Row label="Cards for review" value={String(sum.added)} />
           {sum.firstDue ? <Row label="First review" value={fmtDate(sum.firstDue)} /> : null}
           <Row label="Time" value={`${sum.minutes} min`} last />
         </View>
       ) : null}
       <Text variant="body" color="textMuted">
-        It counts as evidence once the reviews hold up over the coming days, so come back when the cards are due.
+        {sum?.motorPending
+          ? 'The topic stays in practice until you log a session away from the screen where every check passed.'
+          : 'It counts as evidence once the reviews hold up over the coming days, so come back when the cards are due.'}
       </Text>
       <Footer>
         {s.busy === 'Saving' ? <Waiting label="Saving" /> : <Button label="Back to today" onPress={onClose} />}
@@ -505,6 +515,200 @@ function Row({ label, value, last }: { label: string; value: string; last?: bool
         {label}
       </Text>
       <Text variant="bodyStrong">{value}</Text>
+    </View>
+  );
+}
+
+function DrillStep({ S }: { S: SessionApi }) {
+  const { s } = S;
+  const { spacing } = useTheme();
+  const d = s.lesson!.drill!;
+  return (
+    <View>
+      <Text variant="body" color="textMuted">
+        This one is learned by doing. Read it now, do it later today, and come back to log how it went.
+      </Text>
+      <Section title="Steps">
+        {d.steps.map((st, i) => (
+          <View key={i} style={{ flexDirection: 'row', gap: spacing.sm }}>
+            <Text variant="body" color="textMuted" style={{ width: 22 }}>
+              {i + 1}.
+            </Text>
+            <Text variant="body" style={{ flex: 1 }}>
+              {st}
+            </Text>
+          </View>
+        ))}
+        {d.dose ? (
+          <Text variant="caption" color="textMuted" style={{ marginTop: spacing.xs }}>
+            {d.dose}
+          </Text>
+        ) : null}
+      </Section>
+      {d.checks?.length ? (
+        <Section title="A good repetition">
+          {d.checks.map((c, i) => (
+            <Text key={i} variant="body">
+              {c}
+            </Text>
+          ))}
+        </Section>
+      ) : null}
+      {d.cues?.length ? (
+        <Section title="Think about">
+          {d.cues.map((c, i) => (
+            <Text key={i} variant="body">
+              {c}
+            </Text>
+          ))}
+          {d.feedback ? (
+            <Text variant="caption" color="textMuted">
+              {d.feedback}
+            </Text>
+          ) : null}
+        </Section>
+      ) : null}
+      {d.imagery ? (
+        <Section title="Sixty seconds in your head">
+          <Text variant="body">{d.imagery}</Text>
+        </Section>
+      ) : null}
+      {d.safety ? (
+        <Section title="Safety">
+          <Text variant="body">{d.safety}</Text>
+        </Section>
+      ) : null}
+      <Footer>
+        <Button label="Got it. Check my understanding" onPress={S.toRecall} />
+      </Footer>
+    </View>
+  );
+}
+
+function ChatThread({ S, placeholder }: { S: SessionApi; placeholder: string }) {
+  const { s } = S;
+  const { spacing, colors, radius } = useTheme();
+  return (
+    <View style={{ gap: spacing.md }}>
+      {s.chat.map((m, i) => (
+        <View
+          key={i}
+          style={{
+            alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
+            maxWidth: '88%',
+            padding: spacing.md,
+            borderRadius: radius.md,
+            backgroundColor: m.role === 'user' ? colors.primaryMuted : 'transparent',
+            borderWidth: m.role === 'user' ? 0 : 1,
+            borderColor: colors.border,
+          }}
+        >
+          <Text variant="body">{m.content}</Text>
+        </View>
+      ))}
+      {s.chatDraft ? (
+        <View style={{ alignSelf: 'flex-start', maxWidth: '88%', padding: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border }}>
+          <Text variant="body">{s.chatDraft}</Text>
+        </View>
+      ) : s.busy === 'Replying' ? (
+        <View style={{ alignSelf: 'flex-start', padding: spacing.md }}>
+          <ActivityIndicator size="small" />
+        </View>
+      ) : null}
+      <TextField
+        label=""
+        value={s.chatInput}
+        onChangeText={S.setChatInput}
+        placeholder={placeholder}
+        multiline
+        style={{ minHeight: 72, textAlignVertical: 'top' }}
+        editable={!s.busy}
+      />
+      <Button label="Send" onPress={S.sendChat} loading={s.busy === 'Replying'} disabled={!s.chatInput.trim()} />
+    </View>
+  );
+}
+
+function TeachStep({ S }: { S: SessionApi }) {
+  const { s } = S;
+  const { spacing } = useTheme();
+  return (
+    <View style={{ gap: spacing.xl }}>
+      <Text variant="prose">Explain it to someone new.</Text>
+      <Text variant="body" color="textMuted">
+        A curious beginner is listening. Say what the topic is about in your own words; they will ask questions. Three exchanges is plenty. Explaining is one of the surest ways to make it stick.
+      </Text>
+      <ChatThread S={S} placeholder={s.chat.length ? 'Your reply' : 'Start explaining'} />
+      <Footer>
+        {s.chatTurns >= 2 ? (
+          <Button label="Done teaching" onPress={() => S.finish({ taught: true })} />
+        ) : (
+          <Pressable onPress={() => S.finish({ taught: false })} style={{ alignSelf: 'center', padding: spacing.sm }}>
+            <Text variant="caption" color="textMuted">
+              Skip this today
+            </Text>
+          </Pressable>
+        )}
+      </Footer>
+    </View>
+  );
+}
+
+function RoleplayStep({ S }: { S: SessionApi }) {
+  const { s } = S;
+  const { spacing, colors } = useTheme();
+  const sc = s.lesson!.scenario!;
+  if (s.debrief) {
+    const d = s.debrief;
+    return (
+      <View style={{ gap: spacing.xl }}>
+        <Text variant="prose">{Math.round(d.mean * 100)}% of what a skilled person would do.</Text>
+        <View>
+          {sc.criteria.map((c, i) => {
+            const sc2 = d.scores[i] ?? 0;
+            const tone = sc2 >= 1 ? colors.accent : sc2 > 0 ? colors.warning : colors.danger;
+            return (
+              <View key={i} style={{ flexDirection: 'row', gap: spacing.md, paddingVertical: spacing.md, borderTopWidth: 1, borderTopColor: colors.border }}>
+                <View style={{ width: 3, backgroundColor: tone, borderRadius: 2 }} />
+                <Text variant="body" style={{ flex: 1 }}>
+                  {c}
+                </Text>
+                <Text variant="caption" style={{ color: tone }}>
+                  {sc2 >= 1 ? 'Yes' : sc2 > 0 ? 'Partly' : 'No'}
+                </Text>
+              </View>
+            );
+          })}
+          <View style={{ borderTopWidth: 1, borderTopColor: colors.border }} />
+        </View>
+        <Text variant="body">{d.feedback}</Text>
+        <Footer>
+          <Button label="Finish" onPress={() => S.finish()} />
+        </Footer>
+      </View>
+    );
+  }
+  return (
+    <View style={{ gap: spacing.xl }}>
+      <View style={{ gap: spacing.sm }}>
+        <Text variant="body">{sc.setting}</Text>
+        <Text variant="body" color="textMuted">
+          You are {sc.yourRole}. Your goal: {sc.goal}
+        </Text>
+        <Text variant="caption" color="textMuted">
+          Say {'"pause"'} if you need a hint.
+        </Text>
+      </View>
+      <ChatThread S={S} placeholder="Your line" />
+      <Footer>
+        <Button
+          label="End and debrief"
+          variant="secondary"
+          onPress={S.endRoleplay}
+          loading={s.busy === 'Debriefing'}
+          disabled={s.chatTurns < 2}
+        />
+      </Footer>
     </View>
   );
 }

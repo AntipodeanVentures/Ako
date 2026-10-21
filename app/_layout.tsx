@@ -41,6 +41,8 @@ function useRouteGuard() {
     const group = segments[0];
     // Development only: fixture-rendered screens for layout checks (app/preview.tsx).
     if (__DEV__ && group === 'preview') return;
+    // The reset link signs the learner in and must stay on its own screen.
+    if (group === '(auth)' && segments[1] === 'reset-password') return;
     if (!session) {
       if (group !== '(auth)') router.replace('/sign-in');
     } else if (!profile || !(subjects.data && subjects.data.length)) {

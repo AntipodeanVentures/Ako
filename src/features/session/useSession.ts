@@ -22,7 +22,9 @@ import { recordActivity, saveSubject, type LiveSubject } from '@/src/features/su
 // React re-renders. The lesson state object L is mutated in place by the
 // engine, so a tick counter forces renders after each change.
 
-export type Step = 'warm' | 'learn' | 'recall' | 'practice' | 'done';
+export type Step = 'warm' | 'learn' | 'drill' | 'recall' | 'practice' | 'teach' | 'roleplay' | 'done';
+export type ChatMessage = { role: 'user' | 'assistant'; content: string };
+export type Debrief = { scores: number[]; feedback: string; mean: number };
 export type Confidence = 'sure' | 'unsure' | 'guess';
 export type Grade = { score: number; feedback: string };
 
@@ -50,8 +52,14 @@ export type SessionState = {
   pracText: string;
   pracConf: Confidence | null;
   pracResult: Grade | null;
+  // teach-back and role-play share one chat
+  chat: ChatMessage[];
+  chatDraft: string; // the partner's reply as it streams
+  chatInput: string;
+  chatTurns: number; // learner turns so far
+  debrief: Debrief | null;
   // done
-  summary: { added: number; firstDue: number | null; minutes: number; correct: number; asked: number } | null;
+  summary: { added: number; firstDue: number | null; minutes: number; correct: number; asked: number; taught: boolean; roleplay: Debrief | null; motorPending: boolean } | null;
 };
 
 function serialisable(subj: LiveSubject) {
@@ -85,6 +93,11 @@ export function useSession(subj: LiveSubject, topicId: string, retention: number
     pracText: '',
     pracConf: null,
     pracResult: null,
+    chat: [],
+    chatDraft: '',
+    chatInput: '',
+    chatTurns: 0,
+    debrief: null,
     summary: null,
   });
   const patch = useCallback((p: Partial<SessionState>) => setS((prev) => ({ ...prev, ...p })), []);
@@ -161,10 +174,16 @@ export function useSession(subj: LiveSubject, topicId: string, retention: number
     patch({ step: 'learn' });
   }, [L, patch]);
 
+  // After the lesson: a physical skill shows its drill first, then recall.
   const toRecall = useCallback(() => {
+    if (s.step === 'learn' && s.lesson?.drill) {
+      L.step = 'drill';
+      patch({ step: 'drill' });
+      return;
+    }
     L.step = 'recall';
     patch({ step: 'recall', recIdx: 0, recText: '', recConf: null, recResult: null });
-  }, [L, patch]);
+  }, [L, patch, s.lesson, s.step]);
 
   // ---- recall ----
   const gradeShort = useCallback(
@@ -231,30 +250,94 @@ export function useSession(subj: LiveSubject, topicId: string, retention: number
     }
   }, [L, currentItem, gradeShort, patch, s.pracConf, s.pracPicked, s.pracText, subj, topic]);
 
-  const finish = useCallback(async () => {
-    const minutes = clampNum((Date.now() - startedAt.current) / 60000, 1, Math.max(10, topic.minutes * 2));
-    const r = finishTopic(subj, L, { minutes, retention });
-    patch({ step: 'done', busy: 'Saving', summary: { added: r.added.length, firstDue: r.firstDue, minutes: Math.round(minutes), correct: L.prac.correct, asked: L.prac.asked.length } });
-    try {
-      await saveSubject(subj);
-      await recordActivity(subj.id, 'lesson', minutes);
-      onSaved();
-      patch({ busy: null });
-    } catch (e) {
-      patch({ busy: null, error: e instanceof Error ? e.message : 'Could not save. Your progress is kept on this screen; try again.' });
+  const finish = useCallback(
+    async (opts: { taught?: boolean } = {}) => {
+      const minutes = clampNum((Date.now() - startedAt.current) / 60000, 1, Math.max(10, topic.minutes * 2));
+      const r = finishTopic(subj, L, { minutes, retention, taught: opts.taught });
+      patch({
+        step: 'done',
+        busy: 'Saving',
+        summary: {
+          added: r.added.length,
+          firstDue: r.firstDue,
+          minutes: Math.round(minutes),
+          correct: L.prac.correct,
+          asked: L.prac.asked.length,
+          taught: Boolean(opts.taught) && L.teach.turns >= 2,
+          roleplay: L.rp?.debrief ?? null,
+          motorPending: r.motorPending,
+        },
+      });
+      try {
+        await saveSubject(subj);
+        await recordActivity(subj.id, 'lesson', minutes);
+        onSaved();
+        patch({ busy: null });
+      } catch (e) {
+        patch({ busy: null, error: e instanceof Error ? e.message : 'Could not save. Your progress is kept on this screen; try again.' });
+      }
+    },
+    [L, onSaved, patch, retention, subj, topic.minutes],
+  );
+
+  // ---- after practice: role-play for conversational topics, otherwise teach it back ----
+  const afterPractice = useCallback(() => {
+    const scenario = s.lesson?.scenario;
+    if (topic.kind === 'roleplay' && scenario) {
+      L.step = 'roleplay';
+      patch({ step: 'roleplay', chat: scenario.opener ? [{ role: 'assistant', content: scenario.opener }] : [], chatDraft: '', chatInput: '', chatTurns: 0, debrief: null });
+      return;
     }
-  }, [L, onSaved, patch, retention, subj, topic.minutes]);
+    L.step = 'teach';
+    L.teach.started = true;
+    patch({ step: 'teach', chat: [], chatDraft: '', chatInput: '', chatTurns: 0 });
+  }, [L, patch, s.lesson, topic.kind]);
+
+  const sendChat = useCallback(async () => {
+    const text = s.chatInput.trim();
+    if (!text || s.busy) return;
+    const mode = s.step === 'roleplay' ? 'roleplay' : 'student';
+    const messages: ChatMessage[] = [...s.chat, { role: 'user', content: text }];
+    patch({ chat: messages, chatInput: '', chatDraft: '', busy: 'Replying', error: null });
+    try {
+      const r = await callStream<{ text: string }>(
+        'tutor',
+        { subject: serialisable(subj), topicId, lesson: s.lesson, mode, scenario: s.lesson?.scenario ?? null, messages },
+        { onText: (full) => patch({ chatDraft: full }) },
+      );
+      const turns = s.chatTurns + 1;
+      if (mode === 'student') L.teach.turns = turns;
+      patch({ chat: [...messages, { role: 'assistant', content: r.text }], chatDraft: '', chatTurns: turns, busy: null });
+    } catch (e) {
+      // Keep the learner's message; let them retry.
+      patch({ chat: s.chat, chatInput: text, chatDraft: '', busy: null, error: aiErrorCopy(e) });
+    }
+  }, [L, patch, s.busy, s.chat, s.chatInput, s.chatTurns, s.lesson, s.step, subj, topicId]);
+
+  const endRoleplay = useCallback(async () => {
+    const scenario = s.lesson?.scenario;
+    if (!scenario) return finish();
+    patch({ busy: 'Debriefing', error: null });
+    try {
+      const transcript = s.chat.map((m) => (m.role === 'user' ? 'Learner: ' : 'Partner: ') + m.content).join('\n');
+      const r = await callJson<{ debrief: Debrief }>('grade', { kind: 'debrief', subject: serialisable(subj), topicId, scenario, transcript });
+      L.rp = { debrief: r.debrief, runs: (L.rp?.runs || 0) + 1 };
+      patch({ debrief: r.debrief, busy: null });
+    } catch (e) {
+      patch({ busy: null, error: aiErrorCopy(e) });
+    }
+  }, [L, finish, patch, s.chat, s.lesson, subj, topicId]);
 
   const nextPractice = useCallback(async () => {
     pickNextItem(L.prac);
     patch({ pracPicked: null, pracText: '', pracConf: null, pracResult: null });
     if (practiceDone(L.prac)) {
-      void finish();
+      afterPractice();
       return;
     }
     if (practiceExhausted(L.prac)) {
       if (L.prac.extra >= 8) {
-        void finish();
+        afterPractice();
         return;
       }
       patch({ busy: 'Writing more practice' });
@@ -271,12 +354,12 @@ export function useSession(subj: LiveSubject, topicId: string, retention: number
         addPractice(L.prac, r.practice);
         patch({ busy: null });
       } catch {
-        // No more questions: close the topic on what was done.
-        void finish();
+        // No more questions: move on with what was done.
+        afterPractice();
       }
     }
     tick();
-  }, [L, finish, patch, s.lesson, subj, topicId]);
+  }, [L, afterPractice, patch, s.lesson, subj, topicId]);
 
   const retryLesson = useCallback(() => startLesson(s.warm, s.warmAnswers, undefined, true), [s.warm, s.warmAnswers, startLesson]);
 
@@ -299,6 +382,9 @@ export function useSession(subj: LiveSubject, topicId: string, retention: number
     setPracConf: (pracConf: Confidence) => patch({ pracConf }),
     checkPractice,
     nextPractice,
+    setChatInput: (chatInput: string) => patch({ chatInput }),
+    sendChat,
+    endRoleplay,
     finish,
     retryLesson,
     clearError: () => patch({ error: null }),

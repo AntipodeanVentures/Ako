@@ -59,7 +59,7 @@ export default function SignUpScreen() {
             Check your email
           </Text>
           <Text variant="body" color="textMuted" center>
-            We sent a link to {email.trim()}. Open it, then come back and sign in.
+            We sent a link to {email.trim()}. It can take a minute and may land in spam. Open it, then come back and sign in.
           </Text>
           <Link href="/sign-in">
             <Text variant="bodyStrong">Back to sign in</Text>

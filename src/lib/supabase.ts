@@ -2,6 +2,7 @@ import 'react-native-url-polyfill/auto';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { Platform } from 'react-native';
 
 import { env } from './env';
 
@@ -22,9 +23,11 @@ export function getSupabase(): SupabaseClient {
         storage: AsyncStorage,
         autoRefreshToken: true,
         persistSession: true,
-        // No URL-based session detection on native; deep links are handled
-        // explicitly by the auth flow.
-        detectSessionInUrl: false,
+        // On the web the password-reset and confirmation links land with a
+        // code in the URL that the client exchanges for a session. On native
+        // deep links are handled explicitly by the auth flow.
+        detectSessionInUrl: Platform.OS === 'web',
+        flowType: 'pkce',
       },
     });
   }

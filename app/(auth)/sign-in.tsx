@@ -70,6 +70,11 @@ export default function SignInScreen() {
             </Text>
           ) : null}
           <Button label="Sign in" onPress={onSubmit} loading={submitting} />
+          <Link href="/forgot-password" style={{ alignSelf: 'center' }}>
+            <Text variant="caption" color="textMuted">
+              Forgotten your password?
+            </Text>
+          </Link>
         </View>
 
         <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.xs }}>
