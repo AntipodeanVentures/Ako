@@ -36,7 +36,7 @@ Deno.serve(async (req) => {
       await checkLimit(caller, 'grade');
       const r = await sample({ model: MODELS.mid, system: METHOD, prompt: morePracticePrompt(subject, topic, body.lesson, arr(body.used), body.ability), maxTokens: 2500 });
       await recordUsage(caller, 'grade', r.inputTokens, r.outputTokens);
-      const raw = parseJson(r.text) as { practice?: unknown[] };
+      const raw = parseJson(r.text, r.stopReason) as { practice?: unknown[] };
       const practice = arr(raw && raw.practice).map(normQ).filter(Boolean).slice(0, 6);
       if (!practice.length) throw new HttpError(502, 'invalid_json', 'No usable questions came back. Try again.');
       return new Response(JSON.stringify({ practice }), { headers: { 'content-type': 'application/json', ...CORS } });

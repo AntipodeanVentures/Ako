@@ -2,15 +2,16 @@ import { useSyncExternalStore } from 'react';
 
 import { coverTarget } from '@/src/engine/ladder';
 import type { Plan, StageId } from '@/src/engine/types';
-import { aiErrorCopy, callStream } from '@/src/features/ai/client';
+import { aiErrorCopy, callJson, callStream } from '@/src/features/ai/client';
 import { queryClient } from '@/src/lib/queryClient';
 
 import { createSubject, updateSubject } from './api';
 
 // Builds a plan for a new subject and keeps going while the learner moves
-// on. The `plan` function streams the draft, then runs a critic pass. The
-// draft is good enough to start on, so the subject is saved as soon as the
-// draft lands and the reviewed plan replaces it when the critic finishes.
+// on. The `plan` function streams the draft; a second call runs the critic
+// pass (two calls, so neither runs near the server's time limit). The draft
+// is good enough to start on, so the subject is saved as soon as the draft
+// lands and the reviewed plan replaces it when the critic finishes.
 // Module state rather than React state so navigating away does not cancel
 // the stream.
 
@@ -121,37 +122,25 @@ export async function startBuild(profileId: string, intake: Intake) {
           if (my !== run) return;
           set({ progress: parseProgress(text) });
         },
-        onDraft: (data) => {
-          if (my !== run) return;
-          const draft = (data as { plan: Plan }).plan;
-          set({ draft, status: 'draft' });
-          // Save straight away so the learner can start while the critic runs.
-          persist(profileId, intake, draft, null)
-            .then((id) => {
-              if (my !== run) return;
-              subjectId = id;
-              set({ subjectId: id });
-              queryClient.invalidateQueries({ queryKey: ['subjects'] });
-            })
-            .catch((e) => {
-              if (my !== run) return;
-              set({ status: 'error', error: e instanceof Error ? e.message : 'Could not save the subject.' });
-            });
-        },
       },
     );
     if (my !== run) return;
-    const plan = result.plan;
-    // The draft save may still be in flight; wait for it so we update, not duplicate.
-    for (let i = 0; i < 50 && !subjectId && state.status !== 'error'; i++) {
-      await new Promise((r) => setTimeout(r, 200));
-    }
+    const draft = result.plan;
+    set({ draft, status: 'draft' });
+    // Save straight away so the learner can start while the critic runs.
+    subjectId = await persist(profileId, intake, draft, null);
     if (my !== run) return;
-    if (state.status === 'error') return;
-    set({ status: 'saving', plan });
-    subjectId = await persist(profileId, intake, plan, subjectId);
+    set({ subjectId });
+    queryClient.invalidateQueries({ queryKey: ['subjects'] });
+
+    // The critic pass: a second call that reads the draft against the
+    // learner and the level definitions and returns a corrected plan.
+    const reviewed = await callJson<{ plan: Plan }>('plan', { kind: 'review', intake, coverTo, plan: draft });
     if (my !== run) return;
-    set({ status: 'ready', subjectId });
+    set({ status: 'saving', plan: reviewed.plan });
+    await persist(profileId, intake, reviewed.plan, subjectId);
+    if (my !== run) return;
+    set({ status: 'ready' });
     queryClient.invalidateQueries({ queryKey: ['subjects'] });
   } catch (e) {
     if (my !== run) return;

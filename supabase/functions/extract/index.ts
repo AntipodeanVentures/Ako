@@ -28,17 +28,17 @@ Deno.serve(async (req) => {
       if (!material && !body.image) throw new HttpError(400, 'bad_request', 'Nothing to read.');
       const r = await sample({ model: MODELS.mid, prompt: knowPrompt(material, Boolean(body.image)), images: body.image ? [body.image] : undefined, maxTokens: 1800 });
       await recordUsage(caller, 'extract', r.inputTokens, r.outputTokens);
-      return json({ know: normaliseKnow(parseJson(r.text)) });
+      return json({ know: normaliseKnow(parseJson(r.text, r.stopReason)) });
     }
     if (body.kind === 'start') {
       const r = await sample({ model: MODELS.small, prompt: startPrompt(str(body.subject, 160), about), maxTokens: 600 });
       await recordUsage(caller, 'extract', r.inputTokens, r.outputTokens);
-      return json({ start: normaliseStart(parseJson(r.text)) });
+      return json({ start: normaliseStart(parseJson(r.text, r.stopReason)) });
     }
     if (body.kind === 'role') {
       const r = await sample({ model: MODELS.frontier, system: METHOD, prompt: rolePrompt(str(body.title, 140), str(body.description, 6000), about), maxTokens: 3000 });
       await recordUsage(caller, 'extract', r.inputTokens, r.outputTokens);
-      return json({ role: normaliseRole(parseJson(r.text)) });
+      return json({ role: normaliseRole(parseJson(r.text, r.stopReason)) });
     }
     if (body.kind === 'model') {
       const subject = body.subject;
@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
       const topic = topicById(subject, body.topicId);
       const r = await sample({ model: MODELS.small, prompt: modelPrompt(subject, topic, body.evidence), maxTokens: 700 });
       await recordUsage(caller, 'extract', r.inputTokens, r.outputTokens);
-      return json({ model: normaliseModel(parseJson(r.text)) });
+      return json({ model: normaliseModel(parseJson(r.text, r.stopReason)) });
     }
     throw new HttpError(400, 'bad_request', 'Unknown kind.');
   } catch (e) {

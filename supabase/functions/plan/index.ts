@@ -1,8 +1,13 @@
-// plan: writes a learning plan for a subject, then runs the critic pass, and returns the normalised plan.
-// Streams the draft as it arrives so the app can show the outline while the critic works.
+// plan: writes a learning plan for a subject and returns the normalised draft.
+// Streams the text as it arrives so the app can show the outline growing.
 //
 // Request: { intake: { subject, target, current, hours, background, why, syllabus, role? }, coverTo: 's2' }
 // Response: ndjson events: text deltas, then { type: 'done', data: { plan } }
+//
+// The critic pass is a separate request, so neither call runs near the
+// platform's wall-clock limit (150 s on the free plan; each pass alone can
+// take over a minute): { kind: 'review', intake, coverTo, plan }
+// Response: JSON { plan } (the corrected plan, with "changes").
 //
 // Extending to the next level: { kind: 'extend', subject, stageId: 's3' }
 // Response: JSON { extension: { milestones, topics } }, to append to the plan.
@@ -31,26 +36,26 @@ Deno.serve(async (req) => {
       return json({ extension });
     }
     const { intake, coverTo } = body;
+    if (!intake?.subject) throw new HttpError(400, 'bad_request', 'Tell us what you want to learn.');
     // The learner's confirmed background travels with the request; the engine reads intake.about.
     const { data: prof } = await caller.admin.from('profiles').select('about').eq('id', caller.profileId).maybeSingle();
     const fullIntake = { ...intake, about: prof?.about ?? '' };
 
+    if (body.kind === 'review') {
+      // The critic reads the draft against the learner and the level definitions and returns a corrected plan.
+      if (!body.plan) throw new HttpError(400, 'bad_request', 'A draft plan is required.');
+      const review = await sample({ model: MODELS.frontier, system: METHOD, prompt: reviewPlanPrompt(body.plan, fullIntake), maxTokens: 16000 });
+      await recordUsage(caller, 'plan', review.inputTokens, review.outputTokens);
+      const reviewed = parseJson(review.text, review.stopReason) as { changes?: string[] };
+      const corrected = normalisePlan(reviewed, fullIntake, coverTo);
+      corrected.changes = Array.isArray(reviewed.changes) ? reviewed.changes.slice(0, 12) : [];
+      return json({ plan: corrected });
+    }
+
     return ndjsonStream(async (emit) => {
       const draft = await sample({ model: MODELS.frontier, system: METHOD, prompt: planPrompt(fullIntake, coverTo), maxTokens: 16000, onText: (delta) => emit({ type: 'text', delta }) });
       await recordUsage(caller, 'plan', draft.inputTokens, draft.outputTokens);
-      let plan = normalisePlan(parseJson(draft.text, draft.stopReason), fullIntake, coverTo);
-      emit({ type: 'draft', data: { plan } });
-      // The critic reads the draft against the learner and the level definitions and returns a corrected plan.
-      try {
-        const review = await sample({ model: MODELS.frontier, system: METHOD, prompt: reviewPlanPrompt(plan, fullIntake), maxTokens: 16000 });
-        await recordUsage(caller, 'plan', review.inputTokens, review.outputTokens);
-        const reviewed = parseJson(review.text, review.stopReason) as { changes?: string[] };
-        const corrected = normalisePlan(reviewed, fullIntake, coverTo);
-        corrected.changes = Array.isArray(reviewed.changes) ? reviewed.changes.slice(0, 12) : [];
-        plan = corrected;
-      } catch (e) {
-        console.error('critic pass failed, keeping the draft', e);
-      }
+      const plan = normalisePlan(parseJson(draft.text, draft.stopReason), fullIntake, coverTo);
       emit({ type: 'done', data: { plan } });
     });
   } catch (e) {

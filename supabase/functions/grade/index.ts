@@ -25,7 +25,7 @@ Deno.serve(async (req) => {
       const items = arr(body.items).slice(0, 12);
       const r = await sample({ model: MODELS.small, system: METHOD, prompt: gradePrompt(str(body.title, 160), items, body.mode), maxTokens: 1800 });
       await recordUsage(caller, 'grade', r.inputTokens, r.outputTokens);
-      const raw = parseJson(r.text) as { results?: { score?: number; feedback?: string }[] };
+      const raw = parseJson(r.text, r.stopReason) as { results?: { score?: number; feedback?: string }[] };
       const results = arr(raw && raw.results).slice(0, items.length).map((x) => ({ score: Math.max(0, Math.min(1, Number(x && x.score) || 0)), feedback: str(x && x.feedback, 600) }));
       while (results.length < items.length) results.push({ score: 0, feedback: '' });
       return json({ results });
@@ -41,14 +41,14 @@ Deno.serve(async (req) => {
       if (!topics.length) throw new HttpError(400, 'bad_request', 'No topics to check.');
       const r = await sample({ model: MODELS.mid, system: METHOD, prompt: checkPrompt(subject, topics, body.stageId), maxTokens: 3000 });
       await recordUsage(caller, 'grade', r.inputTokens, r.outputTokens);
-      return json({ check: parseJson(r.text) });
+      return json({ check: parseJson(r.text, r.stopReason) });
     }
 
     if (body.kind === 'debrief') {
       const topic = topicById(subject, body.topicId);
       const r = await sample({ model: MODELS.mid, system: METHOD, prompt: debriefPrompt(subject, topic, body.scenario, str(body.transcript, 12000)), maxTokens: 1500 });
       await recordUsage(caller, 'grade', r.inputTokens, r.outputTokens);
-      return json({ debrief: normaliseDebrief(parseJson(r.text), arr(body.scenario && body.scenario.criteria).length || 3) });
+      return json({ debrief: normaliseDebrief(parseJson(r.text, r.stopReason), arr(body.scenario && body.scenario.criteria).length || 3) });
     }
 
     if (body.kind === 'photo') {
