@@ -10,20 +10,17 @@ A running list of outstanding tasks. Tick items off as they are done.
 - [ ] `ANTHROPIC_API_KEY` set as a function secret (Project Settings, Edge
       Functions, Secrets) with a monthly spend limit on the key, then one
       signed-in smoke test of `plan`.
-- [ ] `delete_account` is not installed on the live project (the migration
-      tool refuses anything that deletes from `auth.users`). Run the function
-      from `supabase/migrations/0001_initial.sql` in the SQL editor. Until
-      then, Delete my data removes all content and signs out, but leaves the
-      bare auth user.
+- [x] `delete_account` installed on the live project (SQL editor, 21 Oct
+      2026); Delete my data now removes the auth user too.
 - [ ] Privacy and terms (`public/privacy.html`, `public/terms.html`): fill
       the highlighted fields (company, number, address, contact email) and
       read once. A solicitor's review before any paid plan.
-- [ ] Supabase Authentication, URL configuration: Site URL
-      `https://ako-eight.vercel.app`; Redirect URLs `https://ako-eight.vercel.app/**`
-      and `http://localhost:8081/**`, so reset and confirmation links land
-      in the app.
-- [ ] Email: connect Resend (or another SMTP) under Authentication, SMTP
-      settings, or turn email confirmation off for the beta.
+- [x] Supabase Authentication, URL configuration set (site URL and the two
+      redirect URLs).
+- [x] Email: Resend SMTP connected; sending domain `ako.antipodean.ventures`
+      (placeholder until the real domain), verified 21 Oct 2026. Sender
+      Ako <hello@ako.antipodean.ventures>. Swap the domain in Resend and the
+      sender in Supabase when the Ako domain exists.
 - [ ] Decide on email confirmation. It is on by default, so the first sign-up
       waits for an email from Supabase's rate-limited sender; turn it off for
       the beta or set up custom SMTP first.
