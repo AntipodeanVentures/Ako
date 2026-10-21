@@ -54,3 +54,18 @@ export async function deleteKnowItem(id: string): Promise<void> {
   const { error } = await getSupabase().from('know_items').delete().eq('id', id);
   if (error) throw error;
 }
+
+// Removes everything the learner owns. Subjects cascade to topic state,
+// cards, reviews and activity; items and roles go with them. The final
+// step deletes the auth user through the delete_account RPC; if that
+// function is not yet installed on the project the content is still gone
+// and the account is signed out.
+export async function deleteAllMyData(profileId: string): Promise<{ accountDeleted: boolean }> {
+  const sb = getSupabase();
+  await sb.from('subjects').delete().eq('profile_id', profileId);
+  await sb.from('know_items').delete().eq('profile_id', profileId);
+  await sb.from('roles').delete().eq('profile_id', profileId);
+  await sb.from('profiles').update({ about: '', model: null, display_name: '' }).eq('id', profileId);
+  const { error } = await sb.rpc('delete_account');
+  return { accountDeleted: !error };
+}

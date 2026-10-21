@@ -4,6 +4,7 @@ import { View } from 'react-native';
 
 import { Button, Logo, Screen, Text, TextField } from '@/src/components/ui';
 import { useAuth } from '@/src/features/auth';
+import { openLegal } from '@/src/lib/legal';
 import { useTheme } from '@/src/theme';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -124,6 +125,17 @@ export default function SignUpScreen() {
             </Text>
           ) : null}
           <Button label="Create account" onPress={onSubmit} loading={submitting} />
+          <Text variant="caption" color="textMuted" center>
+            By creating an account you agree to the{' '}
+            <Text variant="caption" onPress={() => openLegal('terms')} style={{ textDecorationLine: 'underline' }}>
+              terms
+            </Text>{' '}
+            and{' '}
+            <Text variant="caption" onPress={() => openLegal('privacy')} style={{ textDecorationLine: 'underline' }}>
+              privacy notice
+            </Text>
+            . Ako is for adults.
+          </Text>
         </View>
 
         <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.xs }}>

@@ -1,0 +1,19 @@
+/* Ako legal pages. Same instrument look as the app: white, ink, one green. */
+:root { --ink: #17191D; --muted: #5F646B; --border: #E6E8EB; --green: #0B7A69; }
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: #fff; color: var(--ink); }
+body { font-family: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.55; font-size: 17px; }
+main { max-width: 640px; margin: 0 auto; padding: 56px 24px 96px; }
+a { color: var(--ink); }
+.mark { font-weight: 600; font-size: 22px; letter-spacing: -0.03em; text-decoration: none; }
+h1 { font-size: 30px; line-height: 1.15; letter-spacing: -0.02em; margin: 28px 0 6px; font-weight: 600; }
+h2 { font-size: 18px; margin: 36px 0 8px; font-weight: 600; }
+p, li { margin: 0 0 12px; }
+ul { padding-left: 20px; }
+.muted { color: var(--muted); }
+.fill { background: #FFF4D6; padding: 0 4px; border-radius: 4px; }
+hr { border: 0; border-top: 1px solid var(--border); margin: 36px 0; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; }
+td, th { text-align: left; vertical-align: top; padding: 8px 8px 8px 0; border-top: 1px solid var(--border); }
+th { font-weight: 600; }
+footer { margin-top: 48px; color: var(--muted); font-size: 14px; }

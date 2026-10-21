@@ -6,11 +6,13 @@ import { Button, Screen, Text, TextField } from '@/src/components/ui';
 import { aiErrorCopy } from '@/src/features/ai/client';
 import { useAuth } from '@/src/features/auth';
 import {
+  deleteAllMyData,
   useDeleteKnowItem,
   useKnowItems,
   useProfile,
   useSaveKnowItems,
 } from '@/src/features/profile';
+import { openLegal } from '@/src/lib/legal';
 import { KIND_LABELS, proposeItems, recomputeAbout, toRows, type ProposedItem } from '@/src/features/profile/know';
 import { useTheme } from '@/src/theme';
 import type { KnowItemRow } from '@/src/types/database';
@@ -29,6 +31,18 @@ export default function YouScreen() {
   const [proposed, setProposed] = useState<{ summary: string; items: ProposedItem[] } | null>(null);
   const [reading, setReading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const deleteEverything = async () => {
+    if (!profile) return;
+    setDeleting(true);
+    try {
+      await deleteAllMyData(profile.id);
+    } finally {
+      await signOut();
+    }
+  };
 
   const read = async () => {
     if (!material.trim()) return;
@@ -185,6 +199,38 @@ export default function YouScreen() {
 
       <View style={{ marginTop: spacing.xl, gap: spacing.md }}>
         <Button label="Sign out" variant="secondary" onPress={signOut} />
+        {!confirmDelete ? (
+          <Pressable onPress={() => setConfirmDelete(true)} style={{ alignSelf: 'center', padding: spacing.sm }}>
+            <Text variant="caption" color="textMuted">
+              Delete my data
+            </Text>
+          </Pressable>
+        ) : (
+          <View style={{ gap: spacing.sm, padding: spacing.lg, borderWidth: 1, borderColor: colors.border, borderRadius: 12 }}>
+            <Text variant="bodyStrong">Delete everything?</Text>
+            <Text variant="body" color="textMuted">
+              Your subjects, progress, cards and profile go at once. There is no undo.
+            </Text>
+            <Button label="Delete everything" variant="danger" onPress={deleteEverything} loading={deleting} />
+            <Pressable onPress={() => setConfirmDelete(false)} style={{ alignSelf: 'center', padding: spacing.sm }}>
+              <Text variant="caption" color="textMuted">
+                Keep it
+              </Text>
+            </Pressable>
+          </View>
+        )}
+        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.lg, marginTop: spacing.md }}>
+          <Pressable onPress={() => openLegal('privacy')}>
+            <Text variant="caption" color="textMuted">
+              Privacy
+            </Text>
+          </Pressable>
+          <Pressable onPress={() => openLegal('terms')}>
+            <Text variant="caption" color="textMuted">
+              Terms
+            </Text>
+          </Pressable>
+        </View>
       </View>
     </Screen>
   );
