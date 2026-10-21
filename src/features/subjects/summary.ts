@@ -1,0 +1,113 @@
+import { dayKey, nowMs } from '@/src/engine/core';
+import { STAGES, stageIdx } from '@/src/engine/ladder';
+import {
+  dueCards,
+  estimateText,
+  learnedCount,
+  nextStageEstimate,
+  nextTopic,
+  stagePosition,
+  stageProgress,
+} from '@/src/engine/progress';
+import type { Topic } from '@/src/engine/types';
+
+import type { LiveSubject } from './context';
+
+// Plain numbers and sentences for the Learn screen, computed from the
+// engine so the app and the artifact agree.
+
+export type NextStep =
+  | { kind: 'review'; count: number }
+  | { kind: 'topic'; subject: LiveSubject; topic: Topic }
+  | { kind: 'none' };
+
+export function minutesToday(subjects: LiveSubject[]): number {
+  const d = dayKey(nowMs());
+  return subjects.reduce((n, s) => n + (((s.stats.log as Record<string, number>) || {})[d] || 0), 0);
+}
+
+export function dueCount(subjects: LiveSubject[]): number {
+  return subjects.reduce((n, s) => n + dueCards(s.cards ?? []).length, 0);
+}
+
+// The thing to do now: reviews first (they are the evidence), then one new topic.
+export function nextStep(subjects: LiveSubject[]): NextStep {
+  const due = dueCount(subjects);
+  if (due > 0) return { kind: 'review', count: due };
+  // The subject studied least recently gets the new topic, so none goes stale.
+  const ordered = [...subjects].sort((a, b) => Number(a.stats.lastStudied || 0) - Number(b.stats.lastStudied || 0));
+  for (const s of ordered) {
+    const t = nextTopic(s);
+    if (t) return { kind: 'topic', subject: s, topic: t };
+  }
+  return { kind: 'none' };
+}
+
+export function todayLine(subjects: LiveSubject[]): string {
+  const due = dueCount(subjects);
+  const step = nextStep(subjects);
+  const topicStep = step.kind === 'topic' ? step : null;
+  const firstTopic = (() => {
+    for (const s of subjects) {
+      const t = nextTopic(s);
+      if (t) return { s, t };
+    }
+    return null;
+  })();
+  const parts: string[] = [];
+  if (due) parts.push(`${due} ${due === 1 ? 'review' : 'reviews'}${subjects.length > 1 ? ' across your subjects' : ''}`);
+  const nt = topicStep ? topicStep.topic : firstTopic?.t;
+  if (nt) parts.push(`${due ? 'then ' : ''}one new idea: ${nt.title.toLowerCase()}`);
+  if (!parts.length) return 'Nothing due. Add a subject to keep going.';
+  const line = parts.join(', ');
+  return line.charAt(0).toUpperCase() + line.slice(1) + '.';
+}
+
+export type SubjectLine = {
+  title: string;
+  reached: number;
+  current: number;
+  progress: number;
+  // "Capable, 60% evidenced"
+  position: string;
+  // "about CEFR B1"
+  marker: string;
+  // "Proficient by Feb to Mar"
+  estimate: string;
+  learned: number;
+  total: number;
+};
+
+export function subjectLine(subj: LiveSubject): SubjectLine {
+  const pos = stagePosition(subj);
+  const cur = STAGES[pos.currentIdx];
+  const prog = stageProgress(subj, cur.id);
+  const def = subj.plan.stages.find((s) => s.id === cur.id);
+  const pct = Math.round(prog.pct * 100);
+  const position = pos.done
+    ? 'Expert reached'
+    : pos.explicit >= 0
+      ? `${STAGES[pos.explicit].name} reached, ${cur.name} ${pct}%`
+      : prog.inPlan
+        ? `${cur.name}, ${pct}% evidenced`
+        : `${cur.name} not planned yet`;
+  const est = nextStageEstimate(subj);
+  const estimate = est ? `${est.name} ${est.text.startsWith('level') ? est.text : 'in ' + est.text.replace(/ \(.*\)$/, '')}` : '';
+  return {
+    title: subj.plan.title || String(subj.intake.subject || ''),
+    reached: pos.reached,
+    current: pos.currentIdx,
+    progress: prog.pct,
+    position,
+    marker: def?.equivalent ? `about ${def.equivalent}` : '',
+    estimate,
+    learned: learnedCount(subj),
+    total: subj.plan.topics.length,
+  };
+}
+
+export function targetEstimate(subj: LiveSubject): string | null {
+  const target = String(subj.intake.target || 's3');
+  if (stageIdx(target) < 0) return null;
+  return estimateText(subj, target);
+}

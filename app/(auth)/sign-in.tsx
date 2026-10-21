@@ -31,16 +31,12 @@ export default function SignInScreen() {
   };
 
   return (
-    <Screen scroll>
-      <View style={{ flex: 1, justifyContent: 'center', gap: spacing.xl }}>
-        <View style={{ alignItems: 'center' }}>
-          <Logo size={48} showWordmark />
-        </View>
-
-        <View style={{ gap: spacing.xs }}>
-          <Text variant="title">Welcome back</Text>
-          <Text variant="body" color="textMuted">
-            Sign in to continue with Ako.
+    <Screen scroll width="narrow">
+      <View style={{ flex: 1, justifyContent: 'center', gap: spacing.xxl }}>
+        <View style={{ alignItems: 'center', gap: spacing.lg }}>
+          <Logo size={40} />
+          <Text variant="title" center>
+            Welcome back
           </Text>
         </View>
 
@@ -55,6 +51,7 @@ export default function SignInScreen() {
             autoComplete="email"
             textContentType="emailAddress"
             placeholder="you@example.com"
+            returnKeyType="next"
           />
           <TextField
             label="Password"
@@ -64,20 +61,25 @@ export default function SignInScreen() {
             autoComplete="current-password"
             textContentType="password"
             placeholder="Your password"
+            returnKeyType="go"
+            onSubmitEditing={onSubmit}
           />
           {error ? (
-            <Text variant="caption" color="danger">
+            <Text variant="caption" color="danger" center>
               {error}
             </Text>
           ) : null}
           <Button label="Sign in" onPress={onSubmit} loading={submitting} />
         </View>
 
-        <Link href="/sign-up" style={{ alignSelf: 'center' }}>
-          <Text variant="bodyStrong" color="primary">
-            Create an account
+        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.xs }}>
+          <Text variant="body" color="textMuted">
+            New here?
           </Text>
-        </Link>
+          <Link href="/sign-up">
+            <Text variant="bodyStrong">Create an account</Text>
+          </Link>
+        </View>
       </View>
     </Screen>
   );

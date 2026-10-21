@@ -2,6 +2,8 @@ import { getSupabase } from '@/src/lib/supabase';
 import type { Plan } from '@/src/engine/types';
 import type {
   ActivityRow,
+  CardRow,
+  ReviewLogRow,
   StageStateRow,
   SubjectRow,
   TopicStateRow,
@@ -107,5 +109,37 @@ export async function addMinutes(
     p_kind: kind,
     p_minutes: minutes,
   });
+  if (error) throw error;
+}
+
+// ---------- cards and reviews ----------
+
+export async function fetchCards(subjectId?: string): Promise<CardRow[]> {
+  let q = getSupabase().from('cards').select('*').order('due', { ascending: true });
+  if (subjectId) q = q.eq('subject_id', subjectId);
+  const { data, error } = await q;
+  if (error) throw error;
+  return (data ?? []) as CardRow[];
+}
+
+export type NewCardRow = Omit<CardRow, 'id' | 'profile_id' | 'created_at'>;
+
+export async function insertCards(profileId: string, rows: NewCardRow[]): Promise<CardRow[]> {
+  if (!rows.length) return [];
+  const { data, error } = await getSupabase()
+    .from('cards')
+    .insert(rows.map((r) => ({ ...r, profile_id: profileId })))
+    .select('*');
+  if (error) throw error;
+  return (data ?? []) as CardRow[];
+}
+
+export async function updateCard(id: string, update: Partial<Omit<CardRow, 'id' | 'profile_id' | 'subject_id' | 'created_at'>>): Promise<void> {
+  const { error } = await getSupabase().from('cards').update(update).eq('id', id);
+  if (error) throw error;
+}
+
+export async function insertReviewLog(row: Omit<ReviewLogRow, 'id'>): Promise<void> {
+  const { error } = await getSupabase().from('review_log').insert(row);
   if (error) throw error;
 }

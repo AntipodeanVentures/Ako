@@ -41,4 +41,11 @@ const LEVEL_PASS = 0.8;        // share of a level check that must be right
 const LEVEL_DELAY = 3 * DAY;   // the level check waits until the last topic is at least this old, so it tests memory
 const START_LEVELS = ['Complete beginner', 'Know a little', 'Intermediate', 'Used to be good, now rusty'];
 
-export { STAGES, stageIdx, stageName, START_STAGE, PITCH, START_PITCH, pitchOf, SUPPORT, supportOf, PLAN_VERSION, RELEARN_TARGET, relearnTarget, ROLE_LEVEL_GOOD, CRITERION, BAND_TARGET, LEVEL_PASS, LEVEL_DELAY, START_LEVELS };
+// The first plan covers the starting stage and the one above it (capped at the target). Later stages are
+// planned when the learner gets there, so the topics are written with what they have actually learned in view.
+function coverTarget(intake) {
+  const start = START_STAGE[intake.current] || 0;
+  return STAGES[Math.min(stageIdx(intake.target), start + 1)].id;
+}
+
+export { STAGES, stageIdx, stageName, START_STAGE, PITCH, START_PITCH, pitchOf, SUPPORT, supportOf, PLAN_VERSION, RELEARN_TARGET, relearnTarget, ROLE_LEVEL_GOOD, CRITERION, BAND_TARGET, LEVEL_PASS, LEVEL_DELAY, START_LEVELS, coverTarget };

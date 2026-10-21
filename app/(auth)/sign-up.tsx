@@ -22,7 +22,7 @@ export default function SignUpScreen() {
   const onSubmit = async () => {
     setError(null);
     if (!name.trim()) {
-      setError('Tell us your name so your partner can recognise you.');
+      setError('Tell us your first name.');
       return;
     }
     if (!EMAIL_PATTERN.test(email.trim())) {
@@ -52,17 +52,17 @@ export default function SignUpScreen() {
 
   if (confirmationSent) {
     return (
-      <Screen>
-        <View style={{ flex: 1, justifyContent: 'center', gap: spacing.lg }}>
-          <Text variant="title">Check your email</Text>
-          <Text variant="body" color="textMuted">
-            We sent a confirmation link to {email.trim()}. Open it, then sign in
-            to continue.
+      <Screen width="narrow">
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', gap: spacing.lg }}>
+          <Logo size={40} />
+          <Text variant="title" center>
+            Check your email
           </Text>
-          <Link href="/sign-in" style={{ alignSelf: 'flex-start' }}>
-            <Text variant="bodyStrong" color="primary">
-              Back to sign in
-            </Text>
+          <Text variant="body" color="textMuted" center>
+            We sent a link to {email.trim()}. Open it, then come back and sign in.
+          </Text>
+          <Link href="/sign-in">
+            <Text variant="bodyStrong">Back to sign in</Text>
           </Link>
         </View>
       </Screen>
@@ -70,29 +70,30 @@ export default function SignUpScreen() {
   }
 
   return (
-    <Screen scroll>
-      <View style={{ flex: 1, justifyContent: 'center', gap: spacing.xl }}>
-        <View style={{ alignItems: 'center' }}>
-          <Logo size={48} showWordmark />
-        </View>
-
-        <View style={{ gap: spacing.xs }}>
-          <Text variant="title">Create your account</Text>
-          <Text variant="body" color="textMuted">
-            A tutor that takes you from where you are to the level you want,
-            and shows the evidence.
-          </Text>
+    <Screen scroll width="narrow">
+      <View style={{ flex: 1, justifyContent: 'center', gap: spacing.xxl }}>
+        <View style={{ alignItems: 'center', gap: spacing.lg }}>
+          <Logo size={40} />
+          <View style={{ gap: spacing.xs }}>
+            <Text variant="title" center>
+              Create your account
+            </Text>
+            <Text variant="body" color="textMuted" center>
+              A tutor that takes you from where you are to the level you want, and shows the evidence.
+            </Text>
+          </View>
         </View>
 
         <View style={{ gap: spacing.lg }}>
           <TextField
-            label="Your name"
+            label="First name"
             value={name}
             onChangeText={setName}
             autoCapitalize="words"
             autoComplete="name"
             textContentType="givenName"
-            placeholder="e.g. Alex"
+            placeholder="Alex"
+            returnKeyType="next"
           />
           <TextField
             label="Email"
@@ -104,6 +105,7 @@ export default function SignUpScreen() {
             autoComplete="email"
             textContentType="emailAddress"
             placeholder="you@example.com"
+            returnKeyType="next"
           />
           <TextField
             label="Password"
@@ -113,20 +115,25 @@ export default function SignUpScreen() {
             autoComplete="new-password"
             textContentType="newPassword"
             placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
+            returnKeyType="go"
+            onSubmitEditing={onSubmit}
           />
           {error ? (
-            <Text variant="caption" color="danger">
+            <Text variant="caption" color="danger" center>
               {error}
             </Text>
           ) : null}
           <Button label="Create account" onPress={onSubmit} loading={submitting} />
         </View>
 
-        <Link href="/sign-in" style={{ alignSelf: 'center' }}>
-          <Text variant="bodyStrong" color="primary">
-            I already have an account
+        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.xs }}>
+          <Text variant="body" color="textMuted">
+            Already have one?
           </Text>
-        </Link>
+          <Link href="/sign-in">
+            <Text variant="bodyStrong">Sign in</Text>
+          </Link>
+        </View>
       </View>
     </Screen>
   );

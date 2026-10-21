@@ -39,6 +39,8 @@ function useRouteGuard() {
     if (session && subjects.isLoading) return;
 
     const group = segments[0];
+    // Development only: fixture-rendered screens for layout checks (app/preview.tsx).
+    if (__DEV__ && group === 'preview') return;
     if (!session) {
       if (group !== '(auth)') router.replace('/sign-in');
     } else if (!profile || !(subjects.data && subjects.data.length)) {

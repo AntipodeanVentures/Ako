@@ -48,23 +48,27 @@ export type Plan = {
 
 export type PracticeItem = {
   type: 'mcq' | 'short';
-  kind: string;
+  kind: 'question' | 'decision';
   prompt: string;
   options?: string[];
   answer: number | string;
-  explain: string;
+  explanation: string;
   difficulty: number;
   concept: number | null;
   mix?: boolean;
+  topicId?: string;
 };
 
+// What normaliseLesson produces (src/engine/normalise.js is the contract).
 export type Lesson = {
   v: number;
+  stage?: string;
+  createdAt?: number;
   concepts: string[];
   bridge: string;
-  compare: { caseA: string; caseB: string; question: string; principle: string } | null;
+  compare: { a: string; b: string; question: string; answer: string } | null;
   sections: { heading: string; paragraphs: string[]; points: string[] }[];
-  workedExample: { title: string; steps: string[]; gaps: number[]; answer: string } | null;
+  workedExample: { problem: string; steps: string[]; gaps: number[]; answer: string } | null;
   mistakes: string[];
   recall: string;
   recallAnswer: string;
@@ -72,8 +76,8 @@ export type Lesson = {
   whyAnswer: string;
   practice: PracticeItem[];
   cards: { front: string; back: string; concept: number | null }[];
-  drill: { title: string; cues: string[]; feedback: string } | null;
-  scenario: { setting: string; role: string; goal: string; opening: string } | null;
+  drill: { steps: string[]; dose: string; checks: string[]; cues: string[]; feedback: string; imagery: string; safety: string } | null;
+  scenario: { setting: string; yourRole: string; claudeRole: string; goal: string; criteria: string[]; opener: string } | null;
   resources: { title: string; creator: string; search: string }[];
 };
 

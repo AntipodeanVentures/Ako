@@ -11,7 +11,7 @@ import {
   mergeKnowItems, renderKnow, withoutKnowItem,
   newLesson, useLesson, stepOrder, nextStep, pickNextItem, scorePractice, practiceDone, finishTopic, recordRelearn, sameAnswer,
 } from '../index.js';
-import { lesson, planPortuguese, planJudo } from './fixtures.js';
+import { lesson, planPortuguese, planJudo } from '../fixtures.js';
 
 const T0 = Date.parse('2026-10-20T12:00:00');
 const intake = { subject: 'Brazilian Portuguese', target: 's3', current: 'Complete beginner', hours: 5, background: '', why: 'Talk to my in-laws', about: 'Structured finance; commercial pilot; jiu-jitsu brown belt.' };

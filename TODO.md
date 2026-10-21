@@ -17,12 +17,22 @@ A running list of outstanding tasks. Tick items off as they are done.
 - [ ] Decide on email confirmation. It is on by default, so the first sign-up
       waits for an email from Supabase's rate-limited sender; turn it off for
       the beta or set up custom SMTP first.
-- [ ] Icon, splash and adaptive icon art. The files under `assets/images/`
-      are Thrive's and must be replaced before any build leaves the laptop.
+- [x] Icon, splash, favicon and adaptive icon: the wordmark, generated from
+      the Instrument Sans semibold (21 Oct 2026). Revisit with a designer later.
 - [ ] Custom SMTP for auth emails (Resend, SendGrid or SES); the built-in
       Supabase sender is rate-limited and not for production.
 - [ ] Apple Developer Program and Google Play Console enrolment; `eas init`
       to mint the project id; a first internal build.
+
+## Next build sessions
+
+- [ ] Teach-back, role-play and drill steps in the session (the engine has
+      them; the screen stops at practice for now).
+- [ ] Level checks and placement; the "known" state from placement.
+- [ ] Profile import (`extract`), roles and readiness on the You tab.
+- [ ] Reminders (local alerts) wired to the due summary.
+- [ ] Second plan stage: write the next level's topics when the learner
+      reaches it (coverTarget covers start and start + 1 only).
 
 ## Product decisions still open
 
