@@ -75,10 +75,37 @@ export async function sample(o: Opts): Promise<Result> {
 }
 
 // Pulls the first JSON object or array out of a model answer that may carry prose around it.
-export function parseJson(text: string): unknown {
+// Models occasionally put a raw newline or tab inside a JSON string, which strict JSON rejects.
+// This walks the text and escapes control characters only where they sit inside a string.
+function repairJson(t: string): string {
+  let out = '', inStr = false, esc = false;
+  for (const ch of t) {
+    if (inStr) {
+      if (esc) { out += ch; esc = false; continue; }
+      if (ch === '\\') { out += ch; esc = true; continue; }
+      if (ch === '"') { inStr = false; out += ch; continue; }
+      if (ch === '\n') { out += '\\n'; continue; }
+      if (ch === '\r') continue;
+      if (ch === '\t') { out += '\\t'; continue; }
+      if (ch < ' ') continue;
+      out += ch;
+    } else {
+      if (ch === '"') inStr = true;
+      out += ch;
+    }
+  }
+  return out;
+}
+
+export function parseJson(text: string, stopReason?: string | null): unknown {
   const t = text.trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
   try { return JSON.parse(t); } catch { /* fall through */ }
   const a = t.indexOf('{'), b = t.lastIndexOf('}');
-  if (a >= 0 && b > a) { try { return JSON.parse(t.slice(a, b + 1)); } catch { /* fall through */ } }
+  const core = a >= 0 && b > a ? t.slice(a, b + 1) : t;
+  try { return JSON.parse(core); } catch { /* fall through */ }
+  try { return JSON.parse(repairJson(core)); } catch { /* fall through */ }
+  // Leave enough in the logs to see why: how it stopped, and the ends of the text.
+  console.error('parseJson failed', JSON.stringify({ stopReason: stopReason ?? null, length: text.length, head: text.slice(0, 200), tail: text.slice(-300) }));
+  if (stopReason === 'max_tokens') throw new HttpError(502, 'too_long', 'The answer ran past its length limit. Try again.');
   throw new HttpError(502, 'invalid_json', 'The model answer could not be read. Try again.');
 }

@@ -87,6 +87,7 @@ export function aiErrorCopy(e: unknown): string {
     case 'daily_limit': return 'You have hit today\'s ceiling. It resets at midnight; reviews are unaffected.';
     case 'rate_limited': return 'The tutor is busy. Give it a moment and try again.';
     case 'invalid_json': return 'The answer came back garbled. Try again.';
+    case 'too_long': return 'The answer ran past its length limit. Try again.';
     case 'not_signed_in': return 'Sign in to continue.';
     default: return err?.message || 'Something went wrong. Try again.';
   }

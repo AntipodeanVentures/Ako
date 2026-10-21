@@ -29,7 +29,7 @@ Deno.serve(async (req) => {
     if (kind === 'warm') {
       const r = await sample({ model: MODELS.mid, system: METHOD, prompt: warmupPrompt(subject, topic), maxTokens: 1500 });
       await recordUsage(caller, 'lesson', r.inputTokens, r.outputTokens);
-      return new Response(JSON.stringify({ warm: normaliseWarm(parseJson(r.text)) }), { headers: { 'content-type': 'application/json', ...CORS } });
+      return new Response(JSON.stringify({ warm: normaliseWarm(parseJson(r.text, r.stopReason)) }), { headers: { 'content-type': 'application/json', ...CORS } });
     }
 
     if (kind === 'more') {
@@ -53,9 +53,9 @@ Deno.serve(async (req) => {
         emit({ type: 'done', data: { lesson: cached, cached: true } });
         return;
       }
-      const r = await sample({ model: MODELS.mid, system: METHOD, prompt: lessonPrompt(subject, topic, body.ctx ?? {}), maxTokens: 6000, onText: (delta) => emit({ type: 'text', delta }) });
+      const r = await sample({ model: MODELS.mid, system: METHOD, prompt: lessonPrompt(subject, topic, body.ctx ?? {}), maxTokens: 10000, onText: (delta) => emit({ type: 'text', delta }) });
       await recordUsage(caller, 'lesson', r.inputTokens, r.outputTokens);
-      const lesson = normaliseLesson(parseJson(r.text), topic);
+      const lesson = normaliseLesson(parseJson(r.text, r.stopReason), topic);
       await writeCache(caller, key, { subjectTitle: subject.plan.title, topicTitle: topic.title, stageId: topic.stage, pitchBand }, lesson);
       emit({ type: 'done', data: { lesson, cached: false } });
     });
