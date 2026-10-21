@@ -18,10 +18,10 @@ A running list of outstanding tasks. Tick items off as they are done.
 - [ ] Privacy and terms (`public/privacy.html`, `public/terms.html`): fill
       the highlighted fields (company, number, address, contact email) and
       read once. A solicitor's review before any paid plan.
-- [ ] Supabase Authentication, URL configuration: Site URL = the deployed
-      address; Redirect URLs include `http://localhost:8081/**` and the
-      deployed address with `/**`, so reset and confirmation links land in
-      the app.
+- [ ] Supabase Authentication, URL configuration: Site URL
+      `https://ako-eight.vercel.app`; Redirect URLs `https://ako-eight.vercel.app/**`
+      and `http://localhost:8081/**`, so reset and confirmation links land
+      in the app.
 - [ ] Email: connect Resend (or another SMTP) under Authentication, SMTP
       settings, or turn email confirmation off for the beta.
 - [ ] Decide on email confirmation. It is on by default, so the first sign-up
@@ -45,9 +45,9 @@ A running list of outstanding tasks. Tick items off as they are done.
 - [ ] Roles and readiness on the You tab.
 - [ ] Reminders (local alerts) on the phone builds.
 - [ ] Photo form check and the profile photo import (expo-image-picker).
-- [ ] Web deploy: Vercel project from the GitHub repo (vercel.json is in
-      place; build `expo export -p web`, output `dist`), then set
-      EXPO_PUBLIC_SITE_URL in .env.production and the auth redirect URLs.
+- [x] Web deploy: https://ako-eight.vercel.app, auto-deploys from main.
+- [ ] A proper domain on Vercel when the name is settled; then update
+      EXPO_PUBLIC_SITE_URL and the Supabase URL configuration.
 
 ## Product decisions still open
 
