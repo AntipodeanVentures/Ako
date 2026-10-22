@@ -134,8 +134,15 @@ export function useSession(subj: LiveSubject, topicId: string, retention: number
       patch({ lessonStarted: true, error: null, lessonProgress: { chars: 0, sections: 0 }, busy: advance ? 'Writing your lesson' : null });
       try {
         // A topic that did not reach the criterion last time comes back simpler: its old section headings tell the model what to simplify.
-        const prior = (subj.topicState[topicId] as { status?: string; simpler?: string[] } | undefined);
-        const ctx = { warm, answers: answers.map((text) => ({ text })), simpler: simpler ?? (prior?.status === 'learning' ? prior.simpler : undefined) };
+        const prior = (subj.topicState[topicId] as { status?: string; simpler?: string[]; relearn?: string } | undefined);
+        const back = prior?.status === 'learning';
+        const ctx = {
+          warm,
+          answers: answers.map((text) => ({ text })),
+          simpler: simpler ?? (back ? prior?.simpler : undefined),
+          // Reopened after reviews or a failed check: the lesson is written afresh, from a different angle.
+          relearn: back && prior?.relearn ? prior.relearn : undefined,
+        };
         const r = await callStream<{ lesson: Lesson; cached: boolean }>(
           'lesson',
           { subject: serialisable(subj), topicId, ctx },

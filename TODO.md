@@ -63,14 +63,38 @@ plan. Still to do, in the audit's order:
 - [ ] Dual coding: ask the lesson for a described diagram or table where the
       content is structural; a video search phrase in motor drills.
 
+## Model routing (22 October 2026)
+
+One table in `supabase/functions/_shared/limits.ts` decides which model does
+which job: the frontier model where the output shapes weeks of study or
+decides what counts as mastery (plan, critic, extension, revision, level
+check, placement, threshold-concept lessons and lessons taught again), the
+mid model for what the learner waits on and for marking (lessons, warm-ups,
+tutor turns, grading, the learner model, intake questions), the small model
+only for bounded extraction. Any task moves with a secret `MODEL_<TASK>`.
+The `plan` function still honours only `MODEL_FRONTIER` until its next
+deploy.
+
+- [ ] Record the model name with each usage row (a column on `usage`), so
+      spend can be read per task and per model.
+- [ ] Put a monthly spend cap on the `ako-server` key in the Anthropic console.
+
 ## The path adapts (22 October 2026)
 
 Done: the intake asks the two or three questions an expert would ask for
 the subject (chosen by the model, with tap answers); the learner model is
-rewritten after every topic; the topics ahead are revised (insert, refocus,
-drop, reorder; started topics never touched; ids stable) when a topic misses
-twice, when a level check is failed, at each milestone, and on request from
-the Path tab, with each change explained to the learner. Still to do:
+rewritten after every topic; reviews feed the same per-idea record as
+practice; the topics ahead are revised (insert, refocus, drop, reorder;
+started topics never touched; ids stable) when a topic misses the mark,
+every third topic mastered, at each milestone, when a level check is
+failed, when two or more cards are forgotten in a review session, and on
+request from the Path tab, with each change explained to the learner. A
+card forgotten three times reopens its topic, which is taught again from a
+different angle (not the cached lesson). Lessons address a listed
+misconception early when it touches the topic; the warm-up probes it. The
+placement check (skip what you already know) is live for learners who did
+not start as complete beginners. The comparison and the completion gaps
+ask for a typed answer before the reveal. Still to do:
 
 - [ ] Let the tutor chat feed the learner model: a question the learner
       asks in a lesson is evidence of a gap.
@@ -84,7 +108,8 @@ the Path tab, with each change explained to the learner. Still to do:
 - [x] Teach-back, role-play and drill steps in the session.
 - [x] Level checks; the next level's topics written on a pass.
 - [x] Profile import on the You tab.
-- [ ] Placement check (skip what you already know) and the "known" state.
+- [x] Placement check (skip what you already know) and the "known" state
+      (22 Oct 2026).
 - [ ] Logging a practice session for physical topics (the drill's checks),
       which moves a topic from practising to mastered.
 - [ ] Roles and readiness on the You tab.

@@ -265,11 +265,20 @@ export default function PlaceScreen() {
         ) : build.status === 'error' ? (
           <Button label="Try again" onPress={begin} />
         ) : (
-          <Button
-            label={canStart ? 'Start' : 'Writing your path'}
-            onPress={() => router.replace('/learn')}
-            loading={!canStart}
-          />
+          <>
+            <Button
+              label={canStart ? 'Start' : 'Writing your path'}
+              onPress={() => router.replace('/learn')}
+              loading={!canStart}
+            />
+            {canStart && current !== 'Complete beginner' && build.subjectId ? (
+              <Button
+                label="Skip what I already know"
+                variant="secondary"
+                onPress={() => router.replace({ pathname: '/placement/[subjectId]', params: { subjectId: build.subjectId as string } })}
+              />
+            ) : null}
+          </>
         )}
         {!building && step === 'levels' ? (
           <Text variant="caption" color="textMuted" center>
@@ -289,7 +298,9 @@ export default function PlaceScreen() {
           </Pressable>
         ) : (
           <Text variant="caption" color="textMuted" center>
-            About a minute. You can change any of this later.
+            {canStart && current !== 'Complete beginner'
+              ? 'Ten questions, basic to advanced; topics you already know are skipped.'
+              : 'About a minute. You can change any of this later.'}
           </Text>
         )}
       </View>

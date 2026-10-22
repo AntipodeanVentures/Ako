@@ -96,6 +96,19 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
         </View>
       ) : null}
 
+      {!subj.placement && String(subj.intake.current || '') !== 'Complete beginner' && line.learned < 3 ? (
+        <View style={{ marginTop: spacing.lg, gap: spacing.sm }}>
+          <Text variant="body" color="textMuted">
+            You said you were not starting from nothing. Ten questions, basic to advanced, and the topics you already know are skipped.
+          </Text>
+          <Button
+            label="Skip what I already know"
+            variant="secondary"
+            onPress={() => router.push({ pathname: '/placement/[subjectId]', params: { subjectId: subj.id } })}
+          />
+        </View>
+      ) : null}
+
       {toPlan ? (
         <View style={{ marginTop: spacing.lg, gap: spacing.sm }}>
           <Text variant="body" color="textMuted">
@@ -160,7 +173,7 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
               {topics.map((t) => {
                 const st = subj.topicState[t.id] as { attempts?: number; reopenedAt?: number } | undefined;
                 const status = topicStatus(subj, t);
-                const note = status === 'learning' ? (st?.reopenedAt ? 'again, after the check' : Number(st?.attempts) ? 'again, simpler' : null) : null;
+                const note = status === 'learning' ? (st?.reopenedAt ? 'again' : Number(st?.attempts) ? 'again, simpler' : null) : status === 'known' ? 'known' : null;
                 return <TopicRow key={t.id} topic={t} status={status} note={note} onPress={() => open(t.id)} />;
               })}
               <View style={{ borderTopWidth: 1, borderTopColor: colors.border }} />

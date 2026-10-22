@@ -10,7 +10,7 @@ import {
   makeCards, reviewCard, recallChance, dueCards,
   mergeKnowItems, renderKnow, withoutKnowItem,
   newLesson, useLesson, stepOrder, nextStep, pickNextItem, scorePractice, practiceDone, metCriterion, finishTopic, recordRelearn, sameAnswer, ROLE_LEVEL_GOOD,
-  normaliseIntake, normaliseAdaptation, reopenTopics, intakePrompt, adaptPrompt,
+  normaliseIntake, normaliseAdaptation, reopenTopics, placeKnown, intakePrompt, adaptPrompt,
 } from '../index.js';
 import { lesson, planPortuguese, planJudo } from '../fixtures.js';
 
@@ -322,6 +322,24 @@ describe('the path adapts', () => {
     const prompt = adaptPrompt(subj, { reason: 'A milestone was reached.', note: 'more speaking', evidence: 'x' });
     expect(prompt).toContain('tried 2x');
     expect(prompt).toContain('more speaking');
+  });
+  it('places known topics out of the path and counts a whole level as reached', () => {
+    const plan = normalisePlan(planPortuguese, intake, 's2');
+    const subj = subjectFrom(plan);
+    const s1 = plan.topics.filter((t) => t.stage === 's1').map((t) => t.id);
+    const placed = placeKnown(subj, s1.concat(['nope']));
+    expect(placed.map((t) => t.id)).toEqual(s1);
+    expect(subj.topicState[s1[0]].status).toBe('known');
+    expect(subj.stages.s1.placed).toBe(true);
+    expect(subj.placement.placed).toEqual(s1);
+    expect(nextTopic(subj).stage).toBe('s2');
+    // a reopened topic carries the reason into the next lesson, which is written afresh
+    const back = reopenTopics(subj, [s1[0]], 'its review cards kept being forgotten');
+    expect(back).toHaveLength(1);
+    expect(subj.topicState[s1[0]].relearn).toBe('its review cards kept being forgotten');
+    const prompt = lessonPrompt(subj, plan.topics[0], { relearn: subj.topicState[s1[0]].relearn });
+    expect(prompt).toContain('did not stick');
+    expect(prompt).toContain('kept being forgotten');
   });
   it('reopens the topics behind a failed check and brings their cards due', () => {
     const plan = normalisePlan(planPortuguese, intake, 's2');

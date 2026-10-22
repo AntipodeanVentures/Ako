@@ -9,7 +9,7 @@ import {
 } from '../_shared/engine/index.js';
 import { CORS, errorResponse, requireCaller, HttpError } from '../_shared/auth.ts';
 import { cacheKey, readCache, writeCache } from '../_shared/cache.ts';
-import { MODELS } from '../_shared/limits.ts';
+import { modelFor } from '../_shared/limits.ts';
 import { checkLimit, recordUsage } from '../_shared/metering.ts';
 import { parseJson, sample } from '../_shared/anthropic.ts';
 import { ndjsonStream } from '../_shared/stream.ts';
@@ -27,14 +27,14 @@ Deno.serve(async (req) => {
     subject.learner = { about: prof?.about ?? '', model: prof?.model ?? null };
 
     if (kind === 'warm') {
-      const r = await sample({ model: MODELS.mid, system: METHOD, prompt: warmupPrompt(subject, topic), maxTokens: 1500 });
+      const r = await sample({ model: modelFor('warm'), system: METHOD, prompt: warmupPrompt(subject, topic), maxTokens: 1500 });
       await recordUsage(caller, 'lesson', r.inputTokens, r.outputTokens);
       return new Response(JSON.stringify({ warm: normaliseWarm(parseJson(r.text, r.stopReason)) }), { headers: { 'content-type': 'application/json', ...CORS } });
     }
 
     if (kind === 'more') {
       await checkLimit(caller, 'grade');
-      const r = await sample({ model: MODELS.mid, system: METHOD, prompt: morePracticePrompt(subject, topic, body.lesson, arr(body.used), body.ability), maxTokens: 2500 });
+      const r = await sample({ model: modelFor('more'), system: METHOD, prompt: morePracticePrompt(subject, topic, body.lesson, arr(body.used), body.ability), maxTokens: 2500 });
       await recordUsage(caller, 'grade', r.inputTokens, r.outputTokens);
       const raw = parseJson(r.text, r.stopReason) as { practice?: unknown[] };
       const practice = arr(raw && raw.practice).map(normQ).filter(Boolean).slice(0, 6);
@@ -47,14 +47,19 @@ Deno.serve(async (req) => {
     // learner's background shape only the personal layer, which the prompt adds on top (bridge, analogies).
     const pitchBand = pitchOf(subject);
     // Keyed per learner: the lesson answers this learner's warm-up and mixes in their earlier topics, so it must not be served to anyone else. The cache still makes a retry or a repeat instant.
-    const key = await cacheKey([caller.profileId, subject.plan.title, topic.title, topic.stage, pitchBand, (body.ctx?.simpler?.length ? "simpler" : "")]);
+    // A topic coming back (simpler after a miss, or relearned after reviews showed it was forgotten) gets a fresh
+    // lesson, not the cached one, and the frontier model: these and threshold concepts are where depth pays most.
+    const ctx = body.ctx ?? {};
+    const again = Boolean(ctx.simpler?.length) || Boolean(ctx.relearn);
+    const deep = Boolean(topic.threshold) || again;
+    const key = await cacheKey([caller.profileId, subject.plan.title, topic.title, topic.stage, pitchBand, ctx.simpler?.length ? 'simpler' : '', ctx.relearn ? 'relearn:' + String(ctx.relearn).slice(0, 16) : '']);
     const cached = await readCache(caller, key);
     return ndjsonStream(async (emit) => {
       if (cached) {
         emit({ type: 'done', data: { lesson: cached, cached: true } });
         return;
       }
-      const r = await sample({ model: MODELS.mid, system: METHOD, prompt: lessonPrompt(subject, topic, body.ctx ?? {}), maxTokens: 10000, onText: (delta) => emit({ type: 'text', delta }) });
+      const r = await sample({ model: modelFor(deep ? 'lessonDeep' : 'lesson'), system: METHOD, prompt: lessonPrompt(subject, topic, ctx), maxTokens: 8000, onText: (delta) => emit({ type: 'text', delta }) });
       await recordUsage(caller, 'lesson', r.inputTokens, r.outputTokens);
       const lesson = normaliseLesson(parseJson(r.text, r.stopReason), topic);
       await writeCache(caller, key, { subjectTitle: subject.plan.title, topicTitle: topic.title, stageId: topic.stage, pitchBand }, lesson);

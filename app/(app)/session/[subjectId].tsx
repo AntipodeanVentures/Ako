@@ -228,6 +228,10 @@ function LearnStep({ S }: { S: SessionApi }) {
   const L = s.lesson!;
   const [cmpOpen, setCmpOpen] = useState(false);
   const [gapsOpen, setGapsOpen] = useState(false);
+  // The learner writes something before each reveal: comparing two cases and completing the missing steps work
+  // because the learner produces the principle or the step, not because they read it. Ungraded; a skip is allowed.
+  const [cmpText, setCmpText] = useState('');
+  const [gapsText, setGapsText] = useState('');
   const cmp = L.compare;
   const worked = L.workedExample;
   return (
@@ -249,13 +253,28 @@ function LearnStep({ S }: { S: SessionApi }) {
             {cmp.question}
           </Text>
           {cmpOpen ? (
-            <Text variant="body" color="textMuted">
-              {cmp.answer}
-            </Text>
+            <View style={{ gap: spacing.sm }}>
+              {cmpText.trim() ? (
+                <Text variant="caption" color="textMuted">
+                  You said: {cmpText.trim()}
+                </Text>
+              ) : null}
+              <Text variant="body" color="textMuted">
+                {cmp.answer}
+              </Text>
+            </View>
           ) : (
-            <Pressable onPress={() => setCmpOpen(true)} style={{ alignSelf: 'flex-start' }}>
-              <Text variant="bodyStrong">Think, then show the principle</Text>
-            </Pressable>
+            <View style={{ gap: spacing.sm }}>
+              <TextField label="Your answer, in a line" value={cmpText} onChangeText={setCmpText} placeholder="What they share, and what makes the difference" multiline style={{ minHeight: 56, textAlignVertical: 'top' }} />
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.lg }}>
+                <Button label="Show the principle" variant="secondary" onPress={() => setCmpOpen(true)} disabled={cmpText.trim().length < 3} />
+                <Pressable onPress={() => setCmpOpen(true)} hitSlop={8}>
+                  <Text variant="caption" color="textMuted">
+                    Skip
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
           )}
         </Section>
       ) : null}
@@ -301,9 +320,22 @@ function LearnStep({ S }: { S: SessionApi }) {
             );
           })}
           {worked.gaps?.length && !gapsOpen ? (
-            <Pressable onPress={() => setGapsOpen(true)} style={{ alignSelf: 'flex-start' }}>
-              <Text variant="bodyStrong">Show the missing steps</Text>
-            </Pressable>
+            <View style={{ gap: spacing.sm, marginTop: spacing.sm }}>
+              <TextField label="Your turn: the missing steps" value={gapsText} onChangeText={setGapsText} placeholder="What happens at the hidden steps, and why" multiline style={{ minHeight: 56, textAlignVertical: 'top' }} />
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.lg }}>
+                <Button label="Show the missing steps" variant="secondary" onPress={() => setGapsOpen(true)} disabled={gapsText.trim().length < 3} />
+                <Pressable onPress={() => setGapsOpen(true)} hitSlop={8}>
+                  <Text variant="caption" color="textMuted">
+                    Skip
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : null}
+          {worked.gaps?.length && gapsOpen && gapsText.trim() ? (
+            <Text variant="caption" color="textMuted">
+              You said: {gapsText.trim()}
+            </Text>
           ) : null}
           {worked.answer ? (
             <Text variant="body" color="textMuted">

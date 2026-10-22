@@ -304,7 +304,7 @@ Write:
 - "hook": one genuinely surprising question or fact about this topic, at most 35 words, that makes the learner want the answer. Do not give the answer. No technical terms.
 - "questions": exactly 2 questions they answer in a sentence or two BEFORE any teaching:
   1. A question that draws on what they already know: everyday experience, an earlier topic, or one of their own fields when there is a natural link. Do not force a link.
-  2. A question that asks them to guess or predict the core idea of this topic.
+  2. A question that asks them to guess or predict the core idea of this topic. If a listed misconception or struggled-with idea bears on this topic, make this the question that would reveal whether they still hold it.
   Use plain, everyday words, and no technical term they have not learned yet. Each question has "a": a short model answer in plain words, 1 to 3 sentences.
 
 Return ONLY JSON: {"hook":"...","questions":[{"q":"...","a":"..."},{"q":"...","a":"..."}]}`;
@@ -334,13 +334,14 @@ This topic: "${topic.title}" (kind: ${topic.kind}). ${topic.summary}
 Builds on: ${prereqs}.
 Rules for this subject: ${plan.rules.join(' ')}
 ${plan.language ? 'This is a language course (' + plan.language + '). Give target-language examples with English translations.' : ''}
-${warm ? '\nJust before this lesson they answered a warm-up in their own words:\n\n' + warm + '\n' : ''}${c.simpler ? '\nThey found an earlier version of this lesson too hard. Its sections were: ' + c.simpler.join('; ') + '. Write a simpler version, with smaller steps, fewer new terms and more everyday comparisons.\n' : ''}
+${warm ? '\nJust before this lesson they answered a warm-up in their own words:\n\n' + warm + '\n' : ''}${c.simpler ? '\nThey found an earlier version of this lesson too hard. Its sections were: ' + c.simpler.join('; ') + '. Write a simpler version, with smaller steps, fewer new terms and more everyday comparisons.\n' : ''}${c.relearn ? '\nThey learned this topic before, but their reviews show it did not stick' + (typeof c.relearn === 'string' && c.relearn !== 'true' ? ' (' + str(c.relearn, 300) + ')' : '') + '. Teach it again from a different angle: a new comparison, a new worked example, and practice that targets exactly what was forgotten, rather than repeating the first lesson.\n' : ''}
 ${METHOD}
 
 How to teach this learner:
 - Start from what they already know.${warm ? ' In the first section, say in a sentence what their warm-up answers got right, correct any misunderstanding directly, and build from there. Where they did not know, start from the very basics.' : ''}
 - Link each new idea to something they already know: an earlier topic, everyday life, or one of their own fields. When a comparison from their world fits, use it and say where it stops working. Do not force one.
 - Teach the simplest accurate version first, and add detail only as far as the lesson level allows.
+- If a listed misconception or a struggled-with idea touches this topic, address it explicitly and early: name the confusion in plain words, show why it is tempting and where it breaks, and test it in practice. Do not let a known confusion pass unmentioned into new material.
 - Introduce at most ${P.terms} new technical terms in this lesson, and explain each in plain words the moment it first appears. Leave out terms they do not need yet.
 - Keep paragraphs to 2 to 4 sentences, with one idea per section.
 - Support level: ${sup.text}

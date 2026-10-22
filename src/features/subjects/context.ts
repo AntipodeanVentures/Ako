@@ -37,6 +37,8 @@ export type LiveSubject = SubjectContext & {
   concepts: Record<string, unknown>;
   errors: Record<string, number>;
   checks: unknown[];
+  // The placement check, once taken: when, and which topics it placed as known.
+  placement?: { at: number; placed: string[] } | null;
   profileId: string;
   // Ids of cards changed by a review since load, so saving writes only those.
   dirtyCards: Set<string>;
@@ -142,6 +144,7 @@ export function buildSubject(
     concepts: (stats.concepts as Record<string, unknown>) || {},
     errors: (stats.errors as Record<string, number>) || {},
     checks: (stats.checks as unknown[]) || [],
+    placement: (stats.placement as { at: number; placed: string[] } | undefined) ?? null,
     stats,
     cards: cardRows.map(cardFromRow),
     learner: { about: profile?.about ?? '', model: profile?.model ?? null },
@@ -159,6 +162,7 @@ export async function saveSubject(subj: LiveSubject): Promise<void> {
     concepts: subj.concepts,
     errors: subj.errors,
     checks: subj.checks,
+    placement: subj.placement ?? null,
   };
   await updateSubject(subj.id, {
     stats,

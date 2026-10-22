@@ -5,7 +5,7 @@ import { ActivityIndicator, Pressable, View } from 'react-native';
 
 import { Button, Screen, Text } from '@/src/components/ui';
 import { fmtInterval } from '@/src/engine/core';
-import { dueCards, logReview, recordMinutes, topicById } from '@/src/engine/progress';
+import { dueCards, logReview, noteConcept, recordMinutes, reopenTopics, topicById } from '@/src/engine/progress';
 import { reviewCard } from '@/src/engine/scheduling';
 import { recordRelearn } from '@/src/engine/session';
 import type { Card } from '@/src/engine/types';
@@ -18,6 +18,7 @@ import {
   useLiveSubjects,
   type LiveSubject,
 } from '@/src/features/subjects';
+import { afterReviews } from '@/src/features/subjects/adapt';
 import { useTheme } from '@/src/theme';
 
 // Due cards across every subject, one at a time: read the front, recall,
@@ -98,6 +99,8 @@ function ReviewScreen({ items, retention }: { items: Item[]; retention: number }
     const ok = g >= 3;
     recordRelearn(subj, next, ok);
     logReview(subj, ok);
+    // Reviews feed the same per-idea record as practice, so lessons, warm-ups and the path revision see what is slipping.
+    noteConcept(subj, card.topicId, (card as { concept?: number | null }).concept ?? null, (card as { conceptName?: string }).conceptName ?? '', ok);
     subj.cards = (subj.cards ?? []).map((c) => (c.id === card.id ? next : c));
     subj.dirtyCards.add(card.id);
     results.current.n++;
@@ -114,9 +117,17 @@ function ReviewScreen({ items, retention }: { items: Item[]; retention: number }
       const minutes = Math.max(0.5, (Date.now() - startedAt.current) / 60000);
       const touched = new Map<string, LiveSubject>();
       for (const p of results.current.pending) touched.set(p.subj.id, p.subj);
+      const forgottenBySubject = new Map<string, { topicTitle: string; front: string; back: string }[]>();
       for (const subj of touched.values()) {
-        const share = results.current.pending.filter((p) => p.subj.id === subj.id).length / Math.max(1, results.current.n);
+        const mine = results.current.pending.filter((p) => p.subj.id === subj.id);
+        const share = mine.length / Math.max(1, results.current.n);
         recordMinutes(subj, 'review', minutes * share);
+        // Cards failed today, and leeches: a card failed three times or more means the lesson did not stick, so
+        // its topic is reopened and taught again from a different angle, before the confusion settles in.
+        const forgotten = mine.filter((p) => p.log.rating === 1).map((p) => (subj.cards ?? []).find((c) => c.id === p.cardId)).filter(Boolean) as Card[];
+        forgottenBySubject.set(subj.id, forgotten.map((c) => ({ topicTitle: topicById(subj, c.topicId)?.title ?? c.topicId, front: c.front, back: c.back })));
+        const leeches = Array.from(new Set(forgotten.filter((c) => Number((c as { lapses?: number }).lapses ?? 0) >= 3).map((c) => c.topicId)));
+        if (leeches.length) reopenTopics(subj, leeches, 'its review cards kept being forgotten');
         await saveSubject(subj);
         await recordActivity(subj.id, 'review', minutes * share);
       }
@@ -124,6 +135,10 @@ function ReviewScreen({ items, retention }: { items: Item[]; retention: number }
       results.current.pending = [];
       invalidate();
       router.replace('/learn');
+      // Off the critical path: let the path adapt where enough was forgotten to mean something.
+      for (const subj of touched.values()) {
+        void afterReviews(subj, forgottenBySubject.get(subj.id) ?? []).then((notes) => { if (notes?.length) invalidate(); });
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save.');
       setSaving(false);

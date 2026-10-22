@@ -52,8 +52,10 @@ export async function updateLearnerModel(subj: LiveSubject, topicId: string, evi
 }
 
 // Runs after a topic is saved: the learner model always; a revision of the
-// path when the topic has now missed the mark twice or a milestone was just
-// reached. Failures are logged and swallowed; nothing here blocks the learner.
+// path when the topic missed the mark, when a milestone was just reached,
+// and otherwise every third topic mastered, so a wrong turn is caught within
+// a few sessions rather than at the end of a level. Failures are logged and
+// swallowed; nothing here blocks the learner.
 export async function afterTopic(
   subj: LiveSubject,
   topicId: string,
@@ -66,11 +68,16 @@ export async function afterTopic(
     console.warn('learner model update failed', e);
   }
   const topic = subj.plan.topics.find((t) => t.id === topicId);
+  const masteredCount = subj.plan.topics.filter((t) => { const st = subj.topicState[t.id] as { status?: string } | undefined; return st?.status === 'mastered'; }).length;
   let reason: string | null = null;
-  if (!ctx.mastered && ctx.attempts >= 2) {
-    reason = `The topic "${topic?.title ?? topicId}" has not reached the mark after ${ctx.attempts} attempts. Decide whether something before it is missing, whether it should be split, or whether it is fine to keep trying as it is.`;
+  if (!ctx.mastered) {
+    reason = ctx.attempts >= 2
+      ? `The topic "${topic?.title ?? topicId}" has not reached the mark after ${ctx.attempts} attempts. Decide whether something before it is missing, whether it should be split, or whether it is fine to keep trying as it is.`
+      : `The topic "${topic?.title ?? topicId}" missed the mark on its first attempt and comes back next session in a simpler form. Look at what went wrong: if a prerequisite is missing or the topic is too dense, change the path now; if it looks like one rough sitting, change nothing.`;
   } else if (ctx.milestoneReached) {
     reason = `The milestone "${ctx.milestoneReached}" has just been reached. Check that the topics still ahead fit what this learner has shown and what they said they want.`;
+  } else if (masteredCount > 0 && masteredCount % 3 === 0) {
+    reason = `A routine look after ${masteredCount} topics mastered: with what the learner has shown so far, are the topics still ahead the right ones, in the right order, at the right grain? Change nothing unless the evidence calls for it.`;
   }
   if (!reason) return null;
   try {
@@ -78,6 +85,25 @@ export async function afterTopic(
     return a.notes ?? [];
   } catch (e) {
     console.warn('path revision failed', e);
+    return null;
+  }
+}
+
+// Runs after a review session for one subject: cards forgotten today feed a
+// revision of the path when there are enough of them to mean something
+// (two or more), with the forgotten cards as evidence. Cards failed three
+// times or more are leeches: their topics are reopened by the caller.
+export async function afterReviews(
+  subj: LiveSubject,
+  forgotten: { topicTitle: string; front: string; back: string }[],
+): Promise<PlanRevision['notes'] | null> {
+  if (forgotten.length < 2) return null;
+  const evidence = forgotten.map((f) => `Forgotten in review (${f.topicTitle}): ${f.front} -> ${f.back}`).join('\n');
+  try {
+    const a = await adaptPlan(subj, `In today's reviews ${forgotten.length} cards in this subject were forgotten. Decide whether the topics ahead assume something that has not stuck, and whether a bridging or consolidating topic belongs before them.`, { evidence });
+    return a.notes ?? [];
+  } catch (e) {
+    console.warn('path revision after reviews failed', e);
     return null;
   }
 }
