@@ -470,7 +470,7 @@ function PracticeStep({ S, item }: { S: SessionApi; item: Record<string, unknown
 
 function DoneStep({ S, onClose }: { S: SessionApi; onClose: () => void }) {
   const { s } = S;
-  const { spacing, colors } = useTheme();
+  const { spacing, colors, radius } = useTheme();
   const sum = s.summary;
   return (
     <View style={{ gap: spacing.xl }}>
@@ -497,6 +497,16 @@ function DoneStep({ S, onClose }: { S: SessionApi; onClose: () => void }) {
             ? 'The topic stays in practice until you log a session away from the screen where every check passed.'
             : 'It counts as evidence once the reviews hold up over the coming days, so come back when the cards are due.'}
       </Text>
+      {s.revision?.length ? (
+        <View style={{ gap: spacing.sm, padding: spacing.lg, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md }}>
+          <Text variant="bodyStrong">Your path has changed</Text>
+          {s.revision.map((n, i) => (
+            <Text key={i} variant="body" color="textMuted">
+              {n.why || `${n.op === 'insert' ? 'Added' : n.op === 'remove' ? 'Removed' : n.op === 'move' ? 'Moved' : 'Refocused'}: ${n.title}`}
+            </Text>
+          ))}
+        </View>
+      ) : null}
       <Footer>
         {s.busy === 'Saving' ? <Waiting label="Saving" /> : <Button label="Back to today" onPress={onClose} />}
       </Footer>

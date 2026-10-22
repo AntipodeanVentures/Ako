@@ -2,14 +2,16 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 
-import { Button, Screen, Segmented, Text, TextField } from '@/src/components/ui';
+import { Button, Chips, Screen, Segmented, Text, TextField } from '@/src/components/ui';
 import { STAGES, START_LEVELS } from '@/src/engine/ladder';
 import type { StageId } from '@/src/engine/types';
 import { useAuth } from '@/src/features/auth';
 import {
+  OTHER,
   answersToIntake,
   fallbackQuestions,
   fetchIntakeQuestions,
+  type IntakeAnswer,
   type IntakeQuestion,
 } from '@/src/features/subjects/intakeQuestions';
 import {
@@ -33,32 +35,45 @@ const AIMS: { value: StageId; label: string }[] = STAGES.slice(1).map((s) => ({ 
 
 const SLOTS = [5, 15, 30, 45] as const;
 
-// Three choices, then three questions written for the subject (what for,
-// what contact so far, where to aim), then the path is written while the
-// learner watches the levels arrive. The draft is enough to start on; the
-// reviewed version replaces it in the background.
-const QUESTIONS_WAIT_MS = 7000;
+// Three choices, then the two or three questions an expert in the subject
+// would ask before writing a course (chosen by the model for this subject
+// and learner, with quick answers to tap), then the path is written while
+// the learner watches the levels arrive. The draft is enough to start on;
+// the reviewed version replaces it in the background.
+const QUESTIONS_WAIT_MS = 12000;
+const DEMO_QUESTIONS: IntakeQuestion[] = [
+  { slot: 'why', q: 'Is this mainly to live by it, to understand it, or to study it formally?', options: ['Live by it', 'Understand it', 'Study it formally'], multi: true, effect: 'Practice versus argument reconstruction.' },
+  { slot: 'material', q: 'Have you read any of the three Romans already?', options: ['Marcus Aurelius', 'Seneca', 'Epictetus', 'None yet'], multi: true, effect: 'Which texts to start from.' },
+  { slot: 'focus', q: 'Stay with the Romans, or bring in the Greek roots and rival schools?', options: ['Romans only', 'Roots and rivals too'], multi: false, effect: 'Whether Zeno, Aristotle and Epicurus get topics.' },
+];
 export default function PlaceScreen() {
   const { colors, spacing } = useTheme();
   const router = useRouter();
   const { session } = useAuth();
-  const { subject } = useLocalSearchParams<{ subject: string }>();
+  const { subject, demo } = useLocalSearchParams<{ subject: string; demo?: string }>();
   const build = usePlanBuild();
   const [current, setCurrent] = useState<StartLevel>('Know a little');
   const [target, setTarget] = useState<StageId>('s3');
   const [minutes, setMinutes] = useState<number>(15);
   const [step, setStep] = useState<'levels' | 'focus'>('levels');
   const [questions, setQuestions] = useState<IntakeQuestion[] | null>(null);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [answers, setAnswers] = useState<Record<number, IntakeAnswer>>({});
+  const answerAt = (i: number): IntakeAnswer => answers[i] ?? { picked: [], other: '' };
+  const setAnswer = (i: number, patch: Partial<IntakeAnswer>) => setAnswers((a) => ({ ...a, [i]: { ...answerAt(i), ...patch } }));
 
   // Ask for the subject's questions as soon as we know the subject, so they
-  // are ready by the time the three choices are made. If they are slow,
-  // the plain versions stand in rather than making the learner wait.
+  // are usually ready by the time the three choices are made. If they are
+  // slow, the plain versions stand in rather than making the learner wait.
   useEffect(() => {
     if (!subject) return;
+    if (__DEV__ && demo) {
+      // Development only: sample questions for the preview screen, with no model call.
+      setQuestions(DEMO_QUESTIONS);
+      return;
+    }
     let live = true;
     const timer = setTimeout(() => { if (live) setQuestions((q) => q ?? fallbackQuestions); }, QUESTIONS_WAIT_MS);
-    fetchIntakeQuestions(subject, current, target).then((qs) => {
+    fetchIntakeQuestions(subject, current, target, minutes).then((qs) => {
       if (live) setQuestions((q) => q ?? qs);
     });
     return () => { live = false; clearTimeout(timer); };
@@ -103,7 +118,9 @@ export default function PlaceScreen() {
           <View style={{ gap: spacing.xs }}>
             <Text variant="heading">Before it is written</Text>
             <Text variant="body" color="textMuted">
-              Three questions, so the path is shaped around you. A line each is plenty, and any can be left blank.
+              {questions && questions.length === 1
+                ? 'One question that changes what goes in. Tap an answer or type your own; it can be left blank.'
+                : 'The questions a good teacher would ask first. Tap an answer or type your own; any can be left blank.'}
             </Text>
           </View>
           {!questions ? (
@@ -114,18 +131,29 @@ export default function PlaceScreen() {
               </Text>
             </View>
           ) : (
-            questions.map((q) => (
-              <TextField
-                key={q.slot}
-                label={q.q}
-                labelVariant="question"
-                value={answers[q.slot] ?? ''}
-                onChangeText={(v) => setAnswers((a) => ({ ...a, [q.slot]: v }))}
-                placeholder={q.hint}
-                multiline
-                style={{ minHeight: 72, textAlignVertical: 'top' }}
-              />
-            ))
+            questions.map((q, i) => {
+              const a = answerAt(i);
+              const typing = !q.options.length || a.picked.includes(OTHER) || Boolean(a.other);
+              return (
+                <View key={i} style={{ gap: spacing.sm }}>
+                  <Text variant="bodyStrong">{q.q}</Text>
+                  {q.options.length ? (
+                    <Chips options={[...q.options, OTHER]} value={a.picked} onChange={(picked) => setAnswer(i, { picked })} multi={q.multi} />
+                  ) : null}
+                  {typing ? (
+                    <TextField
+                      label={q.options.length ? 'In your own words' : 'Your answer'}
+                      value={a.other}
+                      onChangeText={(other) => setAnswer(i, { other })}
+                      placeholder="A line is plenty"
+                      multiline
+                      style={{ minHeight: 64, textAlignVertical: 'top' }}
+                      autoFocus={q.options.length > 0}
+                    />
+                  ) : null}
+                </View>
+              );
+            })
           )}
         </View>
       ) : !building ? (
@@ -245,7 +273,7 @@ export default function PlaceScreen() {
         )}
         {!building && step === 'levels' ? (
           <Text variant="caption" color="textMuted" center>
-            Three quick questions next, then your path. You can change any of this later.
+            A couple of quick questions next, then your path. You can change any of this later.
           </Text>
         ) : !building ? (
           <Pressable onPress={() => setStep('levels')} style={{ alignSelf: 'center', padding: spacing.sm }}>

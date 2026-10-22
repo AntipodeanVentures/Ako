@@ -65,7 +65,13 @@ export function todayLine(subjects: LiveSubject[]): string {
   if (due) parts.push(`${due} ${due === 1 ? 'review' : 'reviews'}${subjects.length > 1 ? ' across your subjects' : ''}`);
   if (step.kind === 'check') parts.push(`${due ? 'then ' : ''}the ${step.stageName} level check in ${step.subject.plan.title}`);
   const nt = topicStep ? topicStep.topic : step.kind === 'check' ? null : firstTopic?.t;
-  if (nt) parts.push(`${due ? 'then ' : ''}one new idea: ${nt.title.toLowerCase()}`);
+  const ns = topicStep ? topicStep.subject : firstTopic?.s;
+  if (nt) {
+    // A topic that comes back: it missed the mark last time, or a level check reopened it.
+    const st = (ns?.topicState[nt.id] ?? {}) as { status?: string; attempts?: number; reopenedAt?: number };
+    const again = st.status === 'learning' && (Number(st.attempts) > 0 || Boolean(st.reopenedAt));
+    parts.push(`${due ? 'then ' : ''}${again ? (st.reopenedAt ? 'back to' : 'another go, simpler, at') : 'one new idea:'} ${nt.title.toLowerCase()}`);
+  }
   if (!parts.length) return 'Nothing due. Add a subject to keep going.';
   const line = parts.join(', ');
   return line.charAt(0).toUpperCase() + line.slice(1) + '.';

@@ -99,6 +99,25 @@ function checkEligible(subj) {
   const last = arr(subj.checks).length ? subj.checks[subj.checks.length - 1].at : 0;
   return topics.length >= 2 && nowMs() - last >= 6 * DAY ? topics : null;
 }
+// After a failed level check, the topics behind the wrong answers go back to
+// learning, so they come first next session, and their cards come due now.
+// Returns the topics reopened.
+function reopenTopics(subj, topicIds) {
+  const ids = new Set(arr(topicIds));
+  const reopened = [];
+  for (const t of subj.plan.topics) {
+    if (!ids.has(t.id)) continue;
+    const st = subj.topicState[t.id] || (subj.topicState[t.id] = {});
+    if (st.status !== 'mastered' && st.status !== 'known') continue;
+    st.status = 'learning';
+    st.reopenedAt = nowMs();
+    delete st.masteredAt;
+    reopened.push(t);
+  }
+  const now = nowMs();
+  for (const c of subjectCards(subj)) if (ids.has(c.topicId) && c.due > now) { c.due = now; if (subj.dirtyCards && subj.dirtyCards.add) subj.dirtyCards.add(c.id); }
+  return reopened;
+}
 // Returns the milestones newly reached, so the caller can tell the learner.
 function checkMilestones(subj, viaPlacement) {
   const reached = [];
@@ -283,4 +302,4 @@ function roleReadiness(role, subjects) {
 }
 const roleForSubject = (roles, sid) => arr(roles).find((r) => arr(r.map && r.map.areas).some((a) => a.subjectId === sid)) || null;
 
-export { topicById, learnerAbout, learnerModel, subjectCards, topicStatus, isLearned, learnedCount, studiedCount, nextTopic, practisingTopics, currentMilestone, relearnCount, isSecure, secureCount, dueCards, stageTopics, stageProgress, firstPlannedIdx, stagePosition, isSkippedStage, daysUntil, positionText, levelCheckReady, coveredStage, dayAgo, minutesSince, checkEligible, checkMilestones, markStageReached, recordMinutes, logReview, retentionRate, paceStats, paceBasis, stageHours, remainingMinutes, estimateStage, fmtMonth, fmtWeeks, fmtHours, estimateText, nextStageEstimate, activityDays, conceptKey, noteConcept, weakConcepts, lessonConceptName, areaCredit, roleReadiness, roleForSubject };
+export { reopenTopics, topicById, learnerAbout, learnerModel, subjectCards, topicStatus, isLearned, learnedCount, studiedCount, nextTopic, practisingTopics, currentMilestone, relearnCount, isSecure, secureCount, dueCards, stageTopics, stageProgress, firstPlannedIdx, stagePosition, isSkippedStage, daysUntil, positionText, levelCheckReady, coveredStage, dayAgo, minutesSince, checkEligible, checkMilestones, markStageReached, recordMinutes, logReview, retentionRate, paceStats, paceBasis, stageHours, remainingMinutes, estimateStage, fmtMonth, fmtWeeks, fmtHours, estimateText, nextStageEstimate, activityDays, conceptKey, noteConcept, weakConcepts, lessonConceptName, areaCredit, roleReadiness, roleForSubject };

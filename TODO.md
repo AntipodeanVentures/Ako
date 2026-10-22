@@ -56,12 +56,28 @@ plan. Still to do, in the audit's order:
 - [ ] Judgement of learning on the Done screen ("how many of these cards
       will you remember in a week?"), resolved at first review.
 - [ ] Split a topic over two days for the 5 and 15 minute slots.
-- [ ] A failed level check reopens the topics it exposed, instead of a flat
-      three-day wait.
-- [ ] Call the learner-model update at the end of each topic so the
-      misconceptions and analogies lines in every prompt stop being empty.
+- [x] Call the learner-model update at the end of each topic (22 Oct 2026),
+      so the misconceptions and analogies lines in every prompt fill up.
+- [x] A failed level check reopens the topics it exposed and asks for a
+      path revision (22 Oct 2026).
 - [ ] Dual coding: ask the lesson for a described diagram or table where the
       content is structural; a video search phrase in motor drills.
+
+## The path adapts (22 October 2026)
+
+Done: the intake asks the two or three questions an expert would ask for
+the subject (chosen by the model, with tap answers); the learner model is
+rewritten after every topic; the topics ahead are revised (insert, refocus,
+drop, reorder; started topics never touched; ids stable) when a topic misses
+twice, when a level check is failed, at each milestone, and on request from
+the Path tab, with each change explained to the learner. Still to do:
+
+- [ ] Let the tutor chat feed the learner model: a question the learner
+      asks in a lesson is evidence of a gap.
+- [ ] A weekly "how is it going?" prompt on the Learn tab that offers the
+      rethink when the learner has missed several sessions or topics.
+- [ ] Revisions to lesson pitch: the "too hard / too easy" rating moving
+      `subj.pitch`, which the prompts already read.
 
 ## Next build sessions
 

@@ -190,23 +190,89 @@ function normaliseStart(raw) {
   const opts = ['Complete beginner', 'Know a little', 'Intermediate', 'Used to be good, now rusty'];
   return { current: opts.includes(R.current) ? R.current : null, background: str(R.background, 1500), why: str(R.why, 300) };
 }
-// The three intake questions. Falls back to plain questions for any slot
-// the model missed, so the screen always has three to ask.
-const INTAKE_FALLBACK = {
-  why: { q: 'What do you want to be able to do with this?', hint: 'The use you have in mind, in a line' },
-  background: { q: 'What contact have you had with it so far?', hint: 'Books, courses, practice, related skills' },
-  focus: { q: 'Is there a part of it you most want to aim at, or all of it?', hint: 'A topic, an area, or "all of it"' },
-};
+// The intake questions: up to three, each with quick answers. If the model
+// gives nothing usable, two plain questions stand in so the screen always
+// has something worth asking.
+const INTAKE_SLOTS = ['why', 'focus', 'background', 'constraint', 'material', 'other'];
+const INTAKE_FALLBACK = [
+  { slot: 'why', q: 'What do you want to be able to do with this?', options: [], multi: false, effect: 'The use the course is aimed at.' },
+  { slot: 'focus', q: 'Is there a part of it you most want to aim at, or all of it?', options: ['All of it'], multi: false, effect: 'Which strand comes first and gets the most time.' },
+];
 function normaliseIntake(raw) {
   const R = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
-  const given = arr(R.questions).filter((x) => x && typeof x === 'object');
-  return {
-    questions: Object.keys(INTAKE_FALLBACK).map((slot) => {
-      const g = given.find((x) => x.slot === slot) || {};
-      const q = str(g.q || g.question, 300);
-      return { slot, q: q || INTAKE_FALLBACK[slot].q, hint: str(g.hint, 120) || INTAKE_FALLBACK[slot].hint };
-    }),
-  };
+  const questions = arr(R.questions).filter((x) => x && typeof x === 'object').map((x) => ({
+    slot: INTAKE_SLOTS.includes(x.slot) ? x.slot : 'other',
+    q: str(x.q || x.question, 220),
+    options: Array.from(new Set(arr(x.options).map((o) => str(o, 60)).filter(Boolean))).slice(0, 5),
+    multi: x.multi === true,
+    effect: str(x.effect, 240),
+  })).filter((x) => x.q).slice(0, 3);
+  return { questions: questions.length ? questions : INTAKE_FALLBACK.map((q) => ({ ...q, options: q.options.slice() })) };
+}
+
+// Applies the model's revisions to a copy of the plan's topics. Ids stay as
+// they are (cards and topic state point at them); new topics take the next
+// free number; started topics are never changed, whatever the model says;
+// prerequisites that would point forward are dropped. Returns the new topic
+// list, the milestones that still have topics, and one note per change made.
+function normaliseAdaptation(raw, plan, subj) {
+  const p = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const topics = plan.topics.map((t) => Object.assign({}, t, { prereqs: arr(t.prereqs).slice() }));
+  const kinds = ['concept', 'procedure', 'vocabulary', 'motor', 'strategy', 'roleplay'];
+  const covered = new Set(plan.topics.map((t) => t.stage));
+  const state = (subj && subj.topicState) || {};
+  const started = (id) => { const st = state[id]; return !!(st && (st.status === 'mastered' || st.status === 'known' || st.status === 'practising' || st.status === 'learning' || num(st.attempts, 0) > 0)); };
+  const idx = (id) => topics.findIndex((t) => t.id === id);
+  let nextNum = plan.topics.reduce((m, t) => Math.max(m, num(String(t.id).replace(/^t/, ''), 0)), 0) + 1;
+  const notes = [];
+  for (const c of arr(p.changes).filter((x) => x && typeof x === 'object').slice(0, 6)) {
+    const why = str(c.why, 240);
+    if (c.op === 'insert' && c.topic && typeof c.topic === 'object') {
+      const t = c.topic;
+      const after = idx(str(c.after, 20));
+      // With no usable anchor, the new topic goes just before the first topic not yet started.
+      const at = after >= 0 ? after + 1 : Math.max(0, topics.findIndex((x) => !started(x.id)));
+      const neighbour = topics[Math.max(0, Math.min(topics.length - 1, after >= 0 ? after : at))] || {};
+      const stage = covered.has(str(t.stage, 4)) ? str(t.stage, 4) : (neighbour.stage || plan.topics[0].stage);
+      const nt = {
+        id: 't' + nextNum++,
+        title: str(t.title, 160) || 'New topic',
+        summary: str(t.summary, 300),
+        kind: kinds.includes(t.kind) ? t.kind : 'concept',
+        stage,
+        milestone: neighbour.milestone || (plan.milestones[0] ? plan.milestones[0].id : null),
+        outcome: Number.isInteger(t.outcome) && t.outcome >= 0 && t.outcome < 8 ? t.outcome : null,
+        threshold: t.threshold === true,
+        prereqs: arr(t.prereqs).map((x) => str(x, 20)).filter((x) => idx(x) >= 0),
+        minutes: Math.round(clampNum(num(t.minutes, 30), 10, 90)),
+      };
+      topics.splice(at, 0, nt);
+      notes.push({ op: 'insert', id: nt.id, title: nt.title, why });
+    } else if (c.op === 'replace') {
+      const i = idx(str(c.id, 20));
+      if (i < 0 || started(topics[i].id)) continue;
+      if (str(c.title)) topics[i].title = str(c.title, 160);
+      if (str(c.summary)) topics[i].summary = str(c.summary, 300);
+      if (kinds.includes(c.kind)) topics[i].kind = c.kind;
+      notes.push({ op: 'replace', id: topics[i].id, title: topics[i].title, why });
+    } else if (c.op === 'remove') {
+      const i = idx(str(c.id, 20));
+      if (i < 0 || started(topics[i].id) || topics.length <= 3) continue;
+      const gone = topics.splice(i, 1)[0];
+      for (const t of topics) t.prereqs = t.prereqs.filter((x) => x !== gone.id);
+      notes.push({ op: 'remove', id: gone.id, title: gone.title, why });
+    } else if (c.op === 'move') {
+      const i = idx(str(c.id, 20));
+      if (i < 0 || started(topics[i].id) || idx(str(c.after, 20)) < 0 || str(c.after, 20) === str(c.id, 20)) continue;
+      const t = topics.splice(i, 1)[0];
+      topics.splice(idx(str(c.after, 20)) + 1, 0, t);
+      notes.push({ op: 'move', id: t.id, title: t.title, why });
+    }
+  }
+  const order = new Map(topics.map((t, i) => [t.id, i]));
+  for (const t of topics) t.prereqs = Array.from(new Set(t.prereqs.filter((x) => order.has(x) && order.get(x) < order.get(t.id))));
+  const milestones = plan.milestones.filter((m) => topics.some((t) => t.milestone === m.id));
+  return { topics, milestones, notes };
 }
 function normaliseDebrief(raw, n) {
   const D = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
@@ -220,4 +286,4 @@ function normaliseModel(raw) {
   return { strengths: list(M.strengths), misconceptions: list(M.misconceptions), analogies: list(M.analogies), note: str(M.note, 500), updatedAt: nowMs() };
 }
 
-export { DEFAULT_HOURS, normaliseStages, normaliseTopics, normalisePlan, normaliseExtension, upgradePlan, normQ, normaliseLesson, normaliseWarm, normaliseRole, normaliseKnow, normaliseStart, INTAKE_FALLBACK, normaliseIntake, normaliseDebrief, normaliseModel };
+export { DEFAULT_HOURS, normaliseStages, normaliseTopics, normalisePlan, normaliseExtension, upgradePlan, normQ, normaliseLesson, normaliseWarm, normaliseRole, normaliseKnow, normaliseStart, INTAKE_SLOTS, INTAKE_FALLBACK, normaliseIntake, normaliseAdaptation, normaliseDebrief, normaliseModel };

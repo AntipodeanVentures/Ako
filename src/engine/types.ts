@@ -44,6 +44,14 @@ export type Plan = {
   resources: { title: string; creator: string; type: string; why: string; search: string }[];
   safety: string[];
   changes?: string[];
+  // Revisions made from evidence after the plan was written (newest last).
+  history?: PlanRevision[];
+};
+
+export type PlanRevision = {
+  at: number;
+  reason: string;
+  notes: { op: 'insert' | 'replace' | 'remove' | 'move'; id: string; title: string; why: string }[];
 };
 
 export type PracticeItem = {

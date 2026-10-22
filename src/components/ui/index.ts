@@ -4,6 +4,7 @@ export { Avatar } from './Avatar';
 export { BarChart } from './BarChart';
 export { Button } from './Button';
 export { Card } from './Card';
+export { Chips } from './Chips';
 export { CountdownRing } from './CountdownRing';
 export { EmptyState } from './EmptyState';
 export { Ladder } from './Ladder';

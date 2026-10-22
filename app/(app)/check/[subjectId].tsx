@@ -7,7 +7,7 @@ import { Button, Screen, Text, TextField } from '@/src/components/ui';
 import { clampNum } from '@/src/engine/core';
 import { LEVEL_PASS, stageName } from '@/src/engine/ladder';
 import { normQ } from '@/src/engine/normalise';
-import { markStageReached, recordMinutes, stageTopics } from '@/src/engine/progress';
+import { markStageReached, recordMinutes, reopenTopics, stageTopics } from '@/src/engine/progress';
 import type { PracticeItem, StageId } from '@/src/engine/types';
 import { aiErrorCopy, callJson } from '@/src/features/ai/client';
 import { useProfile } from '@/src/features/profile';
@@ -18,13 +18,17 @@ import {
   useLiveSubjects,
   type LiveSubject,
 } from '@/src/features/subjects';
+import { adaptPlan } from '@/src/features/subjects/adapt';
 import { extendPlanTo, nextStageToPlan } from '@/src/features/subjects/extend';
 import { useTheme } from '@/src/theme';
 
 // The level check: eight to ten questions across the level's topics, from
 // memory, at least three days after the last of them was learned. Passing
-// (80%) marks the level reached; failing opens it again in three days.
-// On a pass the next level's topics are written, up to the target.
+// (80%) marks the level reached, and the next level's topics are written,
+// up to the target. Failing reopens the topics behind the wrong answers:
+// they come first next session, their cards come due now, and the path is
+// revised in the light of what the check showed. The check opens again
+// once those topics are relearned and three days old.
 
 type Grade = { score: number; feedback: string };
 
@@ -60,6 +64,8 @@ function CheckScreen({ subj, stageId }: { subj: LiveSubject; stageId: StageId })
   const [busy, setBusy] = useState<string | null>('Writing your level check');
   const [error, setError] = useState<string | null>(null);
   const [extension, setExtension] = useState<{ stage: StageId; count: number } | null>(null);
+  const [reopened, setReopened] = useState<string[]>([]);
+  const [revision, setRevision] = useState<string[]>([]);
   const startedAt = useRef(Date.now());
   const name = stageName(stageId);
 
@@ -130,11 +136,22 @@ function CheckScreen({ subj, stageId }: { subj: LiveSubject; stageId: StageId })
       const now = Date.now();
       subj.stageChecks[stageId] = { at: now };
       if (passed) markStageReached(subj, stageId, score, total);
+      // The topics behind the wrong answers go back to learning and their cards come due now.
+      const missedTopics = Array.from(new Set(questions.map((qq, i) => (g[i].score < 1 ? qq.topicId : '')).filter(Boolean)));
+      const back = passed ? [] : (reopenTopics(subj, missedTopics) as { id: string; title: string }[]);
+      setReopened(back.map((t) => t.title));
       const minutes = clampNum((now - startedAt.current) / 60000, 1, 40);
       recordMinutes(subj, 'lesson', minutes);
       await saveSubject(subj);
       await recordActivity(subj.id, 'lesson', minutes);
       invalidate();
+      if (!passed) {
+        // Off the critical path: let the path adapt to what the check showed.
+        const evidence = questions.map((qq, i) => `${qq.topicId}: ${qq.prompt} | they said: ${all[i]?.picked != null ? qq.options?.[all[i].picked as number] ?? '' : all[i]?.text || '(blank)'} | mark ${Math.round(g[i].score * 100)}%`).join('\n');
+        adaptPlan(subj, `The ${name} level check was failed: ${score % 1 ? score.toFixed(1) : score} of ${total}. The topics behind the wrong answers have been reopened. Decide whether a bridging topic, a split or a reorder would help before they are relearned.`, { evidence })
+          .then((a) => { if (a?.notes?.length) { setRevision(a.notes.map((n) => n.why || n.title)); invalidate(); } })
+          .catch((e) => console.warn('path revision failed', e));
+      }
       if (passed) {
         const nextStage = nextStageToPlan(subj);
         if (nextStage) {
@@ -182,9 +199,22 @@ function CheckScreen({ subj, stageId }: { subj: LiveSubject; stageId: StageId })
                 ? stageDef?.equivalent
                   ? `About ${stageDef.equivalent}. Reviews keep it honest from here.`
                   : 'Reviews keep it honest from here.'
-                : 'Keep reviewing; the check opens again in three days. The questions below show where it slipped.'}
+                : reopened.length
+                  ? `The topics behind the missed questions are open again and come first next session: ${reopened.join('; ')}. Their cards are due now. The check opens again once they are relearned.`
+                  : 'Keep reviewing; the check opens again in three days. The questions below show where it slipped.'}
             </Text>
           </View>
+
+          {revision.length ? (
+            <View style={{ gap: spacing.xs, padding: spacing.lg, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md }}>
+              <Text variant="bodyStrong">Your path has changed</Text>
+              {revision.map((line, i) => (
+                <Text key={i} variant="body" color="textMuted">
+                  {line}
+                </Text>
+              ))}
+            </View>
+          ) : null}
 
           {busy ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>

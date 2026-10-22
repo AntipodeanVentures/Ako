@@ -10,6 +10,7 @@ import {
   makeCards, reviewCard, recallChance, dueCards,
   mergeKnowItems, renderKnow, withoutKnowItem,
   newLesson, useLesson, stepOrder, nextStep, pickNextItem, scorePractice, practiceDone, metCriterion, finishTopic, recordRelearn, sameAnswer, ROLE_LEVEL_GOOD,
+  normaliseIntake, normaliseAdaptation, reopenTopics, intakePrompt, adaptPrompt,
 } from '../index.js';
 import { lesson, planPortuguese, planJudo } from '../fixtures.js';
 
@@ -271,6 +272,72 @@ describe('the session deck', () => {
   it('matches typed answers loosely', () => {
     expect(sameAnswer('Bom dia!', 'bom dia')).toBe(true);
     expect(sameAnswer('Boa noite', 'bom dia')).toBe(false);
+  });
+});
+
+describe('the path adapts', () => {
+  it('keeps up to three intake questions with options, and falls back to two plain ones', () => {
+    const got = normaliseIntake({ questions: [
+      { slot: 'why', q: 'Is this for a trip, for family, or for work?', options: ['A trip', 'Family', 'Work', 'A trip'], multi: true, effect: 'Which situations the examples use.' },
+      { slot: 'focus', q: 'Speaking first, or reading and writing too?', options: ['Speaking', 'Both'], multi: false },
+      { slot: 'nonsense', q: 'Anything you are following?', options: [], multi: false },
+      { slot: 'why', q: 'A fourth question', options: [] },
+    ] });
+    expect(got.questions).toHaveLength(3);
+    expect(got.questions[0].options).toEqual(['A trip', 'Family', 'Work']);
+    expect(got.questions[0].multi).toBe(true);
+    expect(got.questions[2].slot).toBe('other');
+    const fb = normaliseIntake({ questions: [] });
+    expect(fb.questions.map((q) => q.slot)).toEqual(['why', 'focus']);
+    const prompt = intakePrompt('Brazilian Portuguese', 'Know a little', 's3', 15, intake.about);
+    expect(prompt).toContain('at most three');
+    expect(prompt).toContain('Never ask about time available');
+  });
+  it('applies a revision to topics not yet started, keeps ids, and never touches started topics', () => {
+    const plan = normalisePlan(planPortuguese, intake, 's2');
+    const subj = subjectFrom(plan);
+    const n = plan.topics.length;
+    const [t1, t2, t3] = plan.topics;
+    subj.topicState[t1.id] = { status: 'mastered' };
+    subj.topicState[t2.id] = { status: 'learning', attempts: 2 };
+    const got = normaliseAdaptation({ changes: [
+      { op: 'insert', after: t1.id, topic: { title: 'Sounds that trip English speakers', summary: 'The handful of vowel sounds that change meaning.', kind: 'vocabulary', stage: 's1', prereqs: [t1.id], minutes: 20 }, why: 'You kept mixing two sounds, so this comes first.' },
+      { op: 'remove', id: t1.id, why: 'should be ignored: mastered' },
+      { op: 'replace', id: t2.id, title: 'nope', why: 'should be ignored: in learning' },
+      { op: 'replace', id: t3.id, title: 'Ordering food and drink', summary: 'Menus, asking for the bill.', kind: 'roleplay', why: 'You said the trip is the point.' },
+      { op: 'move', id: plan.topics[n - 1].id, after: t3.id, why: 'Sooner, for the trip.' },
+    ] }, plan, subj);
+    expect(got.topics).toHaveLength(n + 1);
+    expect(got.topics[1].id).toBe('t' + (n + 1));
+    expect(got.topics[1].prereqs).toEqual([t1.id]);
+    expect(got.topics[1].milestone).toBe(t1.milestone);
+    expect(got.topics.find((t) => t.id === t1.id)).toBeTruthy();
+    expect(got.topics.find((t) => t.id === t2.id).title).toBe(t2.title);
+    expect(got.topics.find((t) => t.id === t3.id).kind).toBe('roleplay');
+    expect(got.topics.findIndex((t) => t.id === plan.topics[n - 1].id)).toBe(got.topics.findIndex((t) => t.id === t3.id) + 1);
+    expect(got.notes.map((x) => x.op)).toEqual(['insert', 'replace', 'move']);
+    // a prerequisite that now points forward is dropped
+    for (const t of got.topics) for (const pr of t.prereqs) expect(got.topics.findIndex((x) => x.id === pr)).toBeLessThan(got.topics.indexOf(t));
+    // the prompt lists statuses and the reason
+    const prompt = adaptPrompt(subj, { reason: 'A milestone was reached.', note: 'more speaking', evidence: 'x' });
+    expect(prompt).toContain('tried 2x');
+    expect(prompt).toContain('more speaking');
+  });
+  it('reopens the topics behind a failed check and brings their cards due', () => {
+    const plan = normalisePlan(planPortuguese, intake, 's2');
+    const subj = subjectFrom(plan);
+    const [t1, t2] = plan.topics;
+    subj.topicState[t1.id] = { status: 'mastered', masteredAt: T0 - 5 * 86400000 };
+    subj.topicState[t2.id] = { status: 'mastered', masteredAt: T0 - 5 * 86400000 };
+    subj.cards = makeCards(t1, [{ front: 'a', back: 'b' }], 3).concat(makeCards(t2, [{ front: 'c', back: 'd' }], 3));
+    const back = reopenTopics(subj, [t1.id, 'nope']);
+    expect(back.map((t) => t.id)).toEqual([t1.id]);
+    expect(subj.topicState[t1.id].status).toBe('learning');
+    expect(subj.topicState[t1.id].masteredAt).toBeUndefined();
+    expect(subj.topicState[t2.id].status).toBe('mastered');
+    expect(subj.cards[0].due).toBeLessThanOrEqual(T0);
+    expect(subj.cards[1].due).toBeGreaterThan(T0);
+    expect(nextTopic(subj).id).toBe(t1.id);
   });
 });
 

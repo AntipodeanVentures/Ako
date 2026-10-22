@@ -12,9 +12,10 @@ import {
   scorePractice,
   useLesson as installLesson,
 } from '@/src/engine/session';
-import type { Lesson, Topic } from '@/src/engine/types';
+import type { Lesson, PlanRevision, Topic } from '@/src/engine/types';
 import { aiErrorCopy, callJson, callStream } from '@/src/features/ai/client';
 import { recordActivity, saveSubject, type LiveSubject } from '@/src/features/subjects';
+import { afterTopic } from '@/src/features/subjects/adapt';
 
 // One topic, start to finish: warm-up, lesson, recall, practice, done.
 // The engine owns the rules (what to ask next, when practice is done, what
@@ -60,6 +61,8 @@ export type SessionState = {
   debrief: Debrief | null;
   // done
   summary: { added: number; firstDue: number | null; minutes: number; correct: number; asked: number; sure: number; sureRight: number; taught: boolean; roleplay: Debrief | null; motorPending: boolean; mastered: boolean } | null;
+  // Changes the path revision made after this topic, if any (shown on Done).
+  revision: PlanRevision['notes'] | null;
 };
 
 function serialisable(subj: LiveSubject) {
@@ -99,6 +102,7 @@ export function useSession(subj: LiveSubject, topicId: string, retention: number
     chatTurns: 0,
     debrief: null,
     summary: null,
+    revision: null,
   });
   const patch = useCallback((p: Partial<SessionState>) => setS((prev) => ({ ...prev, ...p })), []);
 
@@ -255,7 +259,10 @@ export function useSession(subj: LiveSubject, topicId: string, retention: number
   const finish = useCallback(
     async (opts: { taught?: boolean } = {}) => {
       const minutes = clampNum((Date.now() - startedAt.current) / 60000, 1, Math.max(10, topic.minutes * 2));
+      const milestonesBefore = new Set(Object.keys((subj.milestones as Record<string, unknown>) || {}));
       const r = finishTopic(subj, L, { minutes, retention, taught: opts.taught });
+      const reachedId = Object.keys((subj.milestones as Record<string, unknown>) || {}).find((id) => !milestonesBefore.has(id));
+      const milestoneReached = reachedId ? (subj.plan.milestones.find((m) => m.id === reachedId)?.title ?? null) : null;
       patch({
         step: 'done',
         busy: 'Saving',
@@ -281,9 +288,19 @@ export function useSession(subj: LiveSubject, topicId: string, retention: number
         patch({ busy: null });
       } catch (e) {
         patch({ busy: null, error: e instanceof Error ? e.message : 'Could not save. Your progress is kept on this screen; try again.' });
+        return;
+      }
+      // After the save, off the critical path: the learner model, and a
+      // revision of the path when this topic has missed twice or a
+      // milestone was just reached. The Done screen shows any changes.
+      const attempts = Number((subj.topicState[topicId] as { attempts?: number } | undefined)?.attempts ?? 0);
+      const notes = await afterTopic(subj, topicId, evidenceFromLesson(s, L), { mastered: r.mastered, attempts, milestoneReached });
+      if (notes?.length) {
+        onSaved();
+        patch({ revision: notes });
       }
     },
-    [L, onSaved, patch, retention, subj, topic.minutes],
+    [L, onSaved, patch, retention, s, subj, topic.minutes, topicId],
   );
 
   // ---- after practice: role-play for conversational topics, otherwise teach it back ----
@@ -395,4 +412,31 @@ export function useSession(subj: LiveSubject, topicId: string, retention: number
     retryLesson,
     clearError: () => patch({ error: null }),
   };
+}
+
+// What happened in this topic, in plain lines, for the learner-model update
+// and the path revision: warm-up answers against the model answers, recall
+// and why answers with their marks, every practice answer with its mark
+// and confidence, the role-play debrief and whether the idea was taught back.
+type LogEntry = { prompt: string; response: string; score: number; conf: string | null; difficulty: number; re: boolean };
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function evidenceFromLesson(s: SessionState, L: any): string {
+  const lines: string[] = [];
+  const pct = (x: number) => Math.round(x * 100) + '%';
+  if (s.warm) {
+    s.warm.questions.forEach((q, i) => {
+      const g = s.warmGrades?.[i];
+      lines.push(`Warm-up: ${q.q} | they said: ${s.warmAnswers[i] || '(blank)'}${g ? ' | mark ' + pct(g.score) : ''}`);
+    });
+  }
+  for (const it of arr(L.rec?.items) as { key: string; prompt: string; text: string; result: { score: number } | null }[]) {
+    if (it.result) lines.push(`${it.key === 'why' ? 'Why' : 'Recall'}: ${it.prompt} | they said: ${it.text || '(blank)'} | mark ${pct(it.result.score)}`);
+  }
+  for (const e of arr(L.prac?.log) as LogEntry[]) {
+    lines.push(`Practice (difficulty ${e.difficulty}${e.re ? ', asked again' : ''}): ${e.prompt} | they said: ${e.response || '(blank)'} | mark ${pct(e.score)}${e.conf ? ', felt ' + e.conf : ''}`);
+  }
+  if (L.rp?.debrief) lines.push(`Role-play: ${pct(L.rp.debrief.mean)} of the criteria. ${L.rp.debrief.feedback}`);
+  if (L.teach?.turns) lines.push(`Taught it back over ${L.teach.turns} turns.`);
+  lines.push(`Outcome: ${L.mastered ? 'mastered' : 'not yet mastered'}; ${L.prac?.correct ?? 0} fully right of ${L.prac?.asked?.length ?? 0} asked, ${L.prac?.misses ?? 0} missed.`);
+  return lines.join('\n').slice(0, 3000);
 }

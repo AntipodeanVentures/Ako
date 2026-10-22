@@ -3,12 +3,13 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 
-import { Button, Ladder, Text } from '@/src/components/ui';
+import { Button, Ladder, Text, TextField } from '@/src/components/ui';
 import { STAGES, stageName } from '@/src/engine/ladder';
 import { estimateText, levelCheckReady, stagePosition, stageProgress, topicStatus } from '@/src/engine/progress';
 import type { StageId, Topic } from '@/src/engine/types';
 import { aiErrorCopy } from '@/src/features/ai/client';
 import { useInvalidateSubject, type LiveSubject } from '@/src/features/subjects';
+import { adaptPlan } from '@/src/features/subjects/adapt';
 import { extendPlanTo, nextStageToPlan } from '@/src/features/subjects/extend';
 import { subjectLine } from '@/src/features/subjects/summary';
 import { useTheme } from '@/src/theme';
@@ -34,6 +35,27 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
   const invalidate = useInvalidateSubject();
   const [extending, setExtending] = useState(false);
   const [extendError, setExtendError] = useState<string | null>(null);
+  // Rethink my path: the learner says what should change and the model revises the topics still ahead.
+  const [rethinking, setRethinking] = useState(false);
+  const [rethinkOpen, setRethinkOpen] = useState(false);
+  const [rethinkNote, setRethinkNote] = useState('');
+  const [rethinkResult, setRethinkResult] = useState<string | null>(null);
+  const rethink = async () => {
+    setRethinking(true);
+    setRethinkResult(null);
+    try {
+      const a = await adaptPlan(subj, 'The learner asked for the path to be rethought.', { note: rethinkNote.trim() });
+      setRethinkResult(a.notes?.length ? `${a.notes.length} change${a.notes.length === 1 ? '' : 's'} made; see below.` : 'Looked at it against what you said and what you have done so far: no change needed.');
+      setRethinkNote('');
+      setRethinkOpen(false);
+      invalidate();
+    } catch (e) {
+      setRethinkResult(aiErrorCopy(e));
+    } finally {
+      setRethinking(false);
+    }
+  };
+  const history = [...(subj.plan.history ?? [])].reverse();
   const extend = async () => {
     if (!toPlan) return;
     setExtending(true);
@@ -135,24 +157,75 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
               </Text>
             </View>
             <View>
-              {topics.map((t) => (
-                <TopicRow
-                  key={t.id}
-                  topic={t}
-                  status={topicStatus(subj, t)}
-                  onPress={() => open(t.id)}
-                />
-              ))}
+              {topics.map((t) => {
+                const st = subj.topicState[t.id] as { attempts?: number; reopenedAt?: number } | undefined;
+                const status = topicStatus(subj, t);
+                const note = status === 'learning' ? (st?.reopenedAt ? 'again, after the check' : Number(st?.attempts) ? 'again, simpler' : null) : null;
+                return <TopicRow key={t.id} topic={t} status={status} note={note} onPress={() => open(t.id)} />;
+              })}
               <View style={{ borderTopWidth: 1, borderTopColor: colors.border }} />
             </View>
           </View>
         );
       })}
+
+      <View style={{ marginTop: spacing.xxl, paddingTop: spacing.xl, borderTopWidth: 1, borderTopColor: colors.border, gap: spacing.md }}>
+        <View style={{ gap: spacing.xs }}>
+          <Text variant="eyebrow" color="textMuted">
+            The path adapts
+          </Text>
+          <Text variant="body" color="textMuted">
+            Topics still ahead are revised when one keeps slipping, when a level check is failed and at each milestone. You can also ask.
+          </Text>
+        </View>
+        {rethinkOpen ? (
+          <View style={{ gap: spacing.md }}>
+            <TextField
+              label="What should change?"
+              value={rethinkNote}
+              onChangeText={setRethinkNote}
+              placeholder="More of, less of, something you need sooner"
+              multiline
+              style={{ minHeight: 72, textAlignVertical: 'top' }}
+            />
+            <Button label="Rethink my path" onPress={rethink} loading={rethinking} />
+            <Pressable onPress={() => setRethinkOpen(false)} style={{ alignSelf: 'center', padding: spacing.sm }}>
+              <Text variant="caption" color="textMuted">
+                Cancel
+              </Text>
+            </Pressable>
+          </View>
+        ) : (
+          <Button label="Rethink my path" variant="secondary" onPress={() => setRethinkOpen(true)} loading={rethinking} />
+        )}
+        {rethinkResult ? (
+          <Text variant="caption" color="textMuted">
+            {rethinkResult}
+          </Text>
+        ) : null}
+        {history.length ? (
+          <View style={{ marginTop: spacing.sm }}>
+            {history.map((h, i) => (
+              <View key={i} style={{ paddingVertical: spacing.md, borderTopWidth: 1, borderTopColor: colors.border, gap: spacing.xs }}>
+                <Text variant="caption" color="textMuted">
+                  {new Date(h.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} · {h.reason.split('.')[0]}
+                </Text>
+                {h.notes.map((n, j) => (
+                  <Text key={j} variant="body">
+                    {n.why || `${n.op === 'insert' ? 'Added' : n.op === 'remove' ? 'Removed' : n.op === 'move' ? 'Moved' : 'Refocused'}: ${n.title}`}
+                  </Text>
+                ))}
+              </View>
+            ))}
+            <View style={{ borderTopWidth: 1, borderTopColor: colors.border }} />
+          </View>
+        ) : null}
+      </View>
     </View>
   );
 }
 
-function TopicRow({ topic, status, onPress }: { topic: Topic; status: string; onPress: () => void }) {
+function TopicRow({ topic, status, note, onPress }: { topic: Topic; status: string; note?: string | null; onPress: () => void }) {
   const { colors, spacing } = useTheme();
   const learned = status === 'mastered' || status === 'known';
   const open = status === 'available' || status === 'learning' || status === 'practising';
@@ -178,6 +251,11 @@ function TopicRow({ topic, status, onPress }: { topic: Topic; status: string; on
         <Text variant="body" color={open || learned ? 'text' : 'textMuted'}>
           {topic.title}
           {topic.threshold ? '  ·  threshold' : ''}
+          {note ? (
+            <Text variant="body" color="accent">
+              {'  ·  ' + note}
+            </Text>
+          ) : null}
         </Text>
         <Text variant="caption" color="textMuted" numberOfLines={2}>
           {topic.summary}

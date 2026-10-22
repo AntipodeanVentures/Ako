@@ -4,7 +4,7 @@
 //        | { kind: 'start', subject: string }                                                             -> a suggested starting point
 //        | { kind: 'role', title: string, description?: string }                                          -> a role map
 //        | { kind: 'model', subject, topicId, evidence }                                                   -> learner model update
-//        | { kind: 'intake', subject, current, target }                                                    -> three questions to ask before the plan
+//        | { kind: 'intake', subject, current, target, minutes }                                           -> up to three questions to ask before the plan
 // Response: JSON
 
 import {
@@ -39,7 +39,8 @@ Deno.serve(async (req) => {
     if (body.kind === 'intake') {
       const subject = str(body.subject, 160);
       if (!subject) throw new HttpError(400, 'bad_request', 'Tell us what you want to learn.');
-      const r = await sample({ model: MODELS.small, prompt: intakePrompt(subject, str(body.current, 40) || 'Know a little', str(body.target, 4) || 's3', about), maxTokens: 700 });
+      // The mid model: choosing which questions matter for a subject is a judgement call, and it still answers in a few seconds.
+      const r = await sample({ model: MODELS.mid, prompt: intakePrompt(subject, str(body.current, 40) || 'Know a little', str(body.target, 4) || 's3', Number(body.minutes) || 15, about), maxTokens: 900 });
       await recordUsage(caller, 'extract', r.inputTokens, r.outputTokens);
       return json({ intake: normaliseIntake(parseJson(r.text, r.stopReason)) });
     }

@@ -4,7 +4,7 @@
 
 import { arr, clampNum, num, pct, plural, str } from './core.js';
 import { BAND_TARGET, CRITERION, LEVEL_PASS, PITCH, ROLE_LEVEL_GOOD, STAGES, START_STAGE, SUPPORT, pitchOf, relearnTarget, stageIdx, stageName, supportOf } from './ladder.js';
-import { isLearned, learnerAbout, learnerModel, subjectCards, topicById, weakConcepts } from './progress.js';
+import { isLearned, learnerAbout, learnerModel, subjectCards, topicById, topicStatus, weakConcepts } from './progress.js';
 
 // ---------- the method, given to Claude with every request ----------
 const METHOD = `Evidence-based method (follow it):
@@ -32,6 +32,8 @@ function learnerLines(subj) {
     `Topics already learned in this subject: ${known}.`
   ];
   if (subj.intake.focus) lines.push(`What they most want to aim at: ${subj.intake.focus}.`);
+  const qa = arr(subj.intake.answers).filter((x) => x && str(x.a)).slice(0, 4);
+  if (qa.length) lines.push(`What they said when they started: ${qa.map((x) => str(x.q, 120) + ' ' + str(x.a, 200)).join(' | ')}.`);
   if (arr(m.strengths).length) lines.push(`Strengths seen so far: ${m.strengths.join('; ')}.`);
   if (arr(m.misconceptions).length) lines.push(`Misconceptions or confusions to watch for: ${m.misconceptions.join('; ')}.`);
   const an = arr(m.analogies).concat(arr(g.analogies)).slice(0, 6);
@@ -56,7 +58,7 @@ const FRAMEWORK_GUIDE = `Anchor the five levels to recognised frameworks, and na
 function intakeLines(intake) {
   const qa = arr(intake && intake.answers).filter((x) => x && str(x.a)).slice(0, 4);
   if (!qa.length) return '';
-  return '\nBefore the plan was written the learner was asked a few questions. Their answers, in their own words, matter more than anything inferred above. Shape the plan around them: put the parts they want first, serve the use they named, and skip what their background shows they already have:\n' + qa.map((x) => `Q: ${str(x.q, 300)}\nA: ${str(x.a, 1200)}`).join('\n') + '\n';
+  return '\nBefore the plan was written the learner was asked the questions below, chosen because the answers change the course, and answered in their own words. Their answers matter more than anything inferred above. Shape the plan around them: put the parts they want first, serve the use they named, follow any material they named, and skip what their background shows they already have:\n' + qa.map((x) => `Q: ${str(x.q, 300)}${x.effect ? ' (asked because: ' + str(x.effect, 240) + ')' : ''}\nA: ${str(x.a, 1200)}`).join('\n') + '\n';
 }
 
 function planPrompt(intake, coverTo) {
@@ -143,24 +145,65 @@ Decide a realistic starting point for this subject from that background alone. R
 {"current":"one of exactly: Complete beginner | Know a little | Intermediate | Used to be good, now rusty","background":"1 to 3 plain sentences on what in their background bears on this subject, or an empty string if nothing does","why":"one sentence on why you chose that starting point"}`;
 }
 
-// Three questions, specific to the subject, asked before the plan is written:
-// what the learner wants it for, what they already know, and where to aim it.
-// The answers steer the plan and every lesson after it.
-const INTAKE_SLOTS = ['why', 'background', 'focus'];
-function intakePrompt(subject, current, target, about) {
-  return `An adult is about to start learning "${subject}" with an AI tutor. Before the plan is written, the tutor asks them three short questions. Write those questions for THIS subject.
+// Before the plan: the two or three questions whose answers would most change
+// this learner's course, chosen by the model for the subject and the learner
+// rather than drawn from fixed slots. Each comes with quick answers to tap and
+// room to type. The answers steer the plan and every lesson after it.
 
-Their self-rated starting level: ${current}. The level they want to reach: ${stageName(target)}.
-What they already know well in other areas: ${str(about, 1600) || 'not given'}.
+function intakePrompt(subject, current, target, minutes, about) {
+  return `You are an expert tutor meeting a new adult student who wants to learn "${subject}". Before you design their course you may ask at most three short questions. Choose the questions whose answers would most change the course you write: which topics are in it, what comes first, what gets the most time, which examples and practice it uses. Ask nothing you already know and nothing a course would cover anyway.
 
-Write exactly three questions, one for each slot, in this order:
-1. "why": what they want to be able to DO with it, or what they want it for. Offer the two or three most common reasons people take up this subject as examples inside the question, so a one-line answer is easy.
-2. "background": what contact they have already had with it: things read, courses, practice, related skills. Name the kinds of contact that are typical for this subject.
-3. "focus": which part of the subject they most want to aim at, naming the three or four main areas or strands this subject divides into for someone at their level, so they can pick or say "all of it".
+What you already know:
+- Their own rating of where they are now: ${current}
+- The level they want to reach: ${stageName(target)}
+- Time: about ${minutes} minutes a day
+- What they know well in other areas: ${str(about, 1600) || 'not given'}
 
-Rules: plain, friendly British English; each question under 35 words; no technical terms a newcomer would not know; each question has a "hint" (under 12 words) that shows the kind of answer wanted. The questions must be specific to ${subject}, not generic.
+Ask what an expert in ${subject} would actually ask a new student. For example: the specific situation or use they are aiming at (a trip, an exam, a job, a project, a conversation they want to be able to have, a problem they want to solve); which branch or strand of the subject, when the subject divides into strands that lead to different courses; a book, syllabus, teacher or club they are following; a constraint that shapes practice (equipment, a device, where they will practise); what they have already tried and where it stalled. Pick the two or three that matter most for THIS subject and THIS learner, and ask only one if one is enough. Never ask about time available, their level, or anything in the profile above.
 
-Return ONLY JSON: {"questions":[{"slot":"why","q":"...","hint":"..."},{"slot":"background","q":"...","hint":"..."},{"slot":"focus","q":"...","hint":"..."}]}`;
+For each question:
+- "slot": one of "why" (what for), "focus" (which part), "background" (contact so far), "constraint" (shapes delivery), "material" (something to follow), "other".
+- "q": the question, under 25 words, plain British English, no technical terms a newcomer would not know.
+- "options": 2 to 5 short answers (under 7 words each) that cover the common cases, so one tap answers it; the learner can always type their own instead. Use [] only where options make no sense (a book title, a date).
+- "multi": true if several options could apply at once.
+- "effect": one line, for the course writer, on what changes depending on the answer.
+
+Return ONLY JSON: {"questions":[{"slot":"why","q":"...","options":["...","..."],"multi":false,"effect":"..."}]}`;
+}
+
+// Revising the path from evidence: what has been mastered, what keeps slipping,
+// what a check showed, what the learner asked for. The model returns a bounded
+// set of edits to the topics still ahead; normaliseAdaptation applies them.
+function adaptPrompt(subj, ctx) {
+  const plan = subj.plan;
+  const status = (t) => {
+    const st = subj.topicState[t.id] || {};
+    const s = topicStatus(subj, t);
+    return s === 'learning' && num(st.attempts, 0) ? `learning (tried ${st.attempts}x, not yet mastered)` : s;
+  };
+  const rows = plan.topics.map((t) => `${t.id} | ${t.stage} | ${status(t)} | ${t.title} | ${t.summary}${t.prereqs.length ? ' | needs ' + t.prereqs.join(',') : ''}`).join('\n');
+  const covered = Array.from(new Set(plan.topics.map((t) => t.stage)));
+  return `You are revising an adult learner's path in "${plan.title}" in the light of evidence. Make the smallest set of changes that would make their next weeks of study more useful; often that is one or two changes, sometimes none.
+
+Why this revision is happening: ${str(ctx.reason, 400)}
+${ctx.note ? 'What the learner asked for, in their words: "' + str(ctx.note, 600) + '"\n' : ''}${ctx.evidence ? 'Evidence:\n' + str(ctx.evidence, 3000) + '\n' : ''}
+${learnerLines(subj)}
+
+Stages in this subject:
+${stageLines(plan)}
+
+Topics (id | stage | status | title | summary | prerequisites), in order:
+${rows}
+
+What you may do, at most 6 changes in all:
+- "insert": a new topic placed after a given id: a bridging topic before something that keeps slipping, a topic for a use the learner named, a prerequisite that was assumed. Same fields as other topics; only in stages ${covered.join(', ')}; no id.
+- "replace": new title, summary and kind for a topic that has not been started, to refocus it on what this learner needs or to narrow one that was too dense.
+- "remove": drop a topic that has not been started and serves nothing this learner needs.
+- "move": place a topic that has not been started after another id, when the order is wrong for this learner.
+Never touch topics that are mastered, known, practising or in learning. Keep every stage's outcomes served. Keep ids as they are. Each change carries "why": one plain sentence to the learner ("you", "your") saying what changed and why.
+
+Return ONLY JSON: {"changes":[{"op":"insert","after":"t7","topic":{"title":"...","summary":"at most 20 plain words","kind":"concept","stage":"s1","outcome":0,"threshold":false,"prereqs":["t7"],"minutes":30},"why":"..."},{"op":"replace","id":"t9","title":"...","summary":"...","kind":"concept","why":"..."},{"op":"remove","id":"t12","why":"..."},{"op":"move","id":"t15","after":"t8","why":"..."}]}
+Return {"changes":[]} if the path is right as it stands.`;
 }
 
 // A job the learner aspires to, mapped into areas that can each become a subject.
@@ -453,4 +496,4 @@ function lessonDigest(lesson) {
   return pts.filter(Boolean).join('; ').slice(0, 1500);
 }
 
-export { METHOD, INTAKE_SLOTS, intakePrompt, intakeLines, learnerLines, stageLines, FRAMEWORK_GUIDE, planPrompt, reviewPlanPrompt, knowPrompt, startPrompt, rolePrompt, debriefPrompt, formCheckPrompt, extendPrompt, placementPrompt, warmupPrompt, lessonPrompt, morePracticePrompt, gradePrompt, checkPrompt, modelPrompt, tutorRules, lessonDigest };
+export { METHOD, intakePrompt, intakeLines, adaptPrompt, learnerLines, stageLines, FRAMEWORK_GUIDE, planPrompt, reviewPlanPrompt, knowPrompt, startPrompt, rolePrompt, debriefPrompt, formCheckPrompt, extendPrompt, placementPrompt, warmupPrompt, lessonPrompt, morePracticePrompt, gradePrompt, checkPrompt, modelPrompt, tutorRules, lessonDigest };

@@ -11,8 +11,12 @@
 //
 // Extending to the next level: { kind: 'extend', subject, stageId: 's3' }
 // Response: JSON { extension: { milestones, topics } }, to append to the plan.
+//
+// Revising the path from evidence: { kind: 'adapt', subject, reason, note?, evidence? }
+// Response: JSON { adaptation: { topics, milestones, notes } }, the new topic list to
+// replace the plan's, with one note per change (empty when nothing changed).
 
-import { planPrompt, reviewPlanPrompt, normalisePlan, extendPrompt, normaliseExtension, METHOD } from '../_shared/engine/index.js';
+import { planPrompt, reviewPlanPrompt, normalisePlan, extendPrompt, normaliseExtension, adaptPrompt, normaliseAdaptation, METHOD, str } from '../_shared/engine/index.js';
 import { CORS, HttpError, errorResponse, json, requireCaller } from '../_shared/auth.ts';
 import { MODELS } from '../_shared/limits.ts';
 import { checkLimit, recordUsage } from '../_shared/metering.ts';
@@ -34,6 +38,17 @@ Deno.serve(async (req) => {
       await recordUsage(caller, 'plan', r.inputTokens, r.outputTokens);
       const extension = normaliseExtension(parseJson(r.text, r.stopReason), subject.plan, body.stageId);
       return json({ extension });
+    }
+    if (body.kind === 'adapt') {
+      const subject = body.subject;
+      if (!subject?.plan) throw new HttpError(400, 'bad_request', 'Subject is required.');
+      const { data: prof } = await caller.admin.from('profiles').select('about, model').eq('id', caller.profileId).maybeSingle();
+      subject.learner = { about: prof?.about ?? '', model: prof?.model ?? null };
+      const ctx = { reason: str(body.reason, 400) || 'A routine look at the path.', note: str(body.note, 600), evidence: str(body.evidence, 3000) };
+      const r = await sample({ model: MODELS.frontier, system: METHOD, prompt: adaptPrompt(subject, ctx), maxTokens: 4000 });
+      await recordUsage(caller, 'plan', r.inputTokens, r.outputTokens);
+      const adaptation = normaliseAdaptation(parseJson(r.text, r.stopReason), subject.plan, subject);
+      return json({ adaptation });
     }
     const { intake, coverTo } = body;
     if (!intake?.subject) throw new HttpError(400, 'bad_request', 'Tell us what you want to learn.');
