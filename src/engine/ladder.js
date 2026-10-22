@@ -20,8 +20,8 @@ const PITCH = [null,
   { label: 'Complete beginner', text: 'complete beginner. Assume no knowledge of this field at all. Use everyday words, everyday examples and short sentences.', terms: 3, words: '200 to 400' },
   { label: 'Beginner', text: 'beginner who knows a little. Explain every technical term in plain words when it first appears, and build up step by step.', terms: 4, words: '250 to 450' },
   { label: 'Intermediate', text: 'intermediate. They know the basic ideas and common terms of the field. Explain new terms briefly and go a level deeper.', terms: 6, words: '300 to 550' },
-  { label: 'Advanced', text: 'advanced. They are comfortable with the field. Be precise and concise, and focus on mechanisms, evidence and nuance.', terms: 8, words: '350 to 600' },
-  { label: 'Expert', text: 'expert. Go into technical depth, edge cases and current debates.', terms: 12, words: '400 to 650' }];
+  { label: 'Advanced', text: 'advanced. They are comfortable with the field. Be precise and concise, and focus on mechanisms, evidence and nuance.', terms: 6, words: '350 to 600' },
+  { label: 'Expert', text: 'expert. Go into technical depth, edge cases and current debates.', terms: 6, words: '400 to 650' }];
 const START_PITCH = { 'Complete beginner': 1, 'Know a little': 2, 'Intermediate': 3, 'Used to be good, now rusty': 3 };
 const pitchOf = (subj) => clampNum(Math.round(num(subj && subj.pitch, START_PITCH[subj && subj.intake && subj.intake.current] || 2)), 1, 5);
 // How much support a lesson gives. Worked examples fade as practice goes well (the expertise reversal effect).
@@ -35,7 +35,8 @@ const PLAN_VERSION = 4;
 const RELEARN_TARGET = 3;      // successful reviews on separate days before a topic counts as secure (successive relearning)
 const relearnTarget = (t) => (t && t.threshold ? RELEARN_TARGET + 1 : RELEARN_TARGET);   // threshold concepts get one more
 const ROLE_LEVEL_GOOD = 0.7;   // role-play debrief score that counts as passing
-const CRITERION = 3;           // correct practice answers before a topic counts as learned
+const CRITERION = 3;           // fully correct practice answers before a topic counts as learned
+const HARD = 4;                // difficulty from which an item counts as transfer; one must be right before mastery
 const BAND_TARGET = 0.8;       // aim for roughly four in five practice answers right
 const LEVEL_PASS = 0.8;        // share of a level check that must be right
 const LEVEL_DELAY = 3 * DAY;   // the level check waits until the last topic is at least this old, so it tests memory
@@ -48,4 +49,4 @@ function coverTarget(intake) {
   return STAGES[Math.min(stageIdx(intake.target), start + 1)].id;
 }
 
-export { STAGES, stageIdx, stageName, START_STAGE, PITCH, START_PITCH, pitchOf, SUPPORT, supportOf, PLAN_VERSION, RELEARN_TARGET, relearnTarget, ROLE_LEVEL_GOOD, CRITERION, BAND_TARGET, LEVEL_PASS, LEVEL_DELAY, START_LEVELS, coverTarget };
+export { STAGES, stageIdx, stageName, START_STAGE, PITCH, START_PITCH, pitchOf, SUPPORT, supportOf, PLAN_VERSION, RELEARN_TARGET, relearnTarget, ROLE_LEVEL_GOOD, CRITERION, HARD, BAND_TARGET, LEVEL_PASS, LEVEL_DELAY, START_LEVELS, coverTarget };

@@ -7,9 +7,12 @@ import { Text } from './Text';
 type Props = TextInputProps & {
   label: string;
   error?: string;
+  // 'question' sets the label in body weight above the field, for a
+  // sentence-long prompt rather than a one-word field name.
+  labelVariant?: 'caption' | 'question';
 };
 
-export function TextField({ label, error, style, onFocus, onBlur, ...rest }: Props) {
+export function TextField({ label, error, labelVariant = 'caption', style, onFocus, onBlur, ...rest }: Props) {
   const { colors, radius, spacing, typography } = useTheme();
   const [focused, setFocused] = useState(false);
 
@@ -20,8 +23,8 @@ export function TextField({ label, error, style, onFocus, onBlur, ...rest }: Pro
       : colors.border;
 
   return (
-    <View style={{ gap: spacing.xs }}>
-      <Text variant="caption" color="textMuted">
+    <View style={{ gap: labelVariant === 'question' ? spacing.sm : spacing.xs }}>
+      <Text variant={labelVariant === 'question' ? 'bodyStrong' : 'caption'} color={labelVariant === 'question' ? 'text' : 'textMuted'}>
         {label}
       </Text>
       <TextInput

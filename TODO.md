@@ -31,6 +31,38 @@ A running list of outstanding tasks. Tick items off as they are done.
 - [ ] Apple Developer Program and Google Play Console enrolment; `eas init`
       to mint the project id; a first internal build.
 
+## From the learning-science audit (21 October 2026)
+
+The audit of the method against the evidence (`docs/learning-science-audit.md`)
+ranked twelve findings. Done the same day: a real mastery criterion (three
+fully right, including a hard and a mixed item; otherwise the topic stays in
+"learning" and comes back simpler), practice that heads for the hard and
+mixed items, support that fades only on real fluency, per-concept first
+ratings for cards, reviews taking turns between topics, the intake questions
+(why, contact so far, focus) feeding the plan and every lesson, the lesson
+cache keyed per learner so no one reads another learner's warm-up feedback,
+calibration shown on the Done screen, and the new-term cap matched to the
+plan. Still to do, in the audit's order:
+
+- [ ] Split the lesson into a cached canonical core and a small per-learner
+      call (bridge, warm-up response, mixed items), so caching can return.
+- [ ] A weekly mixed retention check across recent topics (`checkEligible`
+      exists; add `kind: 'retention'` to `nextStep`); show "secure" per topic
+      on the Path; gate the level check on two thirds secure rather than a
+      fixed three-day wait.
+- [ ] Move teach-back to the day the topic's first card comes due, offered
+      from the review screen, instead of straight after recall.
+- [ ] A typed answer before the comparison and completion-gap reveals.
+- [ ] Judgement of learning on the Done screen ("how many of these cards
+      will you remember in a week?"), resolved at first review.
+- [ ] Split a topic over two days for the 5 and 15 minute slots.
+- [ ] A failed level check reopens the topics it exposed, instead of a flat
+      three-day wait.
+- [ ] Call the learner-model update at the end of each topic so the
+      misconceptions and analogies lines in every prompt stop being empty.
+- [ ] Dual coding: ask the lesson for a described diagram or table where the
+      content is structural; a video search phrase in motor drills.
+
 ## Next build sessions
 
 - [x] Teach-back, role-play and drill steps in the session.

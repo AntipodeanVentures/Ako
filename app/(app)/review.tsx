@@ -33,6 +33,29 @@ const GRADES: { value: 1 | 2 | 3 | 4; label: string }[] = [
   { value: 4, label: 'Easy' },
 ];
 
+// Overdue first, then within the same due day take turns between topics
+// (and so between subjects), so one card's answer does not cue the next and
+// a topic's cards, which share a due time, do not run as a block.
+function interleave(items: Item[]): Item[] {
+  const day = (t: number) => Math.floor(t / 86400000);
+  const sorted = [...items].sort((a, b) => a.card.due - b.card.due);
+  const out: Item[] = [];
+  let i = 0;
+  while (i < sorted.length) {
+    const d = day(sorted[i].card.due);
+    const group: Item[] = [];
+    while (i < sorted.length && day(sorted[i].card.due) === d) group.push(sorted[i++]);
+    const byTopic = new Map<string, Item[]>();
+    for (const it of group) {
+      const k = `${it.subj.id}:${it.card.topicId}`;
+      byTopic.set(k, [...(byTopic.get(k) ?? []), it]);
+    }
+    const queues = [...byTopic.values()];
+    while (queues.some((q) => q.length)) for (const q of queues) if (q.length) out.push(q.shift()!);
+  }
+  return out;
+}
+
 export default function ReviewRoute() {
   const { profile } = useProfile();
   const { subjects, loading } = useLiveSubjects(profile);
@@ -40,9 +63,7 @@ export default function ReviewRoute() {
   if (!frozen.items && subjects.length && !loading) {
     const items: Item[] = [];
     for (const s of subjects) for (const c of dueCards(s.cards ?? []) as Card[]) items.push({ subj: s, card: c });
-    // Interleave subjects rather than running one then the next.
-    items.sort((a, b) => a.card.due - b.card.due);
-    frozen.items = items;
+    frozen.items = interleave(items);
   }
   if (!frozen.items) {
     return (

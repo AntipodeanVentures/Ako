@@ -2,10 +2,16 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 
-import { Button, Screen, Segmented, Text } from '@/src/components/ui';
+import { Button, Screen, Segmented, Text, TextField } from '@/src/components/ui';
 import { STAGES, START_LEVELS } from '@/src/engine/ladder';
 import type { StageId } from '@/src/engine/types';
 import { useAuth } from '@/src/features/auth';
+import {
+  answersToIntake,
+  fallbackQuestions,
+  fetchIntakeQuestions,
+  type IntakeQuestion,
+} from '@/src/features/subjects/intakeQuestions';
 import {
   currentPlan,
   resetBuild,
@@ -27,9 +33,11 @@ const AIMS: { value: StageId; label: string }[] = STAGES.slice(1).map((s) => ({ 
 
 const SLOTS = [5, 15, 30, 45] as const;
 
-// Three choices, then the path is written while the learner watches the
-// levels arrive. The draft is enough to start on; the reviewed version
-// replaces it in the background.
+// Three choices, then three questions written for the subject (what for,
+// what contact so far, where to aim), then the path is written while the
+// learner watches the levels arrive. The draft is enough to start on; the
+// reviewed version replaces it in the background.
+const QUESTIONS_WAIT_MS = 7000;
 export default function PlaceScreen() {
   const { colors, spacing } = useTheme();
   const router = useRouter();
@@ -39,6 +47,23 @@ export default function PlaceScreen() {
   const [current, setCurrent] = useState<StartLevel>('Know a little');
   const [target, setTarget] = useState<StageId>('s3');
   const [minutes, setMinutes] = useState<number>(15);
+  const [step, setStep] = useState<'levels' | 'focus'>('levels');
+  const [questions, setQuestions] = useState<IntakeQuestion[] | null>(null);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+
+  // Ask for the subject's questions as soon as we know the subject, so they
+  // are ready by the time the three choices are made. If they are slow,
+  // the plain versions stand in rather than making the learner wait.
+  useEffect(() => {
+    if (!subject) return;
+    let live = true;
+    const timer = setTimeout(() => { if (live) setQuestions((q) => q ?? fallbackQuestions); }, QUESTIONS_WAIT_MS);
+    fetchIntakeQuestions(subject, current, target).then((qs) => {
+      if (live) setQuestions((q) => q ?? qs);
+    });
+    return () => { live = false; clearTimeout(timer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subject]);
 
   // A new subject means a fresh build.
   useEffect(() => {
@@ -58,8 +83,7 @@ export default function PlaceScreen() {
       current,
       hours: Math.max(1, Math.round((minutes * 6) / 60)),
       minutes,
-      background: '',
-      why: '',
+      ...answersToIntake(questions ?? fallbackQuestions, answers),
     });
   };
 
@@ -74,7 +98,37 @@ export default function PlaceScreen() {
         <Text variant="title">{plan?.title || subject}</Text>
       </View>
 
-      {!building ? (
+      {!building && step === 'focus' ? (
+        <View style={{ gap: spacing.xl, marginTop: spacing.xxl }}>
+          <View style={{ gap: spacing.xs }}>
+            <Text variant="heading">Before it is written</Text>
+            <Text variant="body" color="textMuted">
+              Three questions, so the path is shaped around you. A line each is plenty, and any can be left blank.
+            </Text>
+          </View>
+          {!questions ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+              <ActivityIndicator size="small" color={colors.textMuted} />
+              <Text variant="caption" color="textMuted">
+                Working out what to ask about {subject}
+              </Text>
+            </View>
+          ) : (
+            questions.map((q) => (
+              <TextField
+                key={q.slot}
+                label={q.q}
+                labelVariant="question"
+                value={answers[q.slot] ?? ''}
+                onChangeText={(v) => setAnswers((a) => ({ ...a, [q.slot]: v }))}
+                placeholder={q.hint}
+                multiline
+                style={{ minHeight: 72, textAlignVertical: 'top' }}
+              />
+            ))
+          )}
+        </View>
+      ) : !building ? (
         <View style={{ gap: spacing.xl, marginTop: spacing.xxl }}>
           <View style={{ gap: spacing.sm }}>
             <Text variant="bodyStrong">Where are you now?</Text>
@@ -101,7 +155,7 @@ export default function PlaceScreen() {
         <View style={{ marginTop: spacing.xxl, gap: spacing.lg }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
             <Text variant="bodyStrong">
-              {build.status === 'building' ? 'Writing your path' : build.status === 'error' ? 'Could not write the path' : 'Your path'}
+              {build.status === 'building' ? 'Writing your path' : build.status === 'error' ? 'Could not write the path' : 'Five levels'}
             </Text>
             <Text variant="caption" color="textMuted">
               {plan
@@ -137,23 +191,21 @@ export default function PlaceScreen() {
                       </Text>
                     )}
                   </View>
-                  <View style={{ flex: 1, gap: 2 }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm }}>
+                  <View style={{ flex: 1, gap: spacing.xs }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: spacing.sm }}>
                       <Text variant="bodyStrong">{s.name}</Text>
-                      {def?.equivalent ? (
-                        <Text variant="caption" color="textMuted" numberOfLines={1} style={{ flexShrink: 1 }}>
-                          {def.equivalent}
+                      {planned ? (
+                        <Text variant="caption" color="accent">
+                          {planned} topics
                         </Text>
                       ) : null}
                     </View>
+                    {def?.equivalent ? (
+                      <Text variant="caption">{def.equivalent}</Text>
+                    ) : null}
                     {def ? (
                       <Text variant="caption" color="textMuted">
                         {def.means}
-                      </Text>
-                    ) : null}
-                    {planned ? (
-                      <Text variant="caption" color="accent">
-                        {planned} topics planned
                       </Text>
                     ) : null}
                   </View>
@@ -178,8 +230,10 @@ export default function PlaceScreen() {
       <View style={{ flex: 1, minHeight: spacing.xxl }} />
 
       <View style={{ gap: spacing.md }}>
-        {!building ? (
-          <Button label="Write my path" onPress={begin} />
+        {!building && step === 'levels' ? (
+          <Button label="Next" onPress={() => setStep('focus')} />
+        ) : !building ? (
+          <Button label="Write my path" onPress={begin} disabled={!questions} />
         ) : build.status === 'error' ? (
           <Button label="Try again" onPress={begin} />
         ) : (
@@ -189,8 +243,18 @@ export default function PlaceScreen() {
             loading={!canStart}
           />
         )}
-        {building && build.status === 'building' && !build.subjectId ? (
-          <Pressable onPress={resetBuild} style={{ alignSelf: 'center', padding: spacing.sm }}>
+        {!building && step === 'levels' ? (
+          <Text variant="caption" color="textMuted" center>
+            Three quick questions next, then your path. You can change any of this later.
+          </Text>
+        ) : !building ? (
+          <Pressable onPress={() => setStep('levels')} style={{ alignSelf: 'center', padding: spacing.sm }}>
+            <Text variant="caption" color="textMuted">
+              Back
+            </Text>
+          </Pressable>
+        ) : building && build.status === 'building' && !build.subjectId ? (
+          <Pressable onPress={() => { resetBuild(); setStep('focus'); }} style={{ alignSelf: 'center', padding: spacing.sm }}>
             <Text variant="caption" color="textMuted">
               Change my answers
             </Text>

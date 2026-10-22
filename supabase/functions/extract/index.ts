@@ -4,10 +4,11 @@
 //        | { kind: 'start', subject: string }                                                             -> a suggested starting point
 //        | { kind: 'role', title: string, description?: string }                                          -> a role map
 //        | { kind: 'model', subject, topicId, evidence }                                                   -> learner model update
+//        | { kind: 'intake', subject, current, target }                                                    -> three questions to ask before the plan
 // Response: JSON
 
 import {
-  knowPrompt, startPrompt, rolePrompt, modelPrompt, normaliseKnow, normaliseStart, normaliseRole, normaliseModel, topicById, METHOD, str,
+  knowPrompt, startPrompt, rolePrompt, modelPrompt, intakePrompt, normaliseKnow, normaliseStart, normaliseRole, normaliseModel, normaliseIntake, topicById, METHOD, str,
 } from '../_shared/engine/index.js';
 import { CORS, errorResponse, json, requireCaller, HttpError } from '../_shared/auth.ts';
 import { MODELS } from '../_shared/limits.ts';
@@ -34,6 +35,13 @@ Deno.serve(async (req) => {
       const r = await sample({ model: MODELS.small, prompt: startPrompt(str(body.subject, 160), about), maxTokens: 600 });
       await recordUsage(caller, 'extract', r.inputTokens, r.outputTokens);
       return json({ start: normaliseStart(parseJson(r.text, r.stopReason)) });
+    }
+    if (body.kind === 'intake') {
+      const subject = str(body.subject, 160);
+      if (!subject) throw new HttpError(400, 'bad_request', 'Tell us what you want to learn.');
+      const r = await sample({ model: MODELS.small, prompt: intakePrompt(subject, str(body.current, 40) || 'Know a little', str(body.target, 4) || 's3', about), maxTokens: 700 });
+      await recordUsage(caller, 'extract', r.inputTokens, r.outputTokens);
+      return json({ intake: normaliseIntake(parseJson(r.text, r.stopReason)) });
     }
     if (body.kind === 'role') {
       const r = await sample({ model: MODELS.frontier, system: METHOD, prompt: rolePrompt(str(body.title, 140), str(body.description, 6000), about), maxTokens: 3000 });

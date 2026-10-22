@@ -474,10 +474,13 @@ function DoneStep({ S, onClose }: { S: SessionApi; onClose: () => void }) {
   const sum = s.summary;
   return (
     <View style={{ gap: spacing.xl }}>
-      <Text variant="prose">{sum?.motorPending ? 'Learned. Now practise it.' : 'Learned.'}</Text>
+      <Text variant="prose">
+        {sum && !sum.mastered ? 'Not yet. It comes back tomorrow.' : sum?.motorPending ? 'Learned. Now practise it.' : 'Learned.'}
+      </Text>
       {sum ? (
         <View>
           <Row label="Practice" value={`${sum.correct} of ${sum.asked} right`} />
+          {sum.sure ? <Row label="Sure of" value={`${sum.sure}, right on ${sum.sureRight}`} /> : null}
           {sum.roleplay ? <Row label="Role-play" value={`${Math.round(sum.roleplay.mean * 100)}% of the criteria`} /> : null}
           {sum.taught ? <Row label="Taught back" value="Yes" /> : null}
           <Row label="Cards for review" value={String(sum.added)} />
@@ -486,9 +489,13 @@ function DoneStep({ S, onClose }: { S: SessionApi; onClose: () => void }) {
         </View>
       ) : null}
       <Text variant="body" color="textMuted">
-        {sum?.motorPending
-          ? 'The topic stays in practice until you log a session away from the screen where every check passed.'
-          : 'It counts as evidence once the reviews hold up over the coming days, so come back when the cards are due.'}
+        {sum && !sum.mastered
+          ? sum.roleplay
+            ? 'The role-play did not yet meet enough of the criteria. The topic is offered again next session, with the debrief to hand.'
+            : 'Practice did not reach the mark: three fully right, including a harder one. The topic is offered again next session in a simpler form, and its cards are already in review.'
+          : sum?.motorPending
+            ? 'The topic stays in practice until you log a session away from the screen where every check passed.'
+            : 'It counts as evidence once the reviews hold up over the coming days, so come back when the cards are due.'}
       </Text>
       <Footer>
         {s.busy === 'Saving' ? <Waiting label="Saving" /> : <Button label="Back to today" onPress={onClose} />}

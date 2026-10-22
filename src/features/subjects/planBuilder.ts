@@ -23,6 +23,10 @@ export type Intake = {
   minutes: number; // the daily slot they chose
   background: string;
   why: string;
+  // Where they most want to aim the subject, in their words.
+  focus?: string;
+  // The intake questions and their answers, verbatim, for the plan prompt.
+  answers?: { slot: string; q: string; a: string }[];
   syllabus?: string;
   role?: string;
 };
@@ -151,6 +155,15 @@ export async function startBuild(profileId: string, intake: Intake) {
     }
     set({ status: 'error', error: aiErrorCopy(e) });
   }
+}
+
+// Development only: puts a finished build in place so the path screen can
+// be previewed without an account (app/preview.tsx).
+export function seedBuildForPreview(intake: Intake, plan: Plan) {
+  if (!__DEV__) return;
+  run++;
+  state = { ...initial, status: 'draft', intake, draft: plan, subjectId: 'fixture', startedAt: Date.now() };
+  listeners.forEach((l) => l());
 }
 
 // The plan to show right now: the reviewed one if it has landed, else the draft.

@@ -190,6 +190,24 @@ function normaliseStart(raw) {
   const opts = ['Complete beginner', 'Know a little', 'Intermediate', 'Used to be good, now rusty'];
   return { current: opts.includes(R.current) ? R.current : null, background: str(R.background, 1500), why: str(R.why, 300) };
 }
+// The three intake questions. Falls back to plain questions for any slot
+// the model missed, so the screen always has three to ask.
+const INTAKE_FALLBACK = {
+  why: { q: 'What do you want to be able to do with this?', hint: 'The use you have in mind, in a line' },
+  background: { q: 'What contact have you had with it so far?', hint: 'Books, courses, practice, related skills' },
+  focus: { q: 'Is there a part of it you most want to aim at, or all of it?', hint: 'A topic, an area, or "all of it"' },
+};
+function normaliseIntake(raw) {
+  const R = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const given = arr(R.questions).filter((x) => x && typeof x === 'object');
+  return {
+    questions: Object.keys(INTAKE_FALLBACK).map((slot) => {
+      const g = given.find((x) => x.slot === slot) || {};
+      const q = str(g.q || g.question, 300);
+      return { slot, q: q || INTAKE_FALLBACK[slot].q, hint: str(g.hint, 120) || INTAKE_FALLBACK[slot].hint };
+    }),
+  };
+}
 function normaliseDebrief(raw, n) {
   const D = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
   const scores = arr(D.scores).map((x) => { const v = num(x, 0); return v >= 0.75 ? 1 : v >= 0.25 ? 0.5 : 0; }).slice(0, n);
@@ -202,4 +220,4 @@ function normaliseModel(raw) {
   return { strengths: list(M.strengths), misconceptions: list(M.misconceptions), analogies: list(M.analogies), note: str(M.note, 500), updatedAt: nowMs() };
 }
 
-export { DEFAULT_HOURS, normaliseStages, normaliseTopics, normalisePlan, normaliseExtension, upgradePlan, normQ, normaliseLesson, normaliseWarm, normaliseRole, normaliseKnow, normaliseStart, normaliseDebrief, normaliseModel };
+export { DEFAULT_HOURS, normaliseStages, normaliseTopics, normalisePlan, normaliseExtension, upgradePlan, normQ, normaliseLesson, normaliseWarm, normaliseRole, normaliseKnow, normaliseStart, INTAKE_FALLBACK, normaliseIntake, normaliseDebrief, normaliseModel };

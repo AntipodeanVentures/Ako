@@ -9,7 +9,7 @@ import {
   recordMinutes, logReview, retentionRate, estimateStage, estimateText, paceStats, paceBasis, activityDays,
   makeCards, reviewCard, recallChance, dueCards,
   mergeKnowItems, renderKnow, withoutKnowItem,
-  newLesson, useLesson, stepOrder, nextStep, pickNextItem, scorePractice, practiceDone, finishTopic, recordRelearn, sameAnswer,
+  newLesson, useLesson, stepOrder, nextStep, pickNextItem, scorePractice, practiceDone, metCriterion, finishTopic, recordRelearn, sameAnswer, ROLE_LEVEL_GOOD,
 } from '../index.js';
 import { lesson, planPortuguese, planJudo } from '../fixtures.js';
 
@@ -214,6 +214,59 @@ describe('the session deck', () => {
     recordRelearn(subj, card, true, T0 + DAY);
     expect(card.relearnDays).toHaveLength(1);
     expect(card.firstReview.ok).toBe(true);
+  });
+  it('needs three fully right answers including a hard one and a mixed one before mastery', () => {
+    const plan = normalisePlan(planPortuguese, intake, 's2');
+    const subj = subjectFrom(plan);
+    const t = plan.topics[0];
+    const L = useLesson(newLesson(t.id), normaliseLesson(lesson('concept'), t), subj);
+    const P = L.prac;
+    // the deck has a difficulty-4 item and a mix item, so three easy answers are not enough
+    const answer = (score) => { P.conf = 'unsure'; scorePractice(L, t, subj, { score, feedback: '' }); pickNextItem(P); };
+    answer(1); answer(1);
+    // after two right, the picker heads for the mixed item, then the hard one
+    expect(P.items[P.idx].mix).toBe(true);
+    answer(1);
+    expect(P.correct).toBe(3);
+    expect(metCriterion(P)).toBe(false);
+    expect(P.items[P.idx].difficulty).toBe(4);
+    answer(0.5); // partly right: logged, not counted
+    expect(P.correct).toBe(3);
+    expect(P.partial).toBe(1);
+    expect(practiceDone(P)).toBe(false);
+  });
+  it('leaves a topic in learning when practice falls short, with cards rated hard and a simpler lesson next time', () => {
+    const plan = normalisePlan(planPortuguese, intake, 's2');
+    const subj = subjectFrom(plan);
+    const t = plan.topics[0];
+    const L = useLesson(newLesson(t.id), normaliseLesson(lesson('concept'), t), subj);
+    const P = L.prac;
+    P.conf = 'unsure'; scorePractice(L, t, subj, { score: 1, feedback: '' }); pickNextItem(P);
+    P.conf = 'unsure'; scorePractice(L, t, subj, { score: 0, feedback: '' });
+    const done = finishTopic(subj, L, { minutes: 8 });
+    expect(done.mastered).toBe(false);
+    expect(subj.topicState[t.id].status).toBe('learning');
+    expect(subj.topicState[t.id].masteredAt).toBeUndefined();
+    expect(subj.topicState[t.id].simpler).toEqual(['The core idea', 'In practice']);
+    expect(nextTopic(subj).id).toBe(t.id);
+    // cards exist already, rated Hard, so they come back sooner than a mastered topic's
+    expect(subj.cards).toHaveLength(2);
+    const good = makeCards(t, [{ front: 'x', back: 'y' }], 3)[0];
+    expect(subj.cards[0].due).toBeLessThan(good.due);
+    expect(subj.support).toBe('full');
+  });
+  it('passes a role-play only at the pass mark', () => {
+    const plan = normalisePlan(planPortuguese, intake, 's2');
+    const subj = subjectFrom(plan);
+    const t = plan.topics[1];
+    t.kind = 'roleplay';
+    const L = useLesson(newLesson(t.id), normaliseLesson(lesson('roleplay'), t), subj);
+    L.rp = { debrief: { scores: [1, 0.5, 0], feedback: '', mean: 0.5 }, runs: 1 };
+    expect(finishTopic(subj, L, {}).mastered).toBe(false);
+    expect(subj.topicState[t.id].status).toBe('learning');
+    L.rp = { debrief: { scores: [1, 1, 0.5], feedback: '', mean: ROLE_LEVEL_GOOD + 0.1 }, runs: 2 };
+    expect(finishTopic(subj, L, {}).mastered).toBe(true);
+    expect(subj.topicState[t.id].status).toBe('mastered');
   });
   it('matches typed answers loosely', () => {
     expect(sameAnswer('Bom dia!', 'bom dia')).toBe(true);

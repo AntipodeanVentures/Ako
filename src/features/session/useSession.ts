@@ -59,7 +59,7 @@ export type SessionState = {
   chatTurns: number; // learner turns so far
   debrief: Debrief | null;
   // done
-  summary: { added: number; firstDue: number | null; minutes: number; correct: number; asked: number; taught: boolean; roleplay: Debrief | null; motorPending: boolean } | null;
+  summary: { added: number; firstDue: number | null; minutes: number; correct: number; asked: number; sure: number; sureRight: number; taught: boolean; roleplay: Debrief | null; motorPending: boolean; mastered: boolean } | null;
 };
 
 function serialisable(subj: LiveSubject) {
@@ -129,7 +129,9 @@ export function useSession(subj: LiveSubject, topicId: string, retention: number
     async (warm: Warm | null, answers: string[], simpler?: string[], advance = false) => {
       patch({ lessonStarted: true, error: null, lessonProgress: { chars: 0, sections: 0 }, busy: advance ? 'Writing your lesson' : null });
       try {
-        const ctx = { warm, answers: answers.map((text) => ({ text })), simpler };
+        // A topic that did not reach the criterion last time comes back simpler: its old section headings tell the model what to simplify.
+        const prior = (subj.topicState[topicId] as { status?: string; simpler?: string[] } | undefined);
+        const ctx = { warm, answers: answers.map((text) => ({ text })), simpler: simpler ?? (prior?.status === 'learning' ? prior.simpler : undefined) };
         const r = await callStream<{ lesson: Lesson; cached: boolean }>(
           'lesson',
           { subject: serialisable(subj), topicId, ctx },
@@ -263,9 +265,13 @@ export function useSession(subj: LiveSubject, topicId: string, retention: number
           minutes: Math.round(minutes),
           correct: L.prac.correct,
           asked: L.prac.asked.length,
+          // Calibration: how many answers they were sure of, and how many of those were right.
+          sure: (L.prac.log as { conf: string | null; score: number }[]).filter((x) => x.conf === 'sure').length,
+          sureRight: (L.prac.log as { conf: string | null; score: number }[]).filter((x) => x.conf === 'sure' && x.score >= 1).length,
           taught: Boolean(opts.taught) && L.teach.turns >= 2,
           roleplay: L.rp?.debrief ?? null,
           motorPending: r.motorPending,
+          mastered: r.mastered,
         },
       });
       try {

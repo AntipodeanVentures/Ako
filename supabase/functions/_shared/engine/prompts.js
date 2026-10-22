@@ -31,6 +31,7 @@ function learnerLines(subj) {
     `Their goal: ${subj.intake.why || 'not given'}.`,
     `Topics already learned in this subject: ${known}.`
   ];
+  if (subj.intake.focus) lines.push(`What they most want to aim at: ${subj.intake.focus}.`);
   if (arr(m.strengths).length) lines.push(`Strengths seen so far: ${m.strengths.join('; ')}.`);
   if (arr(m.misconceptions).length) lines.push(`Misconceptions or confusions to watch for: ${m.misconceptions.join('; ')}.`);
   const an = arr(m.analogies).concat(arr(g.analogies)).slice(0, 6);
@@ -50,6 +51,14 @@ const FRAMEWORK_GUIDE = `Anchor the five levels to recognised frameworks, and na
 - Professions and trades: licences, professional body curricula and job grades (for aviation, PPL, CPL, ATPL and type ratings, instructor and examiner).
 - Where no framework exists, say so in "basis" and describe the levels by what practitioners can do.`;
 
+// The learner's own answers to the intake questions, verbatim, so the plan
+// can be shaped around what they said rather than a summary of it.
+function intakeLines(intake) {
+  const qa = arr(intake && intake.answers).filter((x) => x && str(x.a)).slice(0, 4);
+  if (!qa.length) return '';
+  return '\nBefore the plan was written the learner was asked a few questions. Their answers, in their own words, matter more than anything inferred above. Shape the plan around them: put the parts they want first, serve the use they named, and skip what their background shows they already have:\n' + qa.map((x) => `Q: ${str(x.q, 300)}\nA: ${str(x.a, 1200)}`).join('\n') + '\n';
+}
+
 function planPrompt(intake, coverTo) {
   const about = str(intake.about, 1600);
   const startIdx = START_STAGE[intake.current] || 0;
@@ -64,8 +73,8 @@ Learner:
 - Current level in this subject: ${intake.current}
 - What they already know about this subject: ${intake.background || 'not given'}
 - What they know well in other areas: ${about || 'not given'}
-- What they want to be able to do: ${intake.why || 'not given'}${intake.role ? '\n- The role they are preparing for: ' + intake.role : ''}
-${syllabus ? '\nReference material supplied by the learner (a syllabus, reading list or course outline). Use it as the backbone of the plan: cover what it covers, keep its order where that makes sense, and add any prerequisite it assumes but does not teach:\n"""\n' + syllabus + '\n"""\n' : ''}
+- What they want to be able to do: ${intake.why || 'not given'}${intake.focus ? '\n- What they most want to aim at: ' + intake.focus : ''}${intake.role ? '\n- The role they are preparing for: ' + intake.role : ''}
+${intakeLines(intake)}${syllabus ? '\nReference material supplied by the learner (a syllabus, reading list or course outline). Use it as the backbone of the plan: cover what it covers, keep its order where that makes sense, and add any prerequisite it assumes but does not teach:\n"""\n' + syllabus + '\n"""\n' : ''}
 ${METHOD}
 
 The ladder. Progress in every subject is tracked against five stages named by what the learner can do; each stage's usual anchors in formal frameworks are given for reference:
@@ -94,7 +103,7 @@ Return ONLY JSON, with no commentary, in exactly this shape:
 function reviewPlanPrompt(plan, intake) {
   return `You are reviewing a draft learning plan written for one adult learner, before it is used. Find and fix its weaknesses.
 
-Learner: wants to learn ${intake.subject}; aims for ${stageName(intake.target)} level; starting level: ${intake.current}; knows about the subject: ${intake.background || 'nothing stated'}; knows well elsewhere: ${str(intake.about, 1600) || 'not given'}; goal: ${intake.why || 'not given'}.${str(intake.syllabus) ? '\nReference material they supplied (the plan should follow it):\n"""\n' + str(intake.syllabus, 6000) + '\n"""' : ''}
+Learner: wants to learn ${intake.subject}; aims for ${stageName(intake.target)} level; starting level: ${intake.current}; knows about the subject: ${intake.background || 'nothing stated'}; knows well elsewhere: ${str(intake.about, 1600) || 'not given'}; goal: ${intake.why || 'not given'}${intake.focus ? '; wants to aim at: ' + intake.focus : ''}.${intakeLines(intake)}${str(intake.syllabus) ? '\nReference material they supplied (the plan should follow it):\n"""\n' + str(intake.syllabus, 6000) + '\n"""' : ''}
 
 Draft plan (JSON):
 ${JSON.stringify(plan)}
@@ -132,6 +141,26 @@ ${str(about, 1600) || '(nothing recorded)'}
 
 Decide a realistic starting point for this subject from that background alone. Return ONLY JSON:
 {"current":"one of exactly: Complete beginner | Know a little | Intermediate | Used to be good, now rusty","background":"1 to 3 plain sentences on what in their background bears on this subject, or an empty string if nothing does","why":"one sentence on why you chose that starting point"}`;
+}
+
+// Three questions, specific to the subject, asked before the plan is written:
+// what the learner wants it for, what they already know, and where to aim it.
+// The answers steer the plan and every lesson after it.
+const INTAKE_SLOTS = ['why', 'background', 'focus'];
+function intakePrompt(subject, current, target, about) {
+  return `An adult is about to start learning "${subject}" with an AI tutor. Before the plan is written, the tutor asks them three short questions. Write those questions for THIS subject.
+
+Their self-rated starting level: ${current}. The level they want to reach: ${stageName(target)}.
+What they already know well in other areas: ${str(about, 1600) || 'not given'}.
+
+Write exactly three questions, one for each slot, in this order:
+1. "why": what they want to be able to DO with it, or what they want it for. Offer the two or three most common reasons people take up this subject as examples inside the question, so a one-line answer is easy.
+2. "background": what contact they have already had with it: things read, courses, practice, related skills. Name the kinds of contact that are typical for this subject.
+3. "focus": which part of the subject they most want to aim at, naming the three or four main areas or strands this subject divides into for someone at their level, so they can pick or say "all of it".
+
+Rules: plain, friendly British English; each question under 35 words; no technical terms a newcomer would not know; each question has a "hint" (under 12 words) that shows the kind of answer wanted. The questions must be specific to ${subject}, not generic.
+
+Return ONLY JSON: {"questions":[{"slot":"why","q":"...","hint":"..."},{"slot":"background","q":"...","hint":"..."},{"slot":"focus","q":"...","hint":"..."}]}`;
 }
 
 // A job the learner aspires to, mapped into areas that can each become a subject.
@@ -424,4 +453,4 @@ function lessonDigest(lesson) {
   return pts.filter(Boolean).join('; ').slice(0, 1500);
 }
 
-export { METHOD, learnerLines, stageLines, FRAMEWORK_GUIDE, planPrompt, reviewPlanPrompt, knowPrompt, startPrompt, rolePrompt, debriefPrompt, formCheckPrompt, extendPrompt, placementPrompt, warmupPrompt, lessonPrompt, morePracticePrompt, gradePrompt, checkPrompt, modelPrompt, tutorRules, lessonDigest };
+export { METHOD, INTAKE_SLOTS, intakePrompt, intakeLines, learnerLines, stageLines, FRAMEWORK_GUIDE, planPrompt, reviewPlanPrompt, knowPrompt, startPrompt, rolePrompt, debriefPrompt, formCheckPrompt, extendPrompt, placementPrompt, warmupPrompt, lessonPrompt, morePracticePrompt, gradePrompt, checkPrompt, modelPrompt, tutorRules, lessonDigest };

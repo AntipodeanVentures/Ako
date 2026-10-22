@@ -10,6 +10,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
+import { Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import 'react-native-reanimated';
@@ -23,6 +24,15 @@ import { ThemeProvider, useTheme } from '@/src/theme';
 // Hold the native splash screen until the brand fonts are ready, so the
 // app never flashes a system-font frame.
 SplashScreen.preventAutoHideAsync();
+
+// Web: the typography sets fontWeight so the fallback stack renders at
+// the right weight, but the brand files are registered at normal weight,
+// so stop the browser from faux-bolding them. See src/theme/typography.ts.
+if (Platform.OS === 'web' && typeof document !== 'undefined') {
+  const style = document.createElement('style');
+  style.textContent = '* { font-synthesis: none; }';
+  document.head.appendChild(style);
+}
 
 // Redirects the user to the right section depending on whether they are
 // signed in, have a profile, and have started a subject. The same shape

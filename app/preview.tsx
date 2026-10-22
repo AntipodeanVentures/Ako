@@ -7,6 +7,7 @@ import { makeCards } from '@/src/engine/scheduling';
 import type { Plan } from '@/src/engine/types';
 import { buildSubject, type LiveSubject } from '@/src/features/subjects';
 import { planPortuguese } from '@/src/engine/fixtures';
+import { seedBuildForPreview } from '@/src/features/subjects/planBuilder';
 import { LearnView } from '@/src/screens/LearnView';
 import { SubjectPath } from '@/src/screens/PathView';
 import { useTheme } from '@/src/theme';
@@ -59,12 +60,18 @@ function today() {
 }
 
 export default function PreviewScreen() {
-  const { screen } = useLocalSearchParams<{ screen?: string }>();
+  const { screen, built, subject } = useLocalSearchParams<{ screen?: string; built?: string; subject?: string }>();
   const { spacing } = useTheme();
   const subj = useMemo(fixtureSubject, []);
   if (!__DEV__) return <Redirect href="/" />;
 
-  if (screen === 'place') return <PlaceScreen />;
+  if (screen === 'place') {
+    if (built) {
+      const plan = { v: 4, ...planPortuguese, title: subject || planPortuguese.title } as unknown as Plan;
+      seedBuildForPreview({ subject: subject || 'Brazilian Portuguese', target: 's3', current: 'Know a little', hours: 2, minutes: 15, background: '', why: '' }, plan);
+    }
+    return <PlaceScreen />;
+  }
   if (screen === 'goal') return <GoalScreen />;
   if (screen === 'path') {
     return (

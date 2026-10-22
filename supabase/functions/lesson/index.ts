@@ -46,7 +46,8 @@ Deno.serve(async (req) => {
     // Cache on what shapes the canonical lesson: subject, topic, stage and the pitch band. The warm-up answers and the
     // learner's background shape only the personal layer, which the prompt adds on top (bridge, analogies).
     const pitchBand = pitchOf(subject);
-    const key = await cacheKey([subject.plan.title, topic.title, topic.stage, pitchBand]);
+    // Keyed per learner: the lesson answers this learner's warm-up and mixes in their earlier topics, so it must not be served to anyone else. The cache still makes a retry or a repeat instant.
+    const key = await cacheKey([caller.profileId, subject.plan.title, topic.title, topic.stage, pitchBand, (body.ctx?.simpler?.length ? "simpler" : "")]);
     const cached = await readCache(caller, key);
     return ndjsonStream(async (emit) => {
       if (cached) {
