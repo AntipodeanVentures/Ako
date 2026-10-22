@@ -12,6 +12,7 @@ import {
   useProfile,
   useSaveKnowItems,
 } from '@/src/features/profile';
+import { BUILD, VERSION, sendReport } from '@/src/features/reporting';
 import { openLegal } from '@/src/lib/legal';
 import { KIND_LABELS, proposeItems, recomputeAbout, toRows, type ProposedItem } from '@/src/features/profile/know';
 import { useTheme } from '@/src/theme';
@@ -33,6 +34,20 @@ export default function YouScreen() {
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [problem, setProblem] = useState('');
+  const [problemState, setProblemState] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle');
+
+  const sendProblem = async () => {
+    if (!problem.trim()) return;
+    setProblemState('sending');
+    try {
+      await sendReport('problem', problem.trim());
+      setProblem('');
+      setProblemState('sent');
+    } catch {
+      setProblemState('failed');
+    }
+  };
 
   const deleteEverything = async () => {
     if (!profile) return;
@@ -188,13 +203,43 @@ export default function YouScreen() {
         </View>
       )}
 
+      <View style={{ marginTop: spacing.xxxl, gap: spacing.md }}>
+        <View style={{ gap: spacing.xs }}>
+          <Text variant="eyebrow" color="textMuted">
+            Report a problem
+          </Text>
+          <Text variant="body" color="textMuted">
+            Something wrong, confusing or slow? Say what happened and where. The report carries which screen you were on and the build, so a line is enough.
+          </Text>
+        </View>
+        <TextField
+          label="What happened"
+          value={problem}
+          onChangeText={(v) => { setProblem(v); if (problemState !== 'idle') setProblemState('idle'); }}
+          placeholder="The lesson on X ended before the practice; the Start button did nothing; ..."
+          multiline
+          style={{ minHeight: 80, textAlignVertical: 'top' }}
+        />
+        <Button label="Send" variant="secondary" onPress={sendProblem} loading={problemState === 'sending'} disabled={!problem.trim()} />
+        {problemState === 'sent' ? (
+          <Text variant="caption" color="accent">
+            Sent. Thank you.
+          </Text>
+        ) : problemState === 'failed' ? (
+          <Text variant="caption" color="danger">
+            It did not send. Check your connection and try again.
+          </Text>
+        ) : null}
+      </View>
+
       <View style={{ marginTop: spacing.xxxl }}>
         <Text variant="eyebrow" color="textMuted" style={{ marginBottom: spacing.sm }}>
           Account
         </Text>
         <Row label="Name" value={profile?.display_name || ''} />
         <Row label="Email" value={session?.user.email || ''} />
-        <Row label="Review target" value={`${Math.round(Number(profile?.retention ?? 0.9) * 100)}% recall`} last />
+        <Row label="Review target" value={`${Math.round(Number(profile?.retention ?? 0.9) * 100)}% recall`} />
+        <Row label="Version" value={`${VERSION} (${BUILD})`} last />
       </View>
 
       <View style={{ marginTop: spacing.xl, gap: spacing.md }}>

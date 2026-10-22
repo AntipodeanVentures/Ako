@@ -16,7 +16,7 @@ export class AiError extends Error {
   }
 }
 
-type FunctionName = 'plan' | 'lesson' | 'grade' | 'tutor' | 'extract';
+type FunctionName = 'plan' | 'lesson' | 'grade' | 'tutor' | 'extract' | 'report';
 
 async function headers() {
   const { data } = await getSupabase().auth.getSession();

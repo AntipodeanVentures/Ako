@@ -6,7 +6,7 @@ import {
   useFonts,
 } from '@expo-google-fonts/instrument-sans';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack, usePathname, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
@@ -20,6 +20,8 @@ import { ProfileProvider, useProfile } from '@/src/features/profile';
 import { useSubjects } from '@/src/features/subjects';
 import { queryClient } from '@/src/lib/queryClient';
 import { ThemeProvider, useTheme } from '@/src/theme';
+import { ErrorBoundary } from '@/src/components/ErrorBoundary';
+import { installReporting, noteRoute } from '@/src/features/reporting';
 
 // Hold the native splash screen until the brand fonts are ready, so the
 // app never flashes a system-font frame.
@@ -78,6 +80,9 @@ function useRouteGuard() {
 function RootNavigator() {
   const { colors, mode } = useTheme();
   useRouteGuard();
+  // Where the learner is, for crash and problem reports.
+  const pathname = usePathname();
+  useEffect(() => { noteRoute(pathname); }, [pathname]);
 
   return (
     <>
@@ -112,22 +117,25 @@ export default function RootLayout() {
     if (fontError) console.warn('Ako: font load failed, using the system font', fontError);
     if (ready) SplashScreen.hideAsync();
   }, [ready, fontError]);
+  useEffect(() => { installReporting(); }, []);
 
   if (!ready) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        <QueryClientProvider client={queryClient}>
-          <ThemeProvider>
-            <AuthProvider>
-              <ProfileProvider>
-                <RootNavigator />
-              </ProfileProvider>
-            </AuthProvider>
-          </ThemeProvider>
-        </QueryClientProvider>
-      </SafeAreaProvider>
+      <ErrorBoundary>
+        <SafeAreaProvider>
+          <QueryClientProvider client={queryClient}>
+            <ThemeProvider>
+              <AuthProvider>
+                <ProfileProvider>
+                  <RootNavigator />
+                </ProfileProvider>
+              </AuthProvider>
+            </ThemeProvider>
+          </QueryClientProvider>
+        </SafeAreaProvider>
+      </ErrorBoundary>
     </GestureHandlerRootView>
   );
 }

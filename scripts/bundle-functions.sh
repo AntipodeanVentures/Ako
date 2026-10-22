@@ -13,7 +13,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="${1:-$ROOT/build/functions}"
-FUNCS=(plan lesson grade tutor extract)
+FUNCS=(plan lesson grade tutor extract report)
 
 cd "$ROOT"
 node scripts/sync-engine.mjs

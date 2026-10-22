@@ -103,6 +103,23 @@ ask for a typed answer before the reveal. Still to do:
 - [ ] Revisions to lesson pitch: the "too hard / too easy" rating moving
       `subj.pitch`, which the prompts already read.
 
+## Home screen and reporting (22 October 2026)
+
+- [x] Web shell (`public/index.html`, read by the single-page export) with
+      the manifest, icons, iOS app-capable tags and a caching-free service
+      worker, so the site installs to the home screen on iPhone and Android.
+- [x] Crash reports (uncaught errors, unhandled rejections, render errors
+      via the error boundary) and "Report a problem" on the You tab, both
+      stored in `reports` in the project and emailed when the function
+      secrets `RESEND_API_KEY` and `REPORT_TO` are set.
+- [ ] Set `RESEND_API_KEY` and `REPORT_TO` as function secrets so reports
+      arrive by email (until then, read them in the `reports` table).
+- [ ] Offline: the service worker caches nothing today. Once the app is in
+      daily use, cache the shell and the review queue so reviews work on a
+      train.
+- [ ] Web push for review reminders on Android and on iPhones with the app
+      on the home screen; native push with the store builds.
+
 ## Next build sessions
 
 - [x] Teach-back, role-play and drill steps in the session.
