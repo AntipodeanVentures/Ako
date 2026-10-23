@@ -2,11 +2,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 
-import { Button, Screen, Text, TextField } from '@/src/components/ui';
+import { Button, Screen, SwitchRow, Text, TextField } from '@/src/components/ui';
 import { aiErrorCopy } from '@/src/features/ai/client';
 import { useAuth } from '@/src/features/auth';
 import {
   deleteAllMyData,
+  updateProfile,
   useDeleteKnowItem,
   useKnowItems,
   useProfile,
@@ -240,6 +241,18 @@ export default function YouScreen() {
         <Row label="Email" value={session?.user.email || ''} />
         <Row label="Review target" value={`${Math.round(Number(profile?.retention ?? 0.9) * 100)}% recall`} />
         <Row label="Version" value={`${VERSION} (${BUILD})`} last />
+        <View style={{ marginTop: spacing.lg }}>
+          <SwitchRow
+            label="Daily reminder email"
+            description="At 7 in the morning, UK time, on days you have not yet studied: how many reviews are due and the next idea. Nothing on days you have already been in."
+            value={Boolean(profile?.reminder_time)}
+            onChange={async (on) => {
+              if (!profile) return;
+              await updateProfile(profile.id, { reminder_time: on ? '07:00' : null });
+              await refresh();
+            }}
+          />
+        </View>
       </View>
 
       <View style={{ marginTop: spacing.xl, gap: spacing.md }}>

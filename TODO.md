@@ -120,6 +120,31 @@ ask for a typed answer before the reveal. Still to do:
 - [ ] Web push for review reminders on Android and on iPhones with the app
       on the home screen; native push with the store builds.
 
+## Runs on its own (23 October 2026)
+
+The live site has never needed a terminal: Vercel serves the app, Supabase
+runs the functions and the database. What did depend on the app being open
+was the work after a session, and nothing reminded anyone to come back.
+
+- [x] After a topic or a review session, the learner model update and any
+      path revision run in the `after` function on the server, so they
+      finish even if the tab is closed the moment Done appears.
+- [x] A daily reminder email: pg_cron calls the `digest` function every hour
+      (minute 5); at the hour a person chose it emails them the number of
+      reviews due and the next idea, once a day, and not if they have
+      already studied. Switch on the You tab ("Daily reminder email", 07:00
+      UK time for now). The scheduler's token lives in `app_config` and in
+      the cron job on the live project only; the repo carries placeholders.
+- [ ] Emails only flow once `RESEND_API_KEY` is set as a function secret
+      (the same key as the SMTP password in Supabase Auth). Until then the
+      digest logs what it would have sent.
+- [ ] Let the person choose the reminder hour (the column already takes a
+      time; the switch sets 07:00).
+- [ ] A spend cap on the Anthropic key in the Anthropic console, so a bug
+      or a busy week cannot run up a surprise bill while nobody is watching.
+- [ ] Redeploy `plan` so it honours the per-task `MODEL_<TASK>` secrets
+      like the other functions.
+
 ## Next build sessions
 
 - [x] Teach-back, role-play and drill steps in the session.
