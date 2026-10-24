@@ -7,3 +7,4 @@ export * from './know.js';
 export * from './prompts.js';
 export * from './normalise.js';
 export * from './session.js';
+export * from './evidence.js';

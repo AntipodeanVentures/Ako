@@ -120,6 +120,25 @@ ask for a typed answer before the reveal. Still to do:
 - [ ] Web push for review reminders on Android and on iPhones with the app
       on the home screen; native push with the store builds.
 
+## The evidence base (24 October 2026)
+
+- [x] `docs/evidence-base.md`: the literature the method rests on, banked
+      by principle with what Ako does, where in the code, and a status.
+- [x] `src/engine/evidence.js` and `__tests__/evidence.test.js`: the
+      machine-readable ledger; a constant or prompt rule that drifts from a
+      cited paper fails the test and names the paper.
+- [x] Corrections from the bank: new words grouped by theme or situation,
+      never by semantic category (Tinkham 1993; Waring 1997); the plan
+      critic now also checks whole-task milestones, revisiting of core ideas
+      and vocabulary grouping; every concept gets a practice question.
+- [x] `plan` redeployed (v10): it now honours the per-task MODEL_<TASK>
+      secrets like the other functions.
+- [ ] Redeploy `grade`, `tutor`, `extract` and `after` so their copy of the
+      method text carries the vocabulary correction (it only matters for
+      lessons and plans, which are done).
+- [ ] Review the bank twice a year against new meta-analyses; add Mayer's
+      multimedia principles when lessons gain diagrams.
+
 ## Evidence that learning stuck (24 October 2026)
 
 The app now measures whether a topic stayed learned, independently of its
@@ -189,8 +208,6 @@ was the work after a session, and nothing reminded anyone to come back.
       time; the switch sets 07:00).
 - [ ] A spend cap on the Anthropic key in the Anthropic console, so a bug
       or a busy week cannot run up a surprise bill while nobody is watching.
-- [ ] Redeploy `plan` so it honours the per-task `MODEL_<TASK>` secrets
-      like the other functions.
 
 ## Next build sessions
 

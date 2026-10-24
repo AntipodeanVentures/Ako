@@ -13,7 +13,7 @@ const METHOD = `Evidence-based method (follow it):
 - Attempt first: pose a question before teaching; a wrong first attempt helps learning.
 - Build on prior knowledge: link each new idea to something the learner already knows, from earlier topics, everyday life or their own fields. Compare two contrasting cases to bring out the principle.
 - Worked examples for novices, fading to independent problems as expertise grows.
-- Interleave confusable types once the basics are known; learn new vocabulary in small related sets.
+- Interleave confusable types once the basics are known. New words are learned in small sets grouped by theme or situation (the words of one scene or task), never by semantic category (colours together, fruits together), which causes interference.
 - Keep practice in the productive band: roughly four in five answers right, with difficulty rising as the learner succeeds.
 - Physical skills: brief demonstration and drilling of a new movement, then varied, game-like practice that keeps the decision in the drill; focus on the effect of the movement rather than the body; reduce feedback as the skill forms; mental rehearsal adds a little to real practice; film yourself and compare.
 - Feedback is specific and explains why; prompt the learner to self-correct. Confident mistakes deserve the clearest correction.
@@ -118,6 +118,9 @@ Check, in this order, and correct anything wrong:
 5. Accuracy: are the stage descriptions, markers, frameworks, hours and resources accurate for this field? Correct anything doubtful; never invent a resource.
 6. Level: are the topics pitched for this learner's starting level and background, and do they use their other fields where a comparison genuinely helps?
 7. Threshold concepts: are the right few topics marked, at most one in five?
+8. Milestones: is each one a whole task the learner could demonstrate (something a practitioner does), with a concrete test, rather than a label for a run of topics? Rewrite any that is not.
+9. Revisiting: do later stages return to the core ideas of earlier ones at greater depth, rather than treating them as finished?
+10. Vocabulary topics: are new words grouped by theme or situation, not by semantic category (colours, fruits, days of the week together), which slows learning? Regroup any that are.
 
 Return ONLY JSON: the complete corrected plan in exactly the same shape as the draft (every field, all five stages, all topics, ids renumbered in order if you insert or remove topics), plus one extra top-level field "changes": a list of short plain sentences describing each change you made (empty if the draft needed none).`;
 }
@@ -398,7 +401,7 @@ ${METHOD}
 Produce:
 - "recall": one question asking them to explain the core idea from memory in their own words and link it to something they already know, with "recallAnswer", a model answer of 2 to 4 sentences in plain words.
 - "why": one "why" question that makes them explain the reason behind the core idea or a step (not a definition), with "whyAnswer", 1 to 3 sentences.
-- "practice": 6 questions. Tag each with "difficulty" from 1 (recognise the idea) to 5 (apply it in a new situation with a twist), including at least one each of 1 or 2, 3, and 4 or 5, and with "concept" (the index of the concept it tests). Mix "mcq" (4 options, one correct; "answer" is its 0-based index) and "short" (model answer in "answer").${earlier.length ? ' Make 2 of the 6 "mix": true questions that set this topic against earlier topics (' + earlier.join('; ') + '), so the learner must tell them apart or combine them; the rest test this topic alone.' : ''}${motor ? ' Include 2 "decision" questions: a short scenario from live practice and the question "what do you do next and why", as "short" questions with "kind":"decision".' : ''} Each has a one-sentence "explanation" that says why the right answer is right.
+- "practice": 6 questions. Tag each with "difficulty" from 1 (recognise the idea) to 5 (apply it in a new situation with a twist), including at least one each of 1 or 2, 3, and 4 or 5, and with "concept" (the index of the concept it tests); every concept is tested at least once, and the main one at least twice. Mix "mcq" (4 options, one correct; "answer" is its 0-based index) and "short" (model answer in "answer").${earlier.length ? ' Make 2 of the 6 "mix": true questions that set this topic against earlier topics (' + earlier.join('; ') + '), so the learner must tell them apart or combine them; the rest test this topic alone.' : ''}${motor ? ' Include 2 "decision" questions: a short scenario from live practice and the question "what do you do next and why", as "short" questions with "kind":"decision".' : ''} Each has a one-sentence "explanation" that says why the right answer is right.
 - "cards": 4 to 6 flashcards for spaced review over the coming months. One idea per card, each with "concept". "front" is a question or prompt, "back" a short answer. Favour why, how and when over trivia. Each card also has "variants": two other fronts with the same back, so a review tests the idea rather than the wording: one asks it in different words, one gives a two-sentence situation in which the back is the answer.
 - "heldBack": 4 questions the learner will never see in this lesson. They are asked weeks from now to find out whether the idea stayed learned, so each sets the idea in a situation unlike the lesson's examples and unlike the practice questions. Two "mcq" and two "short", difficulty 3 or 4, each with "concept" and a one-sentence "explanation".
 
