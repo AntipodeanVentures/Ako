@@ -47,11 +47,13 @@ const light: Palette = {
   overlay: 'rgba(23,25,29,0.5)',
 };
 
+// Dark mode: controls and cards sit one step above the ground, so a chip
+// or a field reads as an object and not as a line drawn on the backdrop.
 const dark: Palette = {
   background: '#17191D',
-  surface: '#17191D',
-  surfaceElevated: '#1F2227',
-  border: '#33373E',
+  surface: '#1C1F24',
+  surfaceElevated: '#23272D',
+  border: '#363B43',
   text: '#F2F3F5',
   textMuted: '#9AA0A8',
   textInverse: '#17191D',

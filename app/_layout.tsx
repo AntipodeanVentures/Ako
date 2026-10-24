@@ -20,6 +20,7 @@ import { ProfileProvider, useProfile } from '@/src/features/profile';
 import { useSubjects } from '@/src/features/subjects';
 import { queryClient } from '@/src/lib/queryClient';
 import { ThemeProvider, useTheme } from '@/src/theme';
+import { DesktopModeNotice } from '@/src/components/DesktopModeNotice';
 import { ErrorBoundary } from '@/src/components/ErrorBoundary';
 import { installReporting, noteRoute } from '@/src/features/reporting';
 
@@ -86,6 +87,7 @@ function RootNavigator() {
 
   return (
     <>
+      <DesktopModeNotice />
       <Stack
         screenOptions={{
           headerShown: false,

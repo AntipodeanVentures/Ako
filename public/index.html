@@ -12,8 +12,9 @@
       the iOS app-capable tags, and a minimal service worker (public/sw.js)
       that caches nothing, so every open gets the latest build.
     -->
-    <meta name="theme-color" content="#FFFFFF" />
-    <meta name="color-scheme" content="light" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#FFFFFF" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#17191D" />
+    <meta name="color-scheme" content="light dark" />
     <link rel="manifest" href="/manifest.json" />
     <link rel="icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
@@ -29,6 +30,13 @@
       body {
         height: 100%;
         background: #ffffff;
+      }
+      /* Dark mode: no white flash before the app paints, and no white overscroll. */
+      @media (prefers-color-scheme: dark) {
+        html,
+        body {
+          background: #17191d;
+        }
       }
       /* These styles disable body scrolling if you are using <ScrollView> */
       body {

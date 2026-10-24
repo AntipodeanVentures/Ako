@@ -114,15 +114,12 @@ export default function PlaceScreen() {
       </View>
 
       {!building && step === 'focus' ? (
-        <View style={{ gap: spacing.xl, marginTop: spacing.xxl }}>
-          <View style={{ gap: spacing.xs }}>
-            <Text variant="heading">Before it is written</Text>
-            <Text variant="body" color="textMuted">
-              {questions && questions.length === 1
-                ? 'One question that changes what goes in. Tap an answer or type your own; it can be left blank.'
-                : 'The questions a good teacher would ask first. Tap an answer or type your own; any can be left blank.'}
-            </Text>
-          </View>
+        <View style={{ gap: spacing.xl, marginTop: spacing.lg }}>
+          <Text variant="body" color="textMuted">
+            {questions && questions.length === 1
+              ? 'One question before it is written. Tap an answer or type your own; it can be left blank.'
+              : 'What a good teacher would ask first. Tap an answer or type your own; any can be left blank.'}
+          </Text>
           {!questions ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
               <ActivityIndicator size="small" color={colors.textMuted} />
@@ -138,7 +135,7 @@ export default function PlaceScreen() {
                 <View key={i} style={{ gap: spacing.sm }}>
                   <Text variant="bodyStrong">{q.q}</Text>
                   {q.options.length ? (
-                    <Chips options={[...q.options, OTHER]} value={a.picked} onChange={(picked) => setAnswer(i, { picked })} multi={q.multi} />
+                    <Chips options={[...q.options, OTHER]} other={OTHER} value={a.picked} onChange={(picked) => setAnswer(i, { picked })} multi={q.multi} />
                   ) : null}
                   {typing ? (
                     <TextField
@@ -168,6 +165,7 @@ export default function PlaceScreen() {
               options={AIMS.map((a) => ({ ...a, hint: a.value === target ? aimHint : undefined }))}
               value={target}
               onChange={setTarget}
+              wrap
             />
           </View>
           <View style={{ gap: spacing.sm }}>
