@@ -120,6 +120,21 @@ ask for a typed answer before the reveal. Still to do:
 - [ ] Web push for review reminders on Android and on iPhones with the app
       on the home screen; native push with the store builds.
 
+## Lesson speed (24 October 2026)
+
+- [x] The lesson text is written the moment a topic opens, while the learner
+      does the warm-up; the recall and practice set is written from the
+      finished text while they read it (and tests their warm-up mistakes);
+      a two-sentence opening answers the warm-up. The wait after
+      "Check my answers" drops from the whole generation to a few seconds.
+- [x] A broken stream no longer leaves "Writing your lesson" spinning: Try
+      again appears, and a retry is served from the cache.
+- [x] Repeated taps on Check no longer start repeated generations.
+- [ ] Show the first section as soon as it streams in, before the rest.
+- [ ] Watch the `usage` table for a week: output tokens per lesson should
+      fall with the split; if the set is often slower than the reading,
+      move it to the small model for Beginner topics.
+
 ## Runs on its own (23 October 2026)
 
 The live site has never needed a terminal: Vercel serves the app, Supabase

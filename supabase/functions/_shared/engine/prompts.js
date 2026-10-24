@@ -356,7 +356,6 @@ How to teach this learner:
 - Introduce at most ${P.terms} new technical terms in this lesson, and explain each in plain words the moment it first appears. Leave out terms they do not need yet.
 - Keep paragraphs to 2 to 4 sentences, with one idea per section.
 - Support level: ${sup.text}
-- Practice questions and cards may only use ideas and terms taught in this lesson or in earlier topics.
 
 Produce:
 - "concepts": the 2 to 4 ideas this lesson teaches, as short names (under 8 words each). Every practice question and card below points at one of them by index ("concept").
@@ -365,16 +364,62 @@ Produce:
 - "sections": 2 to 4 short teaching sections, ${P.words} words in total. Each has "heading", "paragraphs" (array of strings) and optional "points" (array of short strings).
 - "workedExample": ${procedural || topic.kind === 'concept' ? 'a worked example as {"problem":"...","steps":["..."],"gaps":[indices of steps the learner should complete themselves, per the support level, or []],"answer":"..."}. Each step states what is done and why.' : 'null.'}
 - "mistakes": 1 to 3 common mistakes, one sentence each.
-- "recall": one question asking them to explain the core idea from memory in their own words and link it to something they already know, with "recallAnswer", a model answer of 2 to 4 sentences in plain words.
-- "why": one "why" question that makes them explain the reason behind the core idea or a step (not a definition), with "whyAnswer", 1 to 3 sentences.
-- "practice": 6 questions. Tag each with "difficulty" from 1 (recognise the idea) to 5 (apply it in a new situation with a twist), including at least one each of 1 or 2, 3, and 4 or 5, and with "concept" (the index of the concept it tests). Mix "mcq" (4 options, one correct; "answer" is its 0-based index) and "short" (model answer in "answer").${earlier.length ? ' Make 2 of the 6 "mix": true questions that set this topic against earlier topics (' + earlier.join('; ') + '), so the learner must tell them apart or combine them; the rest test this topic alone.' : ''}${motor ? ' Include 2 "decision" questions: a short scenario from live practice and the question "what do you do next and why", as "short" questions with "kind":"decision".' : ''}${plan.language ? ' Include translation in both directions.' : ''} Each has a one-sentence "explanation" that says why the right answer is right.
-- "cards": 4 to 6 flashcards for spaced review over the coming months. One idea per card, each with "concept". "front" is a question or prompt, "back" a short answer. Favour why, how and when over trivia.
 - "scenario": ${roleplay ? 'required. A live role-play the learner will do with Claude playing the other person, as {"setting":"where and what is happening, 2 sentences","yourRole":"who the learner is","claudeRole":"who Claude plays, with a disposition that creates realistic difficulty","goal":"what the learner must achieve in the conversation","criteria":["3 to 5 observable things a skilled person would do, used to mark the debrief"],"opener":"the first line Claude says, in character"}' + (plan.language ? ' Conduct it in the target language, with the learner expected to reply in it.' : '') : 'null.'}
 - "drill": ${motor ? 'required. Practice away from the screen, as {"steps":["..."],"dose":"sets, reps or minutes","checks":["3 criteria for a good repetition"],"cues":["2 or 3 external-focus cues: what effect to aim for, not which body part to move"],"feedback":"how often to check form, reducing as it improves","imagery":"a 60-second mental rehearsal script","safety":"..."}' : 'null'}.
 - "resources": 0 to 2 specific resources for this topic that suit their level, as {"title":"...","creator":"...","search":"search phrase"}. Never write URLs.
 
 Return ONLY JSON in this shape:
-{"concepts":["...","..."],"bridge":"...","compare":null,"sections":[{"heading":"...","paragraphs":["..."],"points":["..."]}],"workedExample":null,"mistakes":["..."],"recall":"...","recallAnswer":"...","why":"...","whyAnswer":"...","practice":[{"type":"mcq","difficulty":1,"concept":0,"mix":false,"prompt":"...","options":["...","...","...","..."],"answer":0,"explanation":"..."},{"type":"short","difficulty":3,"concept":1,"mix":false,"prompt":"...","answer":"...","explanation":"..."}],"cards":[{"front":"...","back":"...","concept":0}],"drill":null,"scenario":null,"resources":[]}`;
+{"concepts":["...","..."],"bridge":"...","compare":null,"sections":[{"heading":"...","paragraphs":["..."],"points":["..."]}],"workedExample":null,"mistakes":["..."],"drill":null,"scenario":null,"resources":[]}`;
+}
+
+// The retrieval and practice set is written after the lesson text, from the lesson text, so
+// every question is answerable from what was actually taught. It runs while the learner reads.
+function practicePrompt(subj, topic, lesson, ctx) {
+  const c = ctx || {};
+  const plan = subj.plan;
+  const P = PITCH[pitchOf(subj)];
+  const warm = c.warm && arr(c.warm.questions).length ? c.warm.questions.map((q, i) => {
+    const a = str(c.answers && c.answers[i] && c.answers[i].text, 800);
+    return `Question: ${q.q}\nTheir answer: ${a || '(left blank)'}\nModel answer: ${q.a}`;
+  }).join('\n\n') : '';
+  const motor = topic.kind === 'motor';
+  const earlier = plan.topics.filter((t) => isLearned(subj, t) && t.id !== topic.id).map((t) => t.title).slice(-8);
+  const body = arr(lesson && lesson.sections).map((x) => `${x.heading}: ${arr(x.paragraphs).join(' ')}${arr(x.points).length ? ' Points: ' + x.points.join('; ') : ''}`).join('\n').slice(0, 6000);
+  return `Write the recall and practice set for a lesson an adult learner has just read, in ${plan.title}. They answer from memory, so every question must be answerable from this lesson and earlier topics only, and use only their terms.
+
+Topic: "${topic.title}" (kind: ${topic.kind}). Lesson level: ${P.text}
+${plan.language ? 'This is a language course (' + plan.language + '). Include translation in both directions.' : ''}
+The lesson's concepts, by index: ${arr(lesson && lesson.concepts).map((d, i) => i + ': ' + d).join('; ') || 'not recorded'}.
+${lesson && lesson.bridge ? 'Opening: ' + str(lesson.bridge, 500) + '\n' : ''}What the lesson taught:
+${body}
+${arr(lesson && lesson.mistakes).length ? 'Common mistakes it named: ' + lesson.mistakes.join(' ') + '\n' : ''}${warm ? '\nTheir warm-up answers before the lesson:\n\n' + warm + '\n\nWhere an answer showed a misunderstanding, one practice question must test exactly that.\n' : ''}
+${METHOD}
+
+Produce:
+- "recall": one question asking them to explain the core idea from memory in their own words and link it to something they already know, with "recallAnswer", a model answer of 2 to 4 sentences in plain words.
+- "why": one "why" question that makes them explain the reason behind the core idea or a step (not a definition), with "whyAnswer", 1 to 3 sentences.
+- "practice": 6 questions. Tag each with "difficulty" from 1 (recognise the idea) to 5 (apply it in a new situation with a twist), including at least one each of 1 or 2, 3, and 4 or 5, and with "concept" (the index of the concept it tests). Mix "mcq" (4 options, one correct; "answer" is its 0-based index) and "short" (model answer in "answer").${earlier.length ? ' Make 2 of the 6 "mix": true questions that set this topic against earlier topics (' + earlier.join('; ') + '), so the learner must tell them apart or combine them; the rest test this topic alone.' : ''}${motor ? ' Include 2 "decision" questions: a short scenario from live practice and the question "what do you do next and why", as "short" questions with "kind":"decision".' : ''} Each has a one-sentence "explanation" that says why the right answer is right.
+- "cards": 4 to 6 flashcards for spaced review over the coming months. One idea per card, each with "concept". "front" is a question or prompt, "back" a short answer. Favour why, how and when over trivia.
+
+Return ONLY JSON: {"recall":"...","recallAnswer":"...","why":"...","whyAnswer":"...","practice":[{"type":"mcq","difficulty":1,"concept":0,"mix":false,"prompt":"...","options":["...","...","...","..."],"answer":0,"explanation":"..."},{"type":"short","difficulty":3,"concept":1,"mix":false,"prompt":"...","answer":"...","explanation":"..."}],"cards":[{"front":"...","back":"...","concept":0}]}`;
+}
+
+// The opening of the lesson, written after the warm-up so it answers what the learner just said.
+function bridgePrompt(subj, topic, lesson, ctx) {
+  const c = ctx || {};
+  const warm = c.warm && arr(c.warm.questions).length ? c.warm.questions.map((q, i) => {
+    const a = str(c.answers && c.answers[i] && c.answers[i].text, 800);
+    return `Question: ${q.q}\nTheir answer: ${a || '(left blank: they did not know)'}\nModel answer: ${q.a}`;
+  }).join('\n\n') : '';
+  return `An adult learning ${subj.plan.title} has just answered a warm-up and is about to read a lesson on "${topic.title}". The lesson teaches: ${arr(lesson && lesson.concepts).join('; ') || topic.summary}.
+
+Their warm-up:
+
+${warm}
+
+Write "bridge": one or two sentences, at most 45 words, shown first under the heading "Building on what you know". Say in plain words what their answers got right, correct any misunderstanding directly and without fuss, and lead into what the lesson teaches. Speak to them as "you". Where they did not know, say what the lesson starts from. No praise padding, no technical terms they have not met.
+
+Return ONLY JSON: {"bridge":"..."}`;
 }
 
 function morePracticePrompt(subj, topic, lesson, used, ability) {
@@ -508,4 +553,4 @@ function lessonDigest(lesson) {
   return pts.filter(Boolean).join('; ').slice(0, 1500);
 }
 
-export { METHOD, intakePrompt, intakeLines, adaptPrompt, learnerLines, stageLines, FRAMEWORK_GUIDE, planPrompt, reviewPlanPrompt, knowPrompt, startPrompt, rolePrompt, debriefPrompt, formCheckPrompt, extendPrompt, placementPrompt, warmupPrompt, lessonPrompt, morePracticePrompt, gradePrompt, checkPrompt, modelPrompt, tutorRules, lessonDigest };
+export { METHOD, intakePrompt, intakeLines, adaptPrompt, learnerLines, stageLines, FRAMEWORK_GUIDE, planPrompt, reviewPlanPrompt, knowPrompt, startPrompt, rolePrompt, debriefPrompt, formCheckPrompt, extendPrompt, placementPrompt, warmupPrompt, lessonPrompt, practicePrompt, bridgePrompt, morePracticePrompt, gradePrompt, checkPrompt, modelPrompt, tutorRules, lessonDigest };

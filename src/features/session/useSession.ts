@@ -4,6 +4,7 @@ import { arr, clampNum } from '@/src/engine/core';
 import { topicById } from '@/src/engine/progress';
 import {
   addPractice,
+  addQuestionSet,
   finishTopic,
   newLesson,
   pickNextItem,
@@ -43,6 +44,9 @@ export type SessionState = {
   lessonStarted: boolean;
   lessonProgress: { chars: number; sections: number };
   lesson: Lesson | null;
+  // The recall and practice set is written from the lesson text while the learner reads.
+  questionsReady: boolean;
+  questionsError: string | null;
   // recall
   recIdx: number;
   recText: string;
@@ -88,6 +92,8 @@ export function useSession(subj: LiveSubject, topicId: string, retention: number
     lessonStarted: false,
     lessonProgress: { chars: 0, sections: 0 },
     lesson: null,
+    questionsReady: false,
+    questionsError: null,
     recIdx: 0,
     recText: '',
     recConf: null,
@@ -106,6 +112,81 @@ export function useSession(subj: LiveSubject, topicId: string, retention: number
   });
   const patch = useCallback((p: Partial<SessionState>) => setS((prev) => ({ ...prev, ...p })), []);
 
+  // ---- lesson text ----
+  // Written as soon as the topic opens, while the learner does the warm-up, so by the time they
+  // have answered it is usually ready. The opening (bridge) and the question set come after the
+  // warm-up, because they answer what the learner said.
+  const corePromise = useRef<Promise<Lesson> | null>(null);
+  const advanceWhenReady = useRef(false);
+  const startCore = useCallback((simpler?: string[]) => {
+    const prior = subj.topicState[topicId] as { status?: string; simpler?: string[]; relearn?: string } | undefined;
+    const back = prior?.status === 'learning';
+    const ctx = {
+      // A topic that did not reach the criterion last time comes back simpler: its old section headings tell the model what to simplify.
+      simpler: simpler ?? (back ? prior?.simpler : undefined),
+      // Reopened after reviews or a failed check: the lesson is written afresh, from a different angle.
+      relearn: back && prior?.relearn ? prior.relearn : undefined,
+    };
+    patch({ lessonStarted: true, error: null, lessonProgress: { chars: 0, sections: 0 } });
+    const p = (async () => {
+      const r = await callStream<{ lesson: Lesson; cached: boolean }>(
+        'lesson',
+        { subject: serialisable(subj), topicId, ctx },
+        { onText: (text) => patch({ lessonProgress: { chars: text.length, sections: (text.match(/"heading"/g) || []).length } }) },
+      );
+      installLesson(L, r.lesson, subj);
+      const go = advanceWhenReady.current;
+      if (go) L.step = 'learn';
+      setS((prev) => ({ ...prev, lesson: r.lesson, busy: prev.busy === 'Writing your lesson' ? null : prev.busy, step: go ? 'learn' : prev.step }));
+      return r.lesson;
+    })();
+    corePromise.current = p;
+    p.catch((e) => {
+      corePromise.current = null;
+      patch({ busy: null, lessonStarted: false, error: aiErrorCopy(e) });
+    });
+    return p;
+  }, [L, patch, subj, topicId]);
+
+  // After the warm-up: the opening that answers it, and the question set, both from the finished text.
+  const questionsRequested = useRef(false);
+  const lastAnswers = useRef<string[] | null>(null);
+  const requestQuestions = useCallback(async (answers: string[] | null) => {
+    if (questionsRequested.current) return;
+    questionsRequested.current = true;
+    lastAnswers.current = answers;
+    patch({ questionsError: null });
+    let core: Lesson;
+    try {
+      core = await (corePromise.current ?? startCore());
+    } catch {
+      questionsRequested.current = false;
+      return;
+    }
+    const digest = { concepts: core.concepts, sections: core.sections, bridge: core.bridge, mistakes: core.mistakes };
+    const ctx = { warm: L.warm, answers: (answers ?? []).map((text) => ({ text })) };
+    if (L.warm && answers && answers.some((a) => a.trim())) {
+      callJson<{ bridge: string }>('lesson', { kind: 'bridge', subject: serialisable(subj), topicId, lesson: digest, ctx })
+        .then((r) => {
+          if (!r.bridge || !L.data) return;
+          L.data.bridge = r.bridge;
+          setS((prev) => (prev.lesson ? { ...prev, lesson: { ...prev.lesson, bridge: r.bridge } } : prev));
+        })
+        .catch(() => { /* the generic opening stands */ });
+    }
+    try {
+      const r = await callJson<{ questions: Pick<Lesson, 'recall' | 'recallAnswer' | 'why' | 'whyAnswer' | 'practice' | 'cards'> }>(
+        'lesson',
+        { kind: 'practice', subject: serialisable(subj), topicId, lesson: digest, ctx },
+      );
+      addQuestionSet(L, r.questions, subj);
+      setS((prev) => ({ ...prev, lesson: L.data, questionsReady: true, questionsError: null }));
+    } catch (e) {
+      questionsRequested.current = false;
+      patch({ questionsError: aiErrorCopy(e) });
+    }
+  }, [L, patch, startCore, subj, topicId]);
+
   // ---- warm-up ----
   const loadWarm = useCallback(async () => {
     patch({ busy: 'Writing your warm-up', error: null });
@@ -117,54 +198,25 @@ export function useSession(subj: LiveSubject, topicId: string, retention: number
       // A warm-up that fails should not block the lesson.
       L.warm = null;
       L.checked = true;
-      patch({ warm: null, busy: null });
-      void startLesson(null, [], undefined, true);
+      advanceWhenReady.current = true;
+      patch({ warm: null, busy: L.data ? null : 'Writing your lesson' });
+      if (L.data) { L.step = 'learn'; patch({ step: 'learn' }); }
+      void requestQuestions(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subj, topicId]);
 
   useEffect(() => {
+    void startCore();
     void loadWarm();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ---- lesson ----
-  const startLesson = useCallback(
-    async (warm: Warm | null, answers: string[], simpler?: string[], advance = false) => {
-      patch({ lessonStarted: true, error: null, lessonProgress: { chars: 0, sections: 0 }, busy: advance ? 'Writing your lesson' : null });
-      try {
-        // A topic that did not reach the criterion last time comes back simpler: its old section headings tell the model what to simplify.
-        const prior = (subj.topicState[topicId] as { status?: string; simpler?: string[]; relearn?: string } | undefined);
-        const back = prior?.status === 'learning';
-        const ctx = {
-          warm,
-          answers: answers.map((text) => ({ text })),
-          simpler: simpler ?? (back ? prior?.simpler : undefined),
-          // Reopened after reviews or a failed check: the lesson is written afresh, from a different angle.
-          relearn: back && prior?.relearn ? prior.relearn : undefined,
-        };
-        const r = await callStream<{ lesson: Lesson; cached: boolean }>(
-          'lesson',
-          { subject: serialisable(subj), topicId, ctx },
-          {
-            onText: (text) => patch({ lessonProgress: { chars: text.length, sections: (text.match(/"heading"/g) || []).length } }),
-          },
-        );
-        installLesson(L, r.lesson, subj);
-        L.step = 'learn';
-        setS((prev) => ({ ...prev, lesson: r.lesson, busy: prev.busy === 'Writing your lesson' ? null : prev.busy, step: advance ? 'learn' : prev.step }));
-      } catch (e) {
-        patch({ busy: null, lessonStarted: false, error: aiErrorCopy(e) });
-      }
-    },
-    [L, patch, subj, topicId],
-  );
-
   const checkWarm = useCallback(async () => {
-    if (!s.warm) return;
+    if (!s.warm || s.busy === 'Marking' || L.checked) return;
     patch({ busy: 'Marking', error: null });
-    // Start the lesson now; it uses the answers, not the marks.
-    void startLesson(s.warm, s.warmAnswers);
+    // The opening and the questions use the answers, not the marks.
+    void requestQuestions(s.warmAnswers);
     try {
       const items = s.warm.questions.map((q, i) => ({ prompt: q.q, answer: q.a, response: s.warmAnswers[i] || '' }));
       const r = await callJson<{ results: Grade[] }>('grade', { kind: 'answers', title: subj.plan.title, items, mode: 'warmup' });
@@ -175,12 +227,19 @@ export function useSession(subj: LiveSubject, topicId: string, retention: number
       L.checked = true;
       patch({ warmGrades: s.warm.questions.map(() => ({ score: 0, feedback: '' })), busy: null });
     }
-  }, [L, patch, s.warm, s.warmAnswers, startLesson, subj.plan.title]);
+  }, [L, patch, requestQuestions, s.busy, s.warm, s.warmAnswers, subj.plan.title]);
 
   const skipWarm = useCallback(() => {
     L.checked = true;
-    void startLesson(s.warm, s.warmAnswers, undefined, true);
-  }, [L, s.warm, s.warmAnswers, startLesson]);
+    void requestQuestions(s.warmAnswers.some((a) => a.trim()) ? s.warmAnswers : null);
+    if (L.data) {
+      L.step = 'learn';
+      patch({ step: 'learn' });
+    } else {
+      advanceWhenReady.current = true;
+      patch({ busy: 'Writing your lesson' });
+    }
+  }, [L, patch, requestQuestions, s.warmAnswers]);
 
   const toLearn = useCallback(() => {
     L.step = 'learn';
@@ -391,7 +450,14 @@ export function useSession(subj: LiveSubject, topicId: string, retention: number
     tick();
   }, [L, afterPractice, patch, s.lesson, subj, topicId]);
 
-  const retryLesson = useCallback(() => startLesson(s.warm, s.warmAnswers, undefined, true), [s.warm, s.warmAnswers, startLesson]);
+  const retryLesson = useCallback(() => {
+    if (!L.data) {
+      advanceWhenReady.current = L.checked;
+      patch({ busy: L.checked ? 'Writing your lesson' : null });
+      void startCore();
+    }
+    if (L.checked) void requestQuestions(lastAnswers.current);
+  }, [L, patch, requestQuestions, startCore]);
 
   return {
     s,

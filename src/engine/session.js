@@ -33,6 +33,21 @@ function useLesson(L, data, subj) {
   return L;
 }
 
+// Merge the recall and practice set, written after the lesson text, into an installed lesson.
+function addQuestionSet(L, part, subj) {
+  const d = L.data;
+  if (!d || !part) return L;
+  if (str(part.recall)) { d.recall = str(part.recall, 600); d.recallAnswer = str(part.recallAnswer, 1500); }
+  if (str(part.why)) { d.why = str(part.why, 600); d.whyAnswer = str(part.whyAnswer, 900); }
+  d.practice = arr(part.practice).map((q) => Object.assign({ kind: 'question' }, q, { difficulty: Math.round(clampNum(num(q.difficulty, 3), 1, 5)) }));
+  if (arr(part.cards).length) d.cards = arr(part.cards);
+  L.prac = newPractice(d.practice, startAbility(subj));
+  pickNextItem(L.prac);
+  L.rec = { idx: 0, items: [{ key: 'recall', prompt: d.recall, answer: d.recallAnswer || 'A clear explanation of the core idea.', text: '', conf: null, result: null }]
+    .concat(d.why ? [{ key: 'why', prompt: d.why, answer: d.whyAnswer || 'A clear reason.', text: '', conf: null, result: null }] : []) };
+  return L;
+}
+
 const isRoleplay = (L, t) => t.kind === 'roleplay' && !!(L.data && L.data.scenario);
 
 // The deck's steps for this topic, in order. The screens show one step per card.
@@ -178,4 +193,4 @@ function recordRelearn(subj, card, ok, atMs = nowMs()) {
   return card;
 }
 
-export { newLesson, newPractice, startAbility, useLesson, isRoleplay, stepOrder, nextStep, sameAnswer, pickNextItem, scorePractice, metCriterion, practiceDone, practiceExhausted, addPractice, masteredThisSitting, finishTopic, recordRelearn };
+export { newLesson, newPractice, startAbility, useLesson, addQuestionSet, isRoleplay, stepOrder, nextStep, sameAnswer, pickNextItem, scorePractice, metCriterion, practiceDone, practiceExhausted, addPractice, masteredThisSitting, finishTopic, recordRelearn };

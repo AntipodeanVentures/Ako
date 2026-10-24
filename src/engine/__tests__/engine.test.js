@@ -10,7 +10,7 @@ import {
   makeCards, reviewCard, recallChance, dueCards,
   mergeKnowItems, renderKnow, withoutKnowItem,
   newLesson, useLesson, stepOrder, nextStep, pickNextItem, scorePractice, practiceDone, metCriterion, finishTopic, recordRelearn, sameAnswer, ROLE_LEVEL_GOOD,
-  normaliseIntake, normaliseAdaptation, reopenTopics, placeKnown, intakePrompt, adaptPrompt, cleanOutcome,
+  normaliseIntake, normaliseAdaptation, reopenTopics, placeKnown, intakePrompt, adaptPrompt, cleanOutcome, normalisePractice, addQuestionSet, practicePrompt, bridgePrompt,
 } from '../index.js';
 import { lesson, planPortuguese, planJudo } from '../fixtures.js';
 
@@ -34,6 +34,27 @@ describe('ladder', () => {
     expect(stageName('s5')).toBe('Expert');
     expect(STAGES[1].fheq).toContain('CEFR B1');
     expect(START_LEVELS).toHaveLength(4);
+  });
+});
+
+describe('lesson in two parts', () => {
+  it('installs the text first and merges the question set written from it', () => {
+    const plan = normalisePlan(planPortuguese, intake, 's2');
+    const subj = subjectFrom(plan);
+    const t = plan.topics[0];
+    const core = normaliseLesson({ ...lesson('concept'), practice: [], cards: [], recall: '', why: '' }, t);
+    expect(core.practice).toHaveLength(0);
+    const L = useLesson(newLesson(t.id), core, subj);
+    expect(L.prac.items).toHaveLength(0);
+    const set = normalisePractice({ recall: 'Explain it', recallAnswer: 'A', why: 'Why?', whyAnswer: 'B', practice: lesson('concept').practice, cards: [{ front: 'f', back: 'b', concept: 0 }] });
+    addQuestionSet(L, set, subj);
+    expect(L.prac.items.length).toBeGreaterThan(1);
+    expect(L.rec.items.map((i) => i.key)).toEqual(['recall', 'why']);
+    expect(L.data.cards).toHaveLength(1);
+    expect(() => normalisePractice({ practice: [], cards: [] })).toThrow();
+    const pp = practicePrompt(subj, t, core, { warm: { questions: [{ q: 'Q', a: 'A' }] }, answers: [{ text: 'wrong guess' }] });
+    expect(pp).toContain('wrong guess');
+    expect(bridgePrompt(subj, t, core, { warm: { questions: [{ q: 'Q', a: 'A' }] }, answers: [{ text: 'my go' }] })).toContain('my go');
   });
 });
 

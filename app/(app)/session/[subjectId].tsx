@@ -170,11 +170,16 @@ function Footer({ children }: { children: ReactNode }) {
 // ---------- steps ----------
 
 function WarmStep({ S }: { S: SessionApi }) {
-  const { s } = S;
+  const { s, L } = S;
   const { spacing } = useTheme();
   // One question at a time; the marked answers come back together.
   const [idx, setIdx] = useState(0);
-  if (!s.warm) return <Waiting label={s.busy || 'Writing your warm-up'} />;
+  // Skipped, or no warm-up could be written: only the lesson is awaited now.
+  if (!s.warm || (L.checked && !s.warmGrades)) {
+    if (s.lesson && s.warm) return <Button label="Continue to the lesson" onPress={S.toLearn} />;
+    if (s.error) return <Button label="Try again" onPress={S.retryLesson} />;
+    return <Waiting label={s.busy || (s.warm ? 'Writing your lesson' : 'Writing your warm-up')} detail={s.lessonProgress.sections ? `${s.lessonProgress.sections} sections so far` : undefined} />;
+  }
   const marked = Boolean(s.warmGrades);
   const qs = s.warm.questions;
   const n = qs.length;
@@ -237,8 +242,10 @@ function WarmStep({ S }: { S: SessionApi }) {
           <Footer>
             {s.lesson ? (
               <Button label="Continue to the lesson" onPress={S.toLearn} />
+            ) : s.error ? (
+              <Button label="Try again" onPress={S.retryLesson} />
             ) : (
-              <Waiting label="Writing your lesson" detail={s.lessonProgress.sections ? `${s.lessonProgress.sections} sections so far` : 'Starting from your answers'} />
+              <Waiting label="Writing your lesson" detail={s.lessonProgress.sections ? `${s.lessonProgress.sections} sections so far` : 'Nearly there'} />
             )}
           </Footer>
         </>
@@ -392,6 +399,17 @@ function RecallStep({ S }: { S: SessionApi }) {
   const { s, L } = S;
   const { spacing } = useTheme();
   const item = L.rec.items[s.recIdx];
+  // The questions are written from the lesson text while it is read; they are nearly always ready by now.
+  if (!s.questionsReady) {
+    return s.questionsError ? (
+      <View style={{ gap: spacing.lg }}>
+        <Notice tone="danger" text={s.questionsError} />
+        <Button label="Try again" onPress={S.retryLesson} />
+      </View>
+    ) : (
+      <Waiting label="Writing your questions" detail="From what the lesson taught" />
+    );
+  }
   if (!item) return null;
   const marked = Boolean(s.recResult);
   return (

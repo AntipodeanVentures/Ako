@@ -140,7 +140,8 @@ function normaliseLesson(raw, topic) {
   const scenario = Sc && typeof Sc === 'object' && str(Sc.setting) && arr(Sc.criteria).length ? {
     setting: str(Sc.setting, 800), yourRole: str(Sc.yourRole, 200), claudeRole: str(Sc.claudeRole, 300), goal: str(Sc.goal, 400),
     criteria: arr(Sc.criteria).map((x) => str(x, 240)).filter(Boolean).slice(0, 6), opener: str(Sc.opener, 400) } : null;
-  if (!sections.length || (practice.length < 2 && !scenario) || !cards.length) throw { code: 'invalid_lesson' };
+  // A lesson may arrive as the teaching core alone; its recall and practice set is written separately and merged in.
+  if (!sections.length) throw { code: 'invalid_lesson' };
   if (topic.kind === 'roleplay' && !scenario) throw { code: 'invalid_lesson' };
   const W = L.workedExample;
   const steps = W && typeof W === 'object' ? arr(W.steps).map((x) => str(x, 800)).filter(Boolean).slice(0, 12) : [];
@@ -170,6 +171,20 @@ function normaliseLesson(raw, topic) {
 // a warm-up with nothing left is reported as invalid so the lesson goes
 // ahead without one.
 const WARM_MAX_WORDS = 40;
+// The recall and practice set written after the lesson text (see practicePrompt).
+function normalisePractice(raw) {
+  const r = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const practice = arr(r.practice).map(normQ).filter(Boolean).slice(0, 10);
+  const cards = arr(r.cards).filter((c) => c && typeof c === 'object')
+    .map((c) => ({ front: str(c.front, 600), back: str(c.back, 900), concept: Number.isInteger(c.concept) && c.concept >= 0 && c.concept < 6 ? c.concept : null }))
+    .filter((c) => c.front && c.back).slice(0, 10);
+  if (practice.length < 2 || !cards.length) throw { code: 'invalid_json' };
+  return { recall: str(r.recall, 600), recallAnswer: str(r.recallAnswer, 1500), why: str(r.why, 600), whyAnswer: str(r.whyAnswer, 900), practice, cards };
+}
+function normaliseBridge(raw) {
+  const r = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  return str(r.bridge, 700);
+}
 function normaliseWarm(raw) {
   const W = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
   const questions = arr(W.questions).filter((q) => q && typeof q === 'object')
@@ -305,4 +320,4 @@ function normaliseModel(raw) {
   return { strengths: list(M.strengths), misconceptions: list(M.misconceptions), analogies: list(M.analogies), note: str(M.note, 500), updatedAt: nowMs() };
 }
 
-export { DEFAULT_HOURS, cleanOutcome, normaliseStages, normaliseTopics, normalisePlan, normaliseExtension, upgradePlan, normQ, normaliseLesson, normaliseWarm, normaliseRole, normaliseKnow, normaliseStart, INTAKE_SLOTS, INTAKE_FALLBACK, normaliseIntake, normaliseAdaptation, normaliseDebrief, normaliseModel };
+export { DEFAULT_HOURS, cleanOutcome, normaliseStages, normaliseTopics, normalisePlan, normaliseExtension, upgradePlan, normQ, normaliseLesson, normalisePractice, normaliseBridge, normaliseWarm, normaliseRole, normaliseKnow, normaliseStart, INTAKE_SLOTS, INTAKE_FALLBACK, normaliseIntake, normaliseAdaptation, normaliseDebrief, normaliseModel };
