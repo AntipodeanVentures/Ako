@@ -70,7 +70,7 @@ describe('evidence that learning stuck', () => {
     expect(cardFront({ ...card, reviews: 1 })).toBe('Put differently, X?');
     expect(cardFront({ ...card, reviews: 3 })).toBe('What is X?');
   });
-  it('probes mastered topics after two weeks, records retention and calibrates the bar', () => {
+  it('probes a topic around three weeks after mastery and again five weeks on, and tightens spacing when retention is poor', () => {
     const plan = normalisePlan(planPortuguese, intake, 's2');
     const subj = subjectFrom(plan);
     const [a, b, c] = plan.topics;
@@ -78,29 +78,33 @@ describe('evidence that learning stuck', () => {
     subj.topicState[b.id] = { status: 'mastered', masteredAt: nowMs() - 3 * DAY };
     subj.topicState[c.id] = { status: 'mastered', masteredAt: nowMs() - 50 * DAY, retained: { ok: 1, n: 1, at: nowMs() - 2 * DAY } };
     expect(probeCandidates(subj).map((t) => t.id)).toEqual([a.id]);
+    subj.topicState[c.id].retained.at = nowMs() - 36 * DAY;
+    expect(probeCandidates(subj).map((t) => t.id)).toEqual([c.id, a.id]);
+    subj.topicState[c.id].retained = { ok: 2, n: 2, at: nowMs() - 40 * DAY };
+    expect(probeCandidates(subj).map((t) => t.id)).toEqual([a.id]);
     expect(probeDue(null)).toBe(true);
     expect(probeDue(nowMs() - 2 * DAY)).toBe(false);
+    expect(probeDue(nowMs() - 4 * DAY)).toBe(true);
     const picked = pickProbe([{ key: 'A', items: [1, 2, 3] }, { key: 'B', items: [4] }]);
     expect(picked.map((p) => p.item)).toEqual([1, 4, 2]);
     expect(criterionFor(subj)).toBe(CRITERION);
     expect(retentionFor(subj, 0.9)).toBe(0.9);
     for (let i = 0; i < 6; i++) recordProbe(subj, a.id, i < 2);
     expect(subj.topicState[a.id].retained).toMatchObject({ ok: 2, n: 6 });
-    expect(stageRetention(subj, a.stage).n).toBe(7);
+    expect(stageRetention(subj, a.stage).n).toBe(8);
     const cal = calibrateFromProbes(subj);
-    expect(cal).toMatchObject({ criterion: CRITERION + 1, retention: 0.93 });
-    expect(criterionFor(subj)).toBe(CRITERION + 1);
-    expect(retentionFor(subj, 0.9)).toBe(0.93);
+    expect(cal).toMatchObject({ retention: 0.95, relearn: 1 });
+    expect(criterionFor(subj)).toBe(CRITERION);
+    expect(retentionFor(subj, 0.9)).toBe(0.95);
   });
-  it('offers mixed practice once ten topics are learned, weekly', () => {
-    // Twelve topics: the fixture's six, then six more in the same stage.
+  it('offers mixed practice from four learned topics and keeps pace with new ones', () => {
     const more = Array.from({ length: 6 }, (_, i) => ({ ...planPortuguese.topics[0], id: 'x' + i, title: 'Extra topic ' + i, prereqs: [] }));
     const plan = normalisePlan({ ...planPortuguese, topics: planPortuguese.topics.concat(more) }, intake, 's2');
     const subj = subjectFrom(plan);
     expect(mixedDue(subj)).toBeNull();
-    plan.topics.slice(0, 10).forEach((t, i) => { subj.topicState[t.id] = { status: 'mastered', masteredAt: nowMs() - (30 - i) * DAY }; });
+    plan.topics.slice(0, 4).forEach((t, i) => { subj.topicState[t.id] = { status: 'mastered', masteredAt: nowMs() - (30 - i) * DAY }; });
     const picked = mixedDue(subj);
-    expect(picked && picked.length).toBe(5);
+    expect(picked && picked.length).toBe(4);
     expect(mixedPrompt(subj, picked)).toContain(picked[0].title);
     const qs = normaliseMixed({ questions: [
       { topicId: picked[0].id, type: 'short', prompt: 'q1', answer: 'a', explanation: 'e' },
@@ -110,8 +114,10 @@ describe('evidence that learning stuck', () => {
     ] }, picked.map((t) => t.id));
     expect(qs).toHaveLength(3);
     recordMixed(subj, [{ topicId: picked[0].id, ok: true }, { topicId: picked[1].id, ok: false }]);
-    expect(subj.stats.mixed).toMatchObject({ ok: 1, n: 2 });
+    expect(subj.stats.mixed).toMatchObject({ ok: 1, n: 2, learned: 4 });
     expect(mixedDue(subj)).toBeNull();
+    plan.topics.slice(4, 7).forEach((t) => { subj.topicState[t.id] = { status: 'mastered', masteredAt: nowMs() - DAY }; });
+    expect(mixedDue(subj)).not.toBeNull();
   });
 });
 

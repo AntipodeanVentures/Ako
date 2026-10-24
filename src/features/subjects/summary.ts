@@ -47,7 +47,7 @@ export function dueCount(subjects: LiveSubject[]): number {
 export function nextStep(subjects: LiveSubject[], extras: NextStepExtras = {}): NextStep {
   const due = dueCount(subjects);
   if (due > 0) return { kind: 'review', count: due };
-  // Once a week, a few questions never seen before on topics learned weeks ago: the evidence that it stuck.
+  // A few questions never seen before, on topics learned about three weeks ago: the evidence that it stuck.
   if (extras.probe?.due && extras.probe.count > 0) return { kind: 'probe', count: extras.probe.count };
   for (const s of subjects) {
     const stage = levelCheckReady(s);

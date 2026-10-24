@@ -33,7 +33,7 @@ function relearnCount(subj, tid) {
   for (const c of subjectCards(subj)) if (c.topicId === tid) for (const d of arr(c.relearnDays)) if (d !== c.learnedDay) days.add(d);
   return days.size;
 }
-const isSecure = (subj, t) => (subj.topicState[t.id] || {}).status === 'mastered' && relearnCount(subj, t.id) >= relearnTarget(t);
+const isSecure = (subj, t) => (subj.topicState[t.id] || {}).status === 'mastered' && relearnCount(subj, t.id) >= relearnTarget(t) + relearnBump(subj);
 const secureCount = (subj) => subj.plan.topics.filter((t) => isSecure(subj, t)).length;
 function dueCards(cards, endMs = endOfToday()) { return arr(cards).filter((c) => c.due <= endMs); }
 
@@ -303,24 +303,41 @@ function activityDays(subjects, n) {
 // A topic counts as learned after practice in the sitting. Whether it stayed learned is a different
 // question, answered by questions the learner has never seen, asked two to six weeks on. Those
 // results calibrate the mastery bar and the review schedule for this subject.
-const PROBE_MIN_DAYS = 14;      // a topic is probed no sooner than two weeks after mastery
-const PROBE_GAP_DAYS = 30;      // and not again within a month
-const PROBE_EVERY_DAYS = 6.5;   // one probe a week
+// Timing follows the spacing literature rather than the calendar. Cepeda et al. (2008) found the best
+// gap before a later test scales with how long the memory must last: about three weeks for a year.
+// So each mastered topic is probed twice: once around three weeks after mastery (the window opens at
+// two) and once about five weeks after that, giving two points on its forgetting curve. A check is
+// offered whenever three or more items are in their window; checks are at least three days apart
+// only so they bundle into one short sitting.
+const PROBE_FIRST_DAYS = 14;    // the first window opens two weeks after mastery
+const PROBE_FIRST_TARGET = 21;  // and is due at three
+const PROBE_SECOND_GAP = 35;    // the second probe five weeks after the first
+const PROBE_MAX = 2;            // two points on the curve; the review schedule carries the rest
+const PROBE_MIN_GAP_DAYS = 3;   // checks bundle into sittings at least this far apart
 const PROBE_PER_TOPIC = 2;
 const PROBE_SIZE = 5;
 const PROBE_MIN_ITEMS = 3;      // fewer than this and it is not worth the sitting
-const CALIBRATE_AFTER = 6;      // probe answers before the bar moves
+const CALIBRATE_AFTER = 6;      // probe answers before the schedule moves
 
-function probeDue(lastProbeAt, now = nowMs()) { return !lastProbeAt || now - lastProbeAt >= PROBE_EVERY_DAYS * DAY; }
-// Topics eligible for a probe, most in need first: never probed before those probed longest ago.
+function probeDue(lastProbeAt, now = nowMs()) { return !lastProbeAt || now - lastProbeAt >= PROBE_MIN_GAP_DAYS * DAY; }
+// When a topic's next probe falls due, or null when it has had its two.
+function probeDueAt(st) {
+  if (!st || st.status !== 'mastered' || !st.masteredAt) return null;
+  const n = num(st.retained && st.retained.n, 0);
+  if (n >= PROBE_MAX) return null;
+  return n === 0 ? st.masteredAt + PROBE_FIRST_TARGET * DAY : num(st.retained.at, st.masteredAt) + PROBE_SECOND_GAP * DAY;
+}
+// Topics whose probe window is open, most overdue first.
 function probeCandidates(subj, now = nowMs()) {
   return subj.plan.topics.filter((t) => {
     const st = subj.topicState[t.id] || {};
-    if (st.status !== 'mastered' || !st.masteredAt || now - st.masteredAt < PROBE_MIN_DAYS * DAY) return false;
-    return !st.retained || !st.retained.at || now - st.retained.at >= PROBE_GAP_DAYS * DAY;
-  }).sort((a, b) => num((subj.topicState[a.id] || {}).retained && subj.topicState[a.id].retained.at, 0) - num((subj.topicState[b.id] || {}).retained && subj.topicState[b.id].retained.at, 0));
+    const due = probeDueAt(st);
+    if (due == null) return false;
+    const n = num(st.retained && st.retained.n, 0);
+    return n === 0 ? now - st.masteredAt >= PROBE_FIRST_DAYS * DAY : now >= due;
+  }).sort((a, b) => probeDueAt(subj.topicState[a.id]) - probeDueAt(subj.topicState[b.id]));
 }
-// Pick this week's items across subjects: at most two per topic, five in all, topics interleaved.
+// Pick this sitting's items across subjects: at most two per topic, five in all, topics interleaved.
 function pickProbe(perTopic, size = PROBE_SIZE) {
   const queues = perTopic.map((x) => ({ key: x.key, items: x.items.slice(0, PROBE_PER_TOPIC) })).filter((q) => q.items.length);
   const out = [];
@@ -340,31 +357,40 @@ function stageRetention(subj, stageId) {
   for (const t of subj.plan.topics) { if (t.stage !== stageId) continue; const r = (subj.topicState[t.id] || {}).retained; if (r && r.n) { ok += r.ok; n += r.n; } }
   return { ok, n, rate: n ? ok / n : null };
 }
-// The mastery bar and the review target move with what the probes show. Below 60% retained, a topic
-// needs four fully right answers (one of them hard) instead of three, and cards are scheduled for a
-// 93% recall target; between 60% and 75% only the schedule tightens; above that, the defaults return.
+// What the probes change. Rawson and Dunlosky (2011) found three correct recalls in the first
+// sitting, then three spaced relearning sessions, the efficient recipe for durable learning: more
+// initial recalls add little, more spaced relearning adds a lot. So poor delayed retention tightens
+// the spacing, not the in-sitting bar: the review scheduler aims for a higher recall probability
+// (reviews come sooner, so there are more relearning sessions before a memory lapses), and below
+// 60% a topic also needs one more spaced recall before it counts as secure. The thresholds (60%,
+// 75%) are provisional until the probes themselves say where the knee of the curve is.
 function calibrateFromProbes(subj, now = nowMs()) {
   const p = (subj.stats || {}).probe;
   if (!p || p.n < CALIBRATE_AFTER) return null;
   const rate = p.ok / p.n;
-  const cal = rate < 0.6 ? { criterion: CRITERION + 1, retention: 0.93 } : rate < 0.75 ? { criterion: CRITERION, retention: 0.93 } : { criterion: CRITERION, retention: null };
+  const cal = rate < 0.6 ? { retention: 0.95, relearn: 1 } : rate < 0.75 ? { retention: 0.93, relearn: 0 } : { retention: null, relearn: 0 };
   subj.stats.calibration = Object.assign(cal, { at: now, rate: Math.round(rate * 100) / 100, n: p.n });
   return subj.stats.calibration;
 }
+const relearnBump = (subj) => num(subj && subj.stats && subj.stats.calibration && subj.stats.calibration.relearn, 0);
 const criterionFor = (subj) => num(subj && subj.stats && subj.stats.calibration && subj.stats.calibration.criterion, CRITERION);
 const retentionFor = (subj, fallback) => { const c = subj && subj.stats && subj.stats.calibration; return c && c.retention ? c.retention : num(fallback, 0.9); };
 
 // ---------- mixed practice across topics ----------
-// Once ten or so topics are learned, a weekly set that pits earlier topics against each other: the
-// discrimination between similar ideas that one-topic practice never builds.
-const MIXED_MIN_LEARNED = 10;
-const MIXED_EVERY_DAYS = 6.5;
+// Interleaving (Rohrer and Taylor 2007; Rohrer, Dedrick and Stershic 2015) works when practice keeps
+// mixing earlier topics in, not as an occasional event. Each topic's own practice already mixes in two
+// questions against earlier topics; this adds a set across several topics as soon as there are enough
+// to confuse (four), and again after every three more are learned, so the mixing keeps pace with the
+// learning. Two weeks without new topics also brings one round.
+const MIXED_MIN_LEARNED = 4;
+const MIXED_EVERY_LEARNED = 3;
+const MIXED_MAX_DAYS = 14;
 const MIXED_TOPICS = 5;
 function mixedDue(subj, now = nowMs()) {
   const learned = subj.plan.topics.filter((t) => isLearned(subj, t));
   if (learned.length < MIXED_MIN_LEARNED) return null;
-  const last = subj.stats && subj.stats.mixed && subj.stats.mixed.at;
-  if (last && now - last < MIXED_EVERY_DAYS * DAY) return null;
+  const m = subj.stats && subj.stats.mixed;
+  if (m && learned.length - num(m.learned, 0) < MIXED_EVERY_LEARNED && now - num(m.at, 0) < MIXED_MAX_DAYS * DAY) return null;
   // Two learned longest ago, two most recent, and the one whose ideas slip most in practice and reviews.
   const byAge = learned.slice().sort((a, b) => num((subj.topicState[a.id] || {}).masteredAt, 0) - num((subj.topicState[b.id] || {}).masteredAt, 0));
   const weak = weakConcepts(subj, 3).map((c) => c.tid);
@@ -380,7 +406,7 @@ function recordMixed(subj, results, now = nowMs()) {
   const m = (subj.stats = subj.stats || {}).mixed || { ok: 0, n: 0 };
   let ok = 0;
   for (const r of results) { if (r.ok) ok++; const st = subj.topicState[r.topicId]; if (st && !r.ok) st.misses = num(st.misses, 0) + 1; }
-  subj.stats.mixed = { ok: m.ok + ok, n: m.n + results.length, at: now };
+  subj.stats.mixed = { ok: m.ok + ok, n: m.n + results.length, at: now, learned: subj.plan.topics.filter((t) => isLearned(subj, t)).length };
 }
 
 // ---------- concept-level mastery ----------
@@ -419,4 +445,4 @@ function roleReadiness(role, subjects) {
 }
 const roleForSubject = (roles, sid) => arr(roles).find((r) => arr(r.map && r.map.areas).some((a) => a.subjectId === sid)) || null;
 
-export { reopenTopics, placeKnown, topicById, learnerAbout, learnerModel, subjectCards, topicStatus, isLearned, learnedCount, studiedCount, nextTopic, practisingTopics, currentMilestone, relearnCount, isSecure, secureCount, dueCards, stageTopics, stageProgress, firstPlannedIdx, stagePosition, isSkippedStage, daysUntil, positionText, levelCheckReady, coveredStage, dayAgo, minutesSince, checkEligible, checkMilestones, markStageReached, recordMinutes, logReview, retentionRate, paceStats, paceBasis, stageHours, remainingMinutes, estimateStage, fmtMonth, fmtWeeks, fmtWhen, fmtHours, estimateText, nextStageEstimate, activityDays, conceptKey, noteConcept, weakConcepts, lessonConceptName, areaCredit, roleReadiness, roleForSubject, probeDue, probeCandidates, pickProbe, recordProbe, stageRetention, calibrateFromProbes, criterionFor, retentionFor, mixedDue, recordMixed, PROBE_MIN_ITEMS };
+export { reopenTopics, placeKnown, topicById, learnerAbout, learnerModel, subjectCards, topicStatus, isLearned, learnedCount, studiedCount, nextTopic, practisingTopics, currentMilestone, relearnCount, isSecure, secureCount, dueCards, stageTopics, stageProgress, firstPlannedIdx, stagePosition, isSkippedStage, daysUntil, positionText, levelCheckReady, coveredStage, dayAgo, minutesSince, checkEligible, checkMilestones, markStageReached, recordMinutes, logReview, retentionRate, paceStats, paceBasis, stageHours, remainingMinutes, estimateStage, fmtMonth, fmtWeeks, fmtWhen, fmtHours, estimateText, nextStageEstimate, activityDays, conceptKey, noteConcept, weakConcepts, lessonConceptName, areaCredit, roleReadiness, roleForSubject, probeDue, probeDueAt, probeCandidates, pickProbe, recordProbe, stageRetention, calibrateFromProbes, criterionFor, retentionFor, mixedDue, recordMixed, PROBE_MIN_ITEMS };

@@ -128,21 +128,27 @@ own teaching, and lets that evidence tune the method.
 - [x] Held-back questions: four per topic, written with the practice set and
       never shown (`probe_items`), tagged with the prompt version and model
       that taught the topic.
-- [x] Weekly retention check (`/probe`): five held-back questions on topics
-      mastered two to six weeks ago, across subjects, offered from the Learn
-      tab once a week. Results land on the topic ("retained" or "faded" on
-      the Path), in the per-idea record, and on the subject.
-- [x] Calibration: below 60% retained in a subject, a topic needs four fully
-      right answers to count as learned and cards are scheduled for a 93%
-      target; between 60% and 75% only the schedule tightens; above that the
-      defaults return. A topic with nothing retained is reopened.
+- [x] Retention check (`/probe`): each mastered topic is probed about three
+      weeks after mastery and again five weeks on (Cepeda et al. 2008: the
+      best gap scales with how long the memory must last; three weeks for a
+      year), five held-back questions a sitting, offered whenever three or
+      more are in their window. Results land on the topic ("retained" or
+      "faded" on the Path), in the per-idea record, and on the subject.
+- [x] Calibration (Rawson and Dunlosky 2011: spaced relearning, not a higher
+      in-sitting bar, is what buys durability): below 75% retained, reviews
+      are scheduled for 93% recall; below 60%, 95% and one more spaced recall
+      before a topic counts as secure; above 75% the defaults return. The
+      thresholds are provisional. A topic with nothing retained is reopened.
 - [x] Reviews test the idea, not the wording: each card carries two variant
       fronts (a rephrasing and a small situation) shown in turn.
-- [x] Mixed practice (`/mixed/[subjectId]`): once ten topics are learned, a
-      weekly set of eight questions across five earlier topics, each needing
-      two told apart or combined. A topic with nothing right is reopened.
+- [x] Mixed practice (`/mixed/[subjectId]`): from four learned topics and
+      after every three more (interleaving keeps pace with learning, as in
+      Rohrer's mixed assignments), eight questions across up to five earlier
+      topics, each needing two told apart or combined. A topic with nothing
+      right is reopened.
 - [ ] After a month of use: compare retention by prompt version and model
-      (`probe_items.taught` against `score`) and write up what it shows.
+      (`probe_items.taught` against `score`), fit the forgetting slope from
+      the two probe points, and set the calibration thresholds from it.
 - [ ] Let the probe draw from subjects that have been paused or finished.
 - [ ] Show "retained" on the Learn tab's subject rows once there is data.
 

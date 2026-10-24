@@ -11,11 +11,12 @@ import { markProbeItem, recordActivity, saveSubject, useInvalidateSubject, useLi
 import { QuestionRun, type RunResult } from '@/src/screens/QuestionRun';
 import { useTheme } from '@/src/theme';
 
-// The weekly retention check: questions never seen before, on topics
-// learned two to six weeks ago. The result is the evidence that a topic
-// stayed learned; it is recorded on the topic ("retained" on the Path),
-// feeds the per-idea record, reopens a topic that has faded, and
-// calibrates the mastery bar and review target for the subject.
+// The retention check: questions never seen before, asked around three
+// weeks after a topic was mastered and again five weeks on (the gaps the
+// spacing literature points to for memories that must last a year). The
+// result is the evidence that a topic stayed learned; it is recorded on the
+// topic ("retained" on the Path), feeds the per-idea record, reopens a
+// topic that has faded, and calibrates the review spacing for the subject.
 
 const RETAINED = 0.5; // the grader's "partly right" still shows the idea is there
 
@@ -31,7 +32,7 @@ export default function ProbeRoute() {
   const [frozen] = useState<{ plan: ProbeEntry[] | null }>({ plan: null });
   if (!frozen.plan && subjects.length && !loading && open.data) frozen.plan = planProbe(subjects, open.data.items);
   const entries = frozen.plan;
-  const [outcome, setOutcome] = useState<{ ok: number; n: number; faded: string[]; calibrated: { subject: string; criterion: number }[] } | null>(null);
+  const [outcome, setOutcome] = useState<{ ok: number; n: number; faded: string[]; calibrated: { subject: string; retention: number | null }[] } | null>(null);
 
   const questions = useMemo(
     () => entries?.map((e) => ({ id: e.row.id, label: `${e.subj.plan.title} · ${e.topic.title}`, item: e.item })) ?? null,
@@ -69,11 +70,11 @@ export default function ProbeRoute() {
         faded.push(t.title);
       }
     }
-    const calibrated: { subject: string; criterion: number }[] = [];
+    const calibrated: { subject: string; retention: number | null }[] = [];
     for (const subj of touched.values()) {
-      const before = (subj.stats.calibration as { criterion?: number } | undefined)?.criterion ?? 3;
-      const cal = calibrateFromProbes(subj) as { criterion: number } | null;
-      if (cal && cal.criterion !== before) calibrated.push({ subject: subj.plan.title, criterion: cal.criterion });
+      const before = (subj.stats.calibration as { retention?: number | null } | undefined)?.retention ?? null;
+      const cal = calibrateFromProbes(subj) as { retention: number | null } | null;
+      if (cal && cal.retention !== before) calibrated.push({ subject: subj.plan.title, retention: cal.retention });
       recordMinutes(subj, 'review', minutes / touched.size);
       await saveSubject(subj);
       await recordActivity(subj.id, 'review', minutes / touched.size);
@@ -89,7 +90,7 @@ export default function ProbeRoute() {
         <View style={{ flex: 1, justifyContent: 'center', gap: spacing.lg }}>
           <Text variant="prose">Nothing to check yet.</Text>
           <Text variant="body" color="textMuted">
-            A topic is checked two to six weeks after you learn it, with questions you have not seen. Come back once a few have been learned that long.
+            A topic is checked about three weeks after you learn it, and again five weeks later, with questions you have not seen. Come back once a few have been learned that long.
           </Text>
           <Button label="Back" onPress={close} />
         </View>
@@ -124,9 +125,9 @@ export default function ProbeRoute() {
             ) : null}
             {outcome.calibrated.map((c) => (
               <Text key={c.subject} variant="body">
-                {c.criterion > 3
-                  ? `In ${c.subject}, less than 60% has been retained, so a topic now needs four fully right answers before it counts as learned, and reviews come a little sooner.`
-                  : `In ${c.subject}, retention is back above 75%, so the usual bar applies again.`}
+                {c.retention
+                  ? `In ${c.subject}, less than ${c.retention >= 0.95 ? '60' : '75'}% has been retained, so reviews there now come sooner (scheduled for ${Math.round(c.retention * 100)}% recall) to give each idea more spaced relearning before it fades.`
+                  : `In ${c.subject}, retention is back above 75%, so the usual review spacing applies again.`}
               </Text>
             ))}
             {results.length === 0 ? null : null}

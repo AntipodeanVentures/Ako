@@ -28,8 +28,8 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
   const def = subj.plan.stages.find((s) => s.id === cur.id);
   const aim = aimLine(subj);
   const retention = stageRetention(subj, cur.id) as { ok: number; n: number; rate: number | null };
-  const calibration = subj.stats.calibration as { criterion?: number; retention?: number | null } | undefined;
-  // Mixed practice across earlier topics, weekly once ten are learned.
+  const calibration = subj.stats.calibration as { retention?: number | null; relearn?: number } | undefined;
+  // Mixed practice across earlier topics, from four learned and after every three more.
   const learned = learnedCount(subj);
   const mixedReady = Boolean(mixedDue(subj));
   // The level's outcomes are a long list; shown on request.
@@ -95,7 +95,7 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
         {retention.n ? (
           <Text variant="caption" color="textMuted">
             {Math.round((retention.rate ?? 0) * 100)}% retained weeks later ({retention.ok} of {retention.n} checks)
-            {calibration?.criterion && calibration.criterion > 3 ? '. Below 60%, so a topic here needs four right answers to count as learned.' : ''}
+            {calibration?.retention ? `. Reviews here are scheduled for ${Math.round(calibration.retention * 100)}% recall${calibration.relearn ? ', and a topic needs one more spaced recall to count as secure' : ''}.` : ''}
           </Text>
         ) : null}
       </View>
@@ -185,7 +185,7 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
         </View>
       ) : null}
 
-      {learned >= 10 ? (
+      {learned >= 4 ? (
         <View style={{ marginTop: spacing.xl, gap: spacing.sm }}>
           <Button
             label="Mixed practice"
@@ -194,8 +194,8 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
           />
           <Text variant="caption" color="textMuted">
             {mixedReady
-              ? 'Eight questions across five earlier topics, each needing two of them told apart. About ten minutes, once a week.'
-              : 'Done this week. Eight questions across earlier topics; it comes round again in a few days.'}
+              ? 'Eight questions across earlier topics, each needing two of them told apart. About ten minutes; it comes round after every three new topics.'
+              : 'Done for now. It comes round again after three more topics, or in two weeks.'}
           </Text>
         </View>
       ) : null}
