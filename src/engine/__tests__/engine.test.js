@@ -10,7 +10,7 @@ import {
   makeCards, reviewCard, recallChance, dueCards,
   mergeKnowItems, renderKnow, withoutKnowItem,
   newLesson, useLesson, stepOrder, nextStep, pickNextItem, scorePractice, practiceDone, metCriterion, finishTopic, recordRelearn, sameAnswer, ROLE_LEVEL_GOOD,
-  normaliseIntake, normaliseAdaptation, reopenTopics, placeKnown, intakePrompt, adaptPrompt, cleanOutcome, normalisePractice, addQuestionSet, practicePrompt, bridgePrompt,
+  normaliseIntake, normaliseAdaptation, reopenTopics, placeKnown, intakePrompt, adaptPrompt, cleanOutcome, normalisePractice, addQuestionSet, practicePrompt, bridgePrompt, cardFront, probeCandidates, pickProbe, recordProbe, calibrateFromProbes, criterionFor, retentionFor, stageRetention, mixedDue, recordMixed, mixedPrompt, normaliseMixed, probeDue,
 } from '../index.js';
 import { lesson, planPortuguese, planJudo } from '../fixtures.js';
 
@@ -55,6 +55,63 @@ describe('lesson in two parts', () => {
     const pp = practicePrompt(subj, t, core, { warm: { questions: [{ q: 'Q', a: 'A' }] }, answers: [{ text: 'wrong guess' }] });
     expect(pp).toContain('wrong guess');
     expect(bridgePrompt(subj, t, core, { warm: { questions: [{ q: 'Q', a: 'A' }] }, answers: [{ text: 'my go' }] })).toContain('my go');
+  });
+});
+
+describe('evidence that learning stuck', () => {
+  it('keeps held-back questions and card variants out of the lesson and rotates variants on review', () => {
+    const base = lesson('concept');
+    const set = normalisePractice({ ...base, practice: base.practice, cards: [{ front: 'What is X?', back: 'Y', concept: 0, variants: ['Put differently, X?', 'What is X?', 'A situation: which is it?'] }],
+      heldBack: [{ type: 'short', prompt: 'New situation?', answer: 'Y', concept: 0, difficulty: 4, explanation: 'e' }, { type: 'mcq', prompt: 'Pick', options: ['a', 'b'], answer: 1, concept: 0, difficulty: 3 }] });
+    expect(set.heldBack).toHaveLength(2);
+    expect(set.cards[0].variants).toEqual(['Put differently, X?', 'A situation: which is it?']);
+    const [card] = makeCards({ id: 't1' }, set.cards, 3);
+    expect(cardFront(card)).toBe('What is X?');
+    expect(cardFront({ ...card, reviews: 1 })).toBe('Put differently, X?');
+    expect(cardFront({ ...card, reviews: 3 })).toBe('What is X?');
+  });
+  it('probes mastered topics after two weeks, records retention and calibrates the bar', () => {
+    const plan = normalisePlan(planPortuguese, intake, 's2');
+    const subj = subjectFrom(plan);
+    const [a, b, c] = plan.topics;
+    subj.topicState[a.id] = { status: 'mastered', masteredAt: nowMs() - 20 * DAY };
+    subj.topicState[b.id] = { status: 'mastered', masteredAt: nowMs() - 3 * DAY };
+    subj.topicState[c.id] = { status: 'mastered', masteredAt: nowMs() - 50 * DAY, retained: { ok: 1, n: 1, at: nowMs() - 2 * DAY } };
+    expect(probeCandidates(subj).map((t) => t.id)).toEqual([a.id]);
+    expect(probeDue(null)).toBe(true);
+    expect(probeDue(nowMs() - 2 * DAY)).toBe(false);
+    const picked = pickProbe([{ key: 'A', items: [1, 2, 3] }, { key: 'B', items: [4] }]);
+    expect(picked.map((p) => p.item)).toEqual([1, 4, 2]);
+    expect(criterionFor(subj)).toBe(CRITERION);
+    expect(retentionFor(subj, 0.9)).toBe(0.9);
+    for (let i = 0; i < 6; i++) recordProbe(subj, a.id, i < 2);
+    expect(subj.topicState[a.id].retained).toMatchObject({ ok: 2, n: 6 });
+    expect(stageRetention(subj, a.stage).n).toBe(7);
+    const cal = calibrateFromProbes(subj);
+    expect(cal).toMatchObject({ criterion: CRITERION + 1, retention: 0.93 });
+    expect(criterionFor(subj)).toBe(CRITERION + 1);
+    expect(retentionFor(subj, 0.9)).toBe(0.93);
+  });
+  it('offers mixed practice once ten topics are learned, weekly', () => {
+    // Twelve topics: the fixture's six, then six more in the same stage.
+    const more = Array.from({ length: 6 }, (_, i) => ({ ...planPortuguese.topics[0], id: 'x' + i, title: 'Extra topic ' + i, prereqs: [] }));
+    const plan = normalisePlan({ ...planPortuguese, topics: planPortuguese.topics.concat(more) }, intake, 's2');
+    const subj = subjectFrom(plan);
+    expect(mixedDue(subj)).toBeNull();
+    plan.topics.slice(0, 10).forEach((t, i) => { subj.topicState[t.id] = { status: 'mastered', masteredAt: nowMs() - (30 - i) * DAY }; });
+    const picked = mixedDue(subj);
+    expect(picked && picked.length).toBe(5);
+    expect(mixedPrompt(subj, picked)).toContain(picked[0].title);
+    const qs = normaliseMixed({ questions: [
+      { topicId: picked[0].id, type: 'short', prompt: 'q1', answer: 'a', explanation: 'e' },
+      { topicId: picked[1].id, type: 'mcq', prompt: 'q2', options: ['a', 'b'], answer: 0, explanation: 'e' },
+      { topicId: 'nope', type: 'short', prompt: 'q3', answer: 'a' },
+      { topicId: picked[2].id, type: 'short', prompt: 'q4', answer: 'a' },
+    ] }, picked.map((t) => t.id));
+    expect(qs).toHaveLength(3);
+    recordMixed(subj, [{ topicId: picked[0].id, ok: true }, { topicId: picked[1].id, ok: false }]);
+    expect(subj.stats.mixed).toMatchObject({ ok: 1, n: 2 });
+    expect(mixedDue(subj)).toBeNull();
   });
 });
 

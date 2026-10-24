@@ -2,12 +2,13 @@
 //
 // Request: { kind: 'answers', title, items: [{ prompt, answer, response, conf? }], mode? }
 //        | { kind: 'check', subject, topicIds: string[], stageId? }        (writes the check questions)
+//        | { kind: 'mixed', subject, topicIds: string[] }                  (writes a mixed practice set across learned topics)
 //        | { kind: 'debrief', subject, topicId, scenario, transcript }
 //        | { kind: 'photo', subject, topicId, drill, image: { mediaType, dataBase64 } }
 // Response: JSON
 
 import { placementPrompt,
-  gradePrompt, checkPrompt, debriefPrompt, formCheckPrompt, normaliseDebrief, topicById, METHOD, arr, str,
+  gradePrompt, checkPrompt, mixedPrompt, debriefPrompt, formCheckPrompt, normaliseDebrief, normaliseMixed, topicById, METHOD, arr, str,
 } from '../_shared/engine/index.js';
 import { CORS, errorResponse, json, requireCaller, HttpError } from '../_shared/auth.ts';
 import { modelFor } from '../_shared/limits.ts';
@@ -49,6 +50,14 @@ Deno.serve(async (req) => {
       const r = await sample({ model: modelFor('check'), system: METHOD, prompt: checkPrompt(subject, topics, body.stageId), maxTokens: 4000 });
       await recordUsage(caller, 'grade', r.inputTokens, r.outputTokens);
       return json({ check: parseJson(r.text, r.stopReason) });
+    }
+
+    if (body.kind === 'mixed') {
+      const topics = arr(body.topicIds).map((id: string) => topicById(subject, id)).filter(Boolean);
+      if (topics.length < 3) throw new HttpError(400, 'bad_request', 'Not enough topics for mixed practice.');
+      const r = await sample({ model: modelFor('mixed'), system: METHOD, prompt: mixedPrompt(subject, topics), maxTokens: 3500 });
+      await recordUsage(caller, 'grade', r.inputTokens, r.outputTokens);
+      return json({ questions: normaliseMixed(parseJson(r.text, r.stopReason), topics.map((t: { id: string }) => t.id)) });
     }
 
     if (body.kind === 'debrief') {

@@ -4,7 +4,7 @@
 
 import { createEmptyCard, fsrs, generatorParameters } from 'ts-fsrs';
 
-import { clampNum, nowMs, num, rid } from './core.js';
+import { arr, clampNum, nowMs, num, rid, str } from './core.js';
 
 // One scheduler per retention target. The learner's target (0.8 to 0.97) comes from their profile.
 const cache = new Map();
@@ -35,8 +35,16 @@ function makeCards(topic, items, grade, retention = 0.9, atMs = nowMs()) {
   return items.map((c) => {
     const rec = f.next(createEmptyCard(t), t, grade);
     const srs = fromF(rec.card);
-    return { id: rid('c'), topicId: topic.id, front: c.front, back: c.back, concept: c.concept, createdAt: t.getTime(), due: srs.due, srs, reviews: 0 };
+    return { id: rid('c'), topicId: topic.id, front: c.front, back: c.back, fronts: arr(c.variants).map((v) => str(v, 400)).filter(Boolean).slice(0, 3), concept: c.concept, createdAt: t.getTime(), due: srs.due, srs, reviews: 0 };
   });
+}
+// The prompt to show for this review: the card's front the first time, then its variants in turn, so a
+// review tests the idea rather than recognition of one wording.
+function cardFront(card) {
+  const alts = arr(card.fronts).filter(Boolean);
+  if (!alts.length) return card.front;
+  const i = num(card.reviews, 0) % (alts.length + 1);
+  return i === 0 ? card.front : alts[i - 1];
 }
 // Apply a review. Returns the updated card (a copy) and the log entry.
 function reviewCard(card, grade, retention = 0.9, atMs = nowMs()) {
@@ -47,4 +55,4 @@ function reviewCard(card, grade, retention = 0.9, atMs = nowMs()) {
   return { card: next, log: { rating: grade, elapsed_days: rec.log.elapsed_days, scheduled_days: rec.log.scheduled_days, reviewedAt: atMs } };
 }
 
-export { sched, toF, fromF, recallChance, makeCards, reviewCard };
+export { sched, toF, fromF, recallChance, makeCards, cardFront, reviewCard };

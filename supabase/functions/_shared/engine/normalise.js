@@ -176,10 +176,20 @@ function normalisePractice(raw) {
   const r = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
   const practice = arr(r.practice).map(normQ).filter(Boolean).slice(0, 10);
   const cards = arr(r.cards).filter((c) => c && typeof c === 'object')
-    .map((c) => ({ front: str(c.front, 600), back: str(c.back, 900), concept: Number.isInteger(c.concept) && c.concept >= 0 && c.concept < 6 ? c.concept : null }))
+    .map((c) => ({ front: str(c.front, 600), back: str(c.back, 900), concept: Number.isInteger(c.concept) && c.concept >= 0 && c.concept < 6 ? c.concept : null,
+      variants: arr(c.variants).map((v) => str(v, 400)).filter((v) => v && v !== str(c.front, 600)).slice(0, 3) }))
     .filter((c) => c.front && c.back).slice(0, 10);
   if (practice.length < 2 || !cards.length) throw { code: 'invalid_json' };
-  return { recall: str(r.recall, 600), recallAnswer: str(r.recallAnswer, 1500), why: str(r.why, 600), whyAnswer: str(r.whyAnswer, 900), practice, cards };
+  // Held back for the retention probe weeks later; never shown in the lesson.
+  const heldBack = arr(r.heldBack).map(normQ).filter(Boolean).slice(0, 6);
+  return { recall: str(r.recall, 600), recallAnswer: str(r.recallAnswer, 1500), why: str(r.why, 600), whyAnswer: str(r.whyAnswer, 900), practice, cards, heldBack };
+}
+function normaliseMixed(raw, topicIds) {
+  const r = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const ok = new Set(arr(topicIds));
+  const questions = arr(r.questions).map(normQ).filter((q) => q && ok.has(q.topicId)).slice(0, 10);
+  if (questions.length < 3) throw { code: 'invalid_json' };
+  return questions;
 }
 function normaliseBridge(raw) {
   const r = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
@@ -320,4 +330,4 @@ function normaliseModel(raw) {
   return { strengths: list(M.strengths), misconceptions: list(M.misconceptions), analogies: list(M.analogies), note: str(M.note, 500), updatedAt: nowMs() };
 }
 
-export { DEFAULT_HOURS, cleanOutcome, normaliseStages, normaliseTopics, normalisePlan, normaliseExtension, upgradePlan, normQ, normaliseLesson, normalisePractice, normaliseBridge, normaliseWarm, normaliseRole, normaliseKnow, normaliseStart, INTAKE_SLOTS, INTAKE_FALLBACK, normaliseIntake, normaliseAdaptation, normaliseDebrief, normaliseModel };
+export { DEFAULT_HOURS, cleanOutcome, normaliseStages, normaliseTopics, normalisePlan, normaliseExtension, upgradePlan, normQ, normaliseLesson, normalisePractice, normaliseBridge, normaliseMixed, normaliseWarm, normaliseRole, normaliseKnow, normaliseStart, INTAKE_SLOTS, INTAKE_FALLBACK, normaliseIntake, normaliseAdaptation, normaliseDebrief, normaliseModel };

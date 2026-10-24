@@ -4,7 +4,7 @@
 
 import { arr, clampNum, dayKey, nowMs, num, str } from './core.js';
 import { CRITERION, HARD, ROLE_LEVEL_GOOD, SUPPORT, pitchOf, supportOf } from './ladder.js';
-import { checkMilestones, lessonConceptName, noteConcept, recordMinutes, topicById } from './progress.js';
+import { checkMilestones, criterionFor, lessonConceptName, noteConcept, recordMinutes, retentionFor, topicById } from './progress.js';
 import { makeCards } from './scheduling.js';
 
 // ---------- lesson state ----------
@@ -14,8 +14,8 @@ function newLesson(topicId, logOnly) {
     rec: { idx: 0, items: [] }, prac: newPractice([], 2), teach: { started: false, skipped: false, turns: 0 },
     jol: null, rest: null, rp: { debrief: null, runs: 0 }, log: { minutes: 20, checks: [] }, logOnly: !!logOnly };
 }
-function newPractice(items, ability) {
-  return { items: items.slice(), asked: [], idx: null, picked: null, text: '', conf: null, result: null, correct: 0, partial: 0, misses: 0, hardOk: false, mixOk: false, ability, requeue: [], log: [], why: null, stepBack: false, usedBack: false, confident: 0, extra: 0, re: false };
+function newPractice(items, ability, criterion) {
+  return { items: items.slice(), asked: [], idx: null, picked: null, text: '', conf: null, result: null, correct: 0, partial: 0, misses: 0, hardOk: false, mixOk: false, ability, criterion: num(criterion, CRITERION), requeue: [], log: [], why: null, stepBack: false, usedBack: false, confident: 0, extra: 0, re: false };
 }
 const startAbility = (subj) => [0, 1.5, 2, 3, 4, 4.5][pitchOf(subj)];
 
@@ -23,7 +23,7 @@ const startAbility = (subj) => [0, 1.5, 2, 3, 4, 4.5][pitchOf(subj)];
 function useLesson(L, data, subj) {
   data.practice = arr(data.practice).map((q) => Object.assign({ kind: 'question' }, q, { difficulty: Math.round(clampNum(num(q.difficulty, 3), 1, 5)) }));
   L.data = data;
-  L.prac = newPractice(data.practice, startAbility(subj));
+  L.prac = newPractice(data.practice, startAbility(subj), criterionFor(subj));
   pickNextItem(L.prac);
   L.rec = { idx: 0, items: [{ key: 'recall', prompt: data.recall, answer: data.recallAnswer || 'A clear explanation of the core idea.', text: '', conf: null, result: null }]
     .concat(data.why ? [{ key: 'why', prompt: data.why, answer: data.whyAnswer || 'A clear reason.', text: '', conf: null, result: null }] : []) };
@@ -41,7 +41,7 @@ function addQuestionSet(L, part, subj) {
   if (str(part.why)) { d.why = str(part.why, 600); d.whyAnswer = str(part.whyAnswer, 900); }
   d.practice = arr(part.practice).map((q) => Object.assign({ kind: 'question' }, q, { difficulty: Math.round(clampNum(num(q.difficulty, 3), 1, 5)) }));
   if (arr(part.cards).length) d.cards = arr(part.cards);
-  L.prac = newPractice(d.practice, startAbility(subj));
+  L.prac = newPractice(d.practice, startAbility(subj), criterionFor(subj));
   pickNextItem(L.prac);
   L.rec = { idx: 0, items: [{ key: 'recall', prompt: d.recall, answer: d.recallAnswer || 'A clear explanation of the core idea.', text: '', conf: null, result: null }]
     .concat(d.why ? [{ key: 'why', prompt: d.why, answer: d.whyAnswer || 'A clear reason.', text: '', conf: null, result: null }] : []) };
@@ -75,7 +75,7 @@ const sameAnswer = (a, b) => { const n = (x) => str(x).toLowerCase().replace(/[.
 const hasHard = (P) => P.items.some((q) => num(q.difficulty, 3) >= HARD);
 const hasMix = (P) => P.items.some((q) => q.mix === true);
 // Mastery: CRITERION fully correct answers, including a hard one and a mixed one when the deck offers them.
-const metCriterion = (P) => P.correct >= CRITERION && (P.hardOk || !hasHard(P)) && (P.mixOk || !hasMix(P));
+const metCriterion = (P) => P.correct >= num(P.criterion, CRITERION) && (P.hardOk || !hasHard(P)) && (P.mixOk || !hasMix(P));
 function pickNextItem(P) {
   const open = P.items.map((q, i) => i).filter((i) => !P.asked.includes(i));
   if (P.requeue.length && (!open.length || metCriterion(P))) { P.idx = P.requeue.shift(); P.re = true; }
@@ -147,7 +147,7 @@ function finishTopic(subj, L, opts = {}) {
   if (!existing.length && L.data) {
     const d = dayKey(nowMs());
     added = arr(L.data.cards).map((src, i) => {
-      const card = makeCards(t, [src], firstRating(subj, t, src, mastered), opts.retention)[0];
+      const card = makeCards(t, [src], firstRating(subj, t, src, mastered), retentionFor(subj, opts.retention))[0];
       card.learnedDay = d; card.relearnDays = []; card.concept = src.concept == null ? null : src.concept; card.conceptName = lessonConceptName(L.data, src.concept);
       return card;
     });

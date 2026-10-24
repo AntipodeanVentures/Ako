@@ -10,7 +10,7 @@ import {
   lessonPrompt, practicePrompt, bridgePrompt, morePracticePrompt, warmupPrompt, normaliseLesson, normalisePractice, normaliseBridge, normaliseWarm, normQ, topicById, pitchOf, METHOD, arr,
 } from '../_shared/engine/index.js';
 import { CORS, errorResponse, requireCaller, HttpError } from '../_shared/auth.ts';
-import { cacheKey, readCache, writeCache } from '../_shared/cache.ts';
+import { PROMPT_VERSION, cacheKey, readCache, writeCache } from '../_shared/cache.ts';
 import { modelFor } from '../_shared/limits.ts';
 import { checkLimit, recordUsage } from '../_shared/metering.ts';
 import { parseJson, sample } from '../_shared/anthropic.ts';
@@ -64,9 +64,10 @@ Deno.serve(async (req) => {
         const q = { recall: core.recall, recallAnswer: core.recallAnswer, why: core.why, whyAnswer: core.whyAnswer, practice: core.practice, cards: core.cards };
         return new Response(JSON.stringify({ questions: q, cached: true }), { headers: { 'content-type': 'application/json', ...CORS } });
       }
-      const r = await sample({ model: modelFor('practice'), system: METHOD, prompt: practicePrompt(subject, topic, body.lesson, ctx), maxTokens: 4000 });
+      const model = modelFor('practice');
+      const r = await sample({ model, system: METHOD, prompt: practicePrompt(subject, topic, body.lesson, ctx), maxTokens: 5000 });
       await recordUsage(caller, 'lesson', r.inputTokens, r.outputTokens);
-      const questions = normalisePractice(parseJson(r.text, r.stopReason));
+      const questions = { ...normalisePractice(parseJson(r.text, r.stopReason)), meta: { prompt: PROMPT_VERSION, model } };
       await writeCache(caller, pkey, { subjectTitle: subject.plan.title, topicTitle: topic.title, stageId: topic.stage, pitchBand }, questions);
       return new Response(JSON.stringify({ questions, cached: false }), { headers: { 'content-type': 'application/json', ...CORS } });
     }
@@ -85,9 +86,11 @@ Deno.serve(async (req) => {
         emit({ type: 'done', data: { lesson: cached, cached: true } });
         return;
       }
-      const r = await sample({ model: modelFor(deep ? 'lessonDeep' : 'lesson'), system: METHOD, prompt: lessonPrompt(subject, topic, ctx), maxTokens: 5000, onText: (delta) => emit({ type: 'text', delta }) });
+      const model = modelFor(deep ? 'lessonDeep' : 'lesson');
+      const r = await sample({ model, system: METHOD, prompt: lessonPrompt(subject, topic, ctx), maxTokens: 5000, onText: (delta) => emit({ type: 'text', delta }) });
       await recordUsage(caller, 'lesson', r.inputTokens, r.outputTokens);
-      const lesson = normaliseLesson(parseJson(r.text, r.stopReason), topic);
+      // Tagged with the prompt version and model, so retention weeks later can be compared across them.
+      const lesson = { ...normaliseLesson(parseJson(r.text, r.stopReason), topic), meta: { prompt: PROMPT_VERSION, model } };
       await writeCache(caller, key, { subjectTitle: subject.plan.title, topicTitle: topic.title, stageId: topic.stage, pitchBand }, lesson);
       emit({ type: 'done', data: { lesson, cached: false } });
     });

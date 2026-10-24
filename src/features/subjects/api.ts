@@ -3,6 +3,7 @@ import type { Plan } from '@/src/engine/types';
 import type {
   ActivityRow,
   CardRow,
+  ProbeItemRow,
   ReviewLogRow,
   StageStateRow,
   SubjectRow,
@@ -141,5 +142,31 @@ export async function updateCard(id: string, update: Partial<Omit<CardRow, 'id' 
 
 export async function insertReviewLog(row: Omit<ReviewLogRow, 'id'>): Promise<void> {
   const { error } = await getSupabase().from('review_log').insert(row);
+  if (error) throw error;
+}
+
+// ---- held-back questions for the retention probe ----
+export async function listOpenProbeItems(profileId: string): Promise<ProbeItemRow[]> {
+  const { data, error } = await getSupabase().from('probe_items').select('*').eq('profile_id', profileId).is('asked_at', null);
+  if (error) throw error;
+  return (data ?? []) as ProbeItemRow[];
+}
+export async function lastProbeAt(profileId: string): Promise<number | null> {
+  const { data, error } = await getSupabase().from('probe_items').select('asked_at').eq('profile_id', profileId).not('asked_at', 'is', null).order('asked_at', { ascending: false }).limit(1);
+  if (error) throw error;
+  const at = (data ?? [])[0]?.asked_at as string | undefined;
+  return at ? new Date(at).getTime() : null;
+}
+// A fresh set replaces any unasked items for the topic; asked ones are history and stay.
+export async function replaceProbeItems(profileId: string, subjectId: string, topicId: string, items: unknown[], taught: Record<string, unknown> | null): Promise<void> {
+  const db = getSupabase();
+  const { error: e1 } = await db.from('probe_items').delete().eq('subject_id', subjectId).eq('topic_id', topicId).is('asked_at', null);
+  if (e1) throw e1;
+  if (!items.length) return;
+  const { error } = await db.from('probe_items').insert(items.map((item) => ({ profile_id: profileId, subject_id: subjectId, topic_id: topicId, item, taught })));
+  if (error) throw error;
+}
+export async function markProbeItem(id: string, score: number, response: string): Promise<void> {
+  const { error } = await getSupabase().from('probe_items').update({ asked_at: new Date().toISOString(), score, response: response.slice(0, 2000) }).eq('id', id);
   if (error) throw error;
 }

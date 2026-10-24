@@ -83,7 +83,11 @@ export type Lesson = {
   why: string;
   whyAnswer: string;
   practice: PracticeItem[];
-  cards: { front: string; back: string; concept: number | null }[];
+  cards: { front: string; back: string; concept: number | null; variants?: string[] }[];
+  // Questions never shown in the lesson, kept for the retention probe weeks later.
+  heldBack?: PracticeItem[];
+  // Which prompt version and model produced it, so retention can be compared across them.
+  meta?: { prompt?: string; model?: string; questions?: string; questionsModel?: string };
   drill: { steps: string[]; dose: string; checks: string[]; cues: string[]; feedback: string; imagery: string; safety: string } | null;
   scenario: { setting: string; yourRole: string; claudeRole: string; goal: string; criteria: string[]; opener: string } | null;
   resources: { title: string; creator: string; search: string }[];
@@ -94,6 +98,8 @@ export type Card = {
   topicId: string;
   front: string;
   back: string;
+  // Alternative fronts for the same back, shown in turn on later reviews.
+  fronts?: string[];
   concept: number | null;
   conceptName?: string;
   createdAt: number;

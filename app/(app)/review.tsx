@@ -5,8 +5,8 @@ import { ActivityIndicator, Pressable, View } from 'react-native';
 
 import { Button, Screen, Text } from '@/src/components/ui';
 import { fmtInterval } from '@/src/engine/core';
-import { dueCards, logReview, noteConcept, recordMinutes, reopenTopics, topicById } from '@/src/engine/progress';
-import { reviewCard } from '@/src/engine/scheduling';
+import { dueCards, logReview, noteConcept, recordMinutes, reopenTopics, retentionFor, topicById } from '@/src/engine/progress';
+import { cardFront, reviewCard } from '@/src/engine/scheduling';
 import { recordRelearn } from '@/src/engine/session';
 import type { Card } from '@/src/engine/types';
 import { useProfile } from '@/src/features/profile';
@@ -95,7 +95,8 @@ function ReviewScreen({ items, retention }: { items: Item[]; retention: number }
   const grade = (g: 1 | 2 | 3 | 4) => {
     if (!item) return;
     const { subj, card } = item;
-    const { card: next, log } = reviewCard(card, g, retention);
+    // The review target can be tightened per subject by the retention probes.
+    const { card: next, log } = reviewCard(card, g, retentionFor(subj, retention));
     const ok = g >= 3;
     recordRelearn(subj, next, ok);
     logReview(subj, ok);
@@ -174,7 +175,7 @@ function ReviewScreen({ items, retention }: { items: Item[]; retention: number }
   }
 
   const nextIn = (g: 1 | 2 | 3 | 4) => {
-    const { card } = reviewCard(item.card, g, retention);
+    const { card } = reviewCard(item.card, g, retentionFor(item.subj, retention));
     return fmtInterval((card.due - Date.now()) / 86400000);
   };
 
@@ -196,7 +197,7 @@ function ReviewScreen({ items, retention }: { items: Item[]; retention: number }
       </View>
 
       <View style={{ flex: 1, justifyContent: 'center', gap: spacing.xl }}>
-        <Text variant="prose">{item.card.front}</Text>
+        <Text variant="prose">{cardFront(item.card)}</Text>
         {shown ? (
           <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.xl }}>
             <Text variant="body">{item.card.back}</Text>

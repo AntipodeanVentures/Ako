@@ -15,7 +15,7 @@ import {
 } from '@/src/engine/session';
 import type { Lesson, PlanRevision, Topic } from '@/src/engine/types';
 import { aiErrorCopy, callJson, callStream } from '@/src/features/ai/client';
-import { recordActivity, saveSubject, type LiveSubject } from '@/src/features/subjects';
+import { recordActivity, replaceProbeItems, saveSubject, type LiveSubject } from '@/src/features/subjects';
 import { afterTopic } from '@/src/features/subjects/adapt';
 
 // One topic, start to finish: warm-up, lesson, recall, practice, done.
@@ -180,6 +180,8 @@ export function useSession(subj: LiveSubject, topicId: string, retention: number
         { kind: 'practice', subject: serialisable(subj), topicId, lesson: digest, ctx },
       );
       addQuestionSet(L, r.questions, subj);
+      const qm = (r.questions as { meta?: { prompt?: string; model?: string } }).meta;
+      if (L.data) { L.data.heldBack = (r.questions as { heldBack?: unknown[] }).heldBack ?? []; L.data.meta = { ...(L.data.meta ?? {}), questions: qm?.prompt, questionsModel: qm?.model }; }
       setS((prev) => ({ ...prev, lesson: L.data, questionsReady: true, questionsError: null }));
     } catch (e) {
       questionsRequested.current = false;
@@ -327,6 +329,9 @@ export function useSession(subj: LiveSubject, topicId: string, retention: number
       const minutes = clampNum((Date.now() - startedAt.current) / 60000, 1, Math.max(10, topic.minutes * 2));
       const milestonesBefore = new Set(Object.keys((subj.milestones as Record<string, unknown>) || {}));
       const r = finishTopic(subj, L, { minutes, retention, taught: opts.taught });
+      // Which prompt version and model taught this topic, so retention weeks later can be compared across them.
+      const taught = { v: L.data?.meta?.prompt ?? null, model: L.data?.meta?.model ?? null, qv: L.data?.meta?.questions ?? null, qmodel: L.data?.meta?.questionsModel ?? null, at: Date.now() };
+      (subj.topicState[topicId] as Record<string, unknown>).taughtBy = taught;
       const reachedId = Object.keys((subj.milestones as Record<string, unknown>) || {}).find((id) => !milestonesBefore.has(id));
       const milestoneReached = reachedId ? (subj.plan.milestones.find((m) => m.id === reachedId)?.title ?? null) : null;
       patch({
@@ -350,6 +355,10 @@ export function useSession(subj: LiveSubject, topicId: string, retention: number
       try {
         await saveSubject(subj);
         await recordActivity(subj.id, 'lesson', minutes);
+        // The questions held back from this lesson wait for the retention probe weeks from now.
+        if (r.mastered && arr(L.data?.heldBack).length) {
+          try { await replaceProbeItems(subj.profileId, subj.id, topicId, L.data.heldBack, taught); } catch (e) { console.warn('held-back questions not saved', e); }
+        }
         onSaved();
         patch({ busy: null });
       } catch (e) {

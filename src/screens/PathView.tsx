@@ -6,7 +6,7 @@ import { Pressable, View } from 'react-native';
 import { Button, Ladder, Text, TextField } from '@/src/components/ui';
 import { STAGES, stageName } from '@/src/engine/ladder';
 import { cleanOutcome } from '@/src/engine/normalise';
-import { levelCheckReady, stagePosition, stageProgress, topicStatus } from '@/src/engine/progress';
+import { learnedCount, levelCheckReady, mixedDue, stagePosition, stageProgress, stageRetention, topicStatus } from '@/src/engine/progress';
 import type { Topic } from '@/src/engine/types';
 import { aiErrorCopy } from '@/src/features/ai/client';
 import { useInvalidateSubject, type LiveSubject } from '@/src/features/subjects';
@@ -27,6 +27,11 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
   const cur = STAGES[pos.currentIdx];
   const def = subj.plan.stages.find((s) => s.id === cur.id);
   const aim = aimLine(subj);
+  const retention = stageRetention(subj, cur.id) as { ok: number; n: number; rate: number | null };
+  const calibration = subj.stats.calibration as { criterion?: number; retention?: number | null } | undefined;
+  // Mixed practice across earlier topics, weekly once ten are learned.
+  const learned = learnedCount(subj);
+  const mixedReady = Boolean(mixedDue(subj));
   // The level's outcomes are a long list; shown on request.
   const [showOutcomes, setShowOutcomes] = useState(false);
   const checkStage = levelCheckReady(subj) as { id: string; name: string } | null;
@@ -85,6 +90,12 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
         {def?.equivalent ? (
           <Text variant="caption" color="textMuted">
             Comparable to {def.equivalent}
+          </Text>
+        ) : null}
+        {retention.n ? (
+          <Text variant="caption" color="textMuted">
+            {Math.round((retention.rate ?? 0) * 100)}% retained weeks later ({retention.ok} of {retention.n} checks)
+            {calibration?.criterion && calibration.criterion > 3 ? '. Below 60%, so a topic here needs four right answers to count as learned.' : ''}
           </Text>
         ) : null}
       </View>
@@ -174,6 +185,21 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
         </View>
       ) : null}
 
+      {learned >= 10 ? (
+        <View style={{ marginTop: spacing.xl, gap: spacing.sm }}>
+          <Button
+            label="Mixed practice"
+            variant={mixedReady ? 'primary' : 'secondary'}
+            onPress={() => router.push({ pathname: '/mixed/[subjectId]', params: { subjectId: subj.id } })}
+          />
+          <Text variant="caption" color="textMuted">
+            {mixedReady
+              ? 'Eight questions across five earlier topics, each needing two of them told apart. About ten minutes, once a week.'
+              : 'Done this week. Eight questions across earlier topics; it comes round again in a few days.'}
+          </Text>
+        </View>
+      ) : null}
+
       {STAGES.filter((s) => subj.plan.topics.some((t) => t.stage === s.id)).map((s) => {
         const topics = subj.plan.topics.filter((t) => t.stage === s.id);
         const prog = stageProgress(subj, s.id);
@@ -187,9 +213,12 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
             </View>
             <View>
               {topics.map((t) => {
-                const st = subj.topicState[t.id] as { attempts?: number; reopenedAt?: number } | undefined;
+                const st = subj.topicState[t.id] as { attempts?: number; reopenedAt?: number; retained?: { n: number; last: number } } | undefined;
                 const status = topicStatus(subj, t);
-                const note = status === 'learning' ? (st?.reopenedAt ? 'again' : Number(st?.attempts) ? 'again, simpler' : null) : status === 'known' ? 'known' : null;
+                const note = status === 'learning'
+                  ? (st?.reopenedAt ? 'again' : Number(st?.attempts) ? 'again, simpler' : null)
+                  : status === 'known' ? 'known'
+                    : st?.retained?.n ? (st.retained.last ? 'retained' : 'faded') : null;
                 return <TopicRow key={t.id} topic={t} status={status} note={note} onPress={() => open(t.id)} />;
               })}
               <View style={{ borderTopWidth: 1, borderTopColor: colors.border }} />
@@ -280,7 +309,7 @@ function TopicRow({ topic, status, note, onPress }: { topic: Topic; status: stri
         <Text variant="body" color={open || learned ? 'text' : 'textMuted'}>
           {topic.title}
           {note ? (
-            <Text variant="body" color="accent">
+            <Text variant="body" color={note === 'faded' ? 'warning' : 'accent'}>
               {'  ·  ' + note}
             </Text>
           ) : null}

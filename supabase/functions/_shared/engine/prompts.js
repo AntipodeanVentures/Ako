@@ -399,9 +399,28 @@ Produce:
 - "recall": one question asking them to explain the core idea from memory in their own words and link it to something they already know, with "recallAnswer", a model answer of 2 to 4 sentences in plain words.
 - "why": one "why" question that makes them explain the reason behind the core idea or a step (not a definition), with "whyAnswer", 1 to 3 sentences.
 - "practice": 6 questions. Tag each with "difficulty" from 1 (recognise the idea) to 5 (apply it in a new situation with a twist), including at least one each of 1 or 2, 3, and 4 or 5, and with "concept" (the index of the concept it tests). Mix "mcq" (4 options, one correct; "answer" is its 0-based index) and "short" (model answer in "answer").${earlier.length ? ' Make 2 of the 6 "mix": true questions that set this topic against earlier topics (' + earlier.join('; ') + '), so the learner must tell them apart or combine them; the rest test this topic alone.' : ''}${motor ? ' Include 2 "decision" questions: a short scenario from live practice and the question "what do you do next and why", as "short" questions with "kind":"decision".' : ''} Each has a one-sentence "explanation" that says why the right answer is right.
-- "cards": 4 to 6 flashcards for spaced review over the coming months. One idea per card, each with "concept". "front" is a question or prompt, "back" a short answer. Favour why, how and when over trivia.
+- "cards": 4 to 6 flashcards for spaced review over the coming months. One idea per card, each with "concept". "front" is a question or prompt, "back" a short answer. Favour why, how and when over trivia. Each card also has "variants": two other fronts with the same back, so a review tests the idea rather than the wording: one asks it in different words, one gives a two-sentence situation in which the back is the answer.
+- "heldBack": 4 questions the learner will never see in this lesson. They are asked weeks from now to find out whether the idea stayed learned, so each sets the idea in a situation unlike the lesson's examples and unlike the practice questions. Two "mcq" and two "short", difficulty 3 or 4, each with "concept" and a one-sentence "explanation".
 
-Return ONLY JSON: {"recall":"...","recallAnswer":"...","why":"...","whyAnswer":"...","practice":[{"type":"mcq","difficulty":1,"concept":0,"mix":false,"prompt":"...","options":["...","...","...","..."],"answer":0,"explanation":"..."},{"type":"short","difficulty":3,"concept":1,"mix":false,"prompt":"...","answer":"...","explanation":"..."}],"cards":[{"front":"...","back":"...","concept":0}]}`;
+Return ONLY JSON: {"recall":"...","recallAnswer":"...","why":"...","whyAnswer":"...","practice":[{"type":"mcq","difficulty":1,"concept":0,"mix":false,"prompt":"...","options":["...","...","...","..."],"answer":0,"explanation":"..."},{"type":"short","difficulty":3,"concept":1,"mix":false,"prompt":"...","answer":"...","explanation":"..."}],"cards":[{"front":"...","back":"...","concept":0,"variants":["...","..."]}],"heldBack":[{"type":"mcq","difficulty":3,"concept":0,"prompt":"...","options":["...","...","...","..."],"answer":0,"explanation":"..."},{"type":"short","difficulty":4,"concept":1,"prompt":"...","answer":"...","explanation":"..."}]}`;
+}
+
+// Mixed practice: a weekly set across several learned topics, where each question needs two of them
+// told apart or combined. One-topic practice never builds that discrimination.
+function mixedPrompt(subj, topics) {
+  const P = PITCH[pitchOf(subj)];
+  const list = topics.map((t) => `${t.id} | ${t.title} | ${t.summary}`).join('\n');
+  const weak = weakConcepts(subj, 4).filter((c) => topics.some((t) => t.id === c.tid)).map((c) => c.name + ' (' + c.ok + ' of ' + c.n + ' right)');
+  return `Write a mixed practice set for an adult learner of ${subj.plan.title}, across topics they learned over the past weeks. Lesson level: ${P.text}
+${subj.plan.language ? 'This is a language course (' + subj.plan.language + '). Include translation in both directions.' : ''}
+Topics (id | title | summary):
+${list}
+${weak.length ? 'Ideas that slip for this learner: ' + weak.join('; ') + '.\n' : ''}
+${METHOD}
+
+Write 8 questions. Each one requires telling two of these topics apart, or combining them, in a situation the lessons did not use; none can be answered by recognising which topic it belongs to. Spread them across the topics. Mix "mcq" (4 options, one correct; "answer" is its 0-based index) and "short" (model answer in "answer"), difficulty 3 or 4. Each has "topicId" (the topic it mainly tests), "concept": null, and a one-sentence "explanation" that says why the right answer is right and names the topic it came from. Use only ideas and terms from these topics and earlier ones.
+
+Return ONLY JSON: {"questions":[{"topicId":"t3","type":"mcq","difficulty":3,"prompt":"...","options":["...","...","...","..."],"answer":1,"explanation":"..."},{"topicId":"t7","type":"short","difficulty":4,"prompt":"...","answer":"...","explanation":"..."}]}`;
 }
 
 // The opening of the lesson, written after the warm-up so it answers what the learner just said.
@@ -553,4 +572,4 @@ function lessonDigest(lesson) {
   return pts.filter(Boolean).join('; ').slice(0, 1500);
 }
 
-export { METHOD, intakePrompt, intakeLines, adaptPrompt, learnerLines, stageLines, FRAMEWORK_GUIDE, planPrompt, reviewPlanPrompt, knowPrompt, startPrompt, rolePrompt, debriefPrompt, formCheckPrompt, extendPrompt, placementPrompt, warmupPrompt, lessonPrompt, practicePrompt, bridgePrompt, morePracticePrompt, gradePrompt, checkPrompt, modelPrompt, tutorRules, lessonDigest };
+export { METHOD, intakePrompt, intakeLines, adaptPrompt, learnerLines, stageLines, FRAMEWORK_GUIDE, planPrompt, reviewPlanPrompt, knowPrompt, startPrompt, rolePrompt, debriefPrompt, formCheckPrompt, extendPrompt, placementPrompt, warmupPrompt, lessonPrompt, practicePrompt, bridgePrompt, mixedPrompt, morePracticePrompt, gradePrompt, checkPrompt, modelPrompt, tutorRules, lessonDigest };

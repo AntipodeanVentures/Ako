@@ -104,7 +104,22 @@ export type CardRow = {
   relearn_days: string[];
   first_review: { at: number; ok: boolean } | null;
   reviews: number;
+  fronts: string[];
   created_at: string;
+};
+
+// A question held back from a lesson for the retention probe weeks later.
+export type ProbeItemRow = {
+  id: string;
+  profile_id: string;
+  subject_id: string;
+  topic_id: string;
+  item: Record<string, unknown>;
+  taught: Record<string, unknown> | null;
+  created_at: string;
+  asked_at: string | null;
+  score: number | null;
+  response: string | null;
 };
 
 export type ReviewLogRow = {

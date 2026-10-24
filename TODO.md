@@ -120,6 +120,32 @@ ask for a typed answer before the reveal. Still to do:
 - [ ] Web push for review reminders on Android and on iPhones with the app
       on the home screen; native push with the store builds.
 
+## Evidence that learning stuck (24 October 2026)
+
+The app now measures whether a topic stayed learned, independently of its
+own teaching, and lets that evidence tune the method.
+
+- [x] Held-back questions: four per topic, written with the practice set and
+      never shown (`probe_items`), tagged with the prompt version and model
+      that taught the topic.
+- [x] Weekly retention check (`/probe`): five held-back questions on topics
+      mastered two to six weeks ago, across subjects, offered from the Learn
+      tab once a week. Results land on the topic ("retained" or "faded" on
+      the Path), in the per-idea record, and on the subject.
+- [x] Calibration: below 60% retained in a subject, a topic needs four fully
+      right answers to count as learned and cards are scheduled for a 93%
+      target; between 60% and 75% only the schedule tightens; above that the
+      defaults return. A topic with nothing retained is reopened.
+- [x] Reviews test the idea, not the wording: each card carries two variant
+      fronts (a rephrasing and a small situation) shown in turn.
+- [x] Mixed practice (`/mixed/[subjectId]`): once ten topics are learned, a
+      weekly set of eight questions across five earlier topics, each needing
+      two told apart or combined. A topic with nothing right is reopened.
+- [ ] After a month of use: compare retention by prompt version and model
+      (`probe_items.taught` against `score`) and write up what it shows.
+- [ ] Let the probe draw from subjects that have been paused or finished.
+- [ ] Show "retained" on the Learn tab's subject rows once there is data.
+
 ## Lesson speed (24 October 2026)
 
 - [x] The lesson text is written the moment a topic opens, while the learner

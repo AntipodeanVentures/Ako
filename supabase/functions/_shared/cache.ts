@@ -3,7 +3,7 @@
 
 import type { Caller } from './auth.ts';
 
-const PROMPT_VERSION = 'v4';
+export const PROMPT_VERSION = 'v5';
 
 export async function cacheKey(parts: (string | number)[]): Promise<string> {
   const data = new TextEncoder().encode([PROMPT_VERSION, ...parts].join('\u0001').toLowerCase());

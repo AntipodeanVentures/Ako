@@ -3,6 +3,7 @@ import { STAGES, stageIdx } from '@/src/engine/ladder';
 import {
   dueCards,
   estimateStage,
+  mixedDue,
   estimateText,
   fmtWeeks,
   fmtWhen,
@@ -23,9 +24,14 @@ import type { LiveSubject } from './context';
 
 export type NextStep =
   | { kind: 'review'; count: number }
+  | { kind: 'probe'; count: number }
   | { kind: 'check'; subject: LiveSubject; stageId: string; stageName: string }
+  | { kind: 'mixed'; subject: LiveSubject; topics: Topic[] }
   | { kind: 'topic'; subject: LiveSubject; topic: Topic }
   | { kind: 'none' };
+
+// What the screen knows that the subjects do not: whether this week's retention probe is ready.
+export type NextStepExtras = { probe?: { due: boolean; count: number } };
 
 export function minutesToday(subjects: LiveSubject[]): number {
   const d = dayKey(nowMs());
@@ -38,12 +44,18 @@ export function dueCount(subjects: LiveSubject[]): number {
 
 // The thing to do now: reviews first (they are the evidence), then a level
 // check that has come due, then one new topic.
-export function nextStep(subjects: LiveSubject[]): NextStep {
+export function nextStep(subjects: LiveSubject[], extras: NextStepExtras = {}): NextStep {
   const due = dueCount(subjects);
   if (due > 0) return { kind: 'review', count: due };
+  // Once a week, a few questions never seen before on topics learned weeks ago: the evidence that it stuck.
+  if (extras.probe?.due && extras.probe.count > 0) return { kind: 'probe', count: extras.probe.count };
   for (const s of subjects) {
     const stage = levelCheckReady(s);
     if (stage) return { kind: 'check', subject: s, stageId: stage.id, stageName: stage.name };
+  }
+  for (const s of subjects) {
+    const topics = mixedDue(s) as Topic[] | null;
+    if (topics) return { kind: 'mixed', subject: s, topics };
   }
   // The subject studied least recently gets the new topic, so none goes stale.
   const ordered = [...subjects].sort((a, b) => Number(a.stats.lastStudied || 0) - Number(b.stats.lastStudied || 0));
@@ -54,9 +66,9 @@ export function nextStep(subjects: LiveSubject[]): NextStep {
   return { kind: 'none' };
 }
 
-export function todayLine(subjects: LiveSubject[]): string {
+export function todayLine(subjects: LiveSubject[], extras: NextStepExtras = {}): string {
   const due = dueCount(subjects);
-  const step = nextStep(subjects);
+  const step = nextStep(subjects, extras);
   const topicStep = step.kind === 'topic' ? step : null;
   const firstTopic = (() => {
     for (const s of subjects) {
@@ -67,8 +79,10 @@ export function todayLine(subjects: LiveSubject[]): string {
   })();
   const parts: string[] = [];
   if (due) parts.push(`${due} ${due === 1 ? 'review' : 'reviews'}${subjects.length > 1 ? ' across your subjects' : ''}`);
+  if (step.kind === 'probe') parts.push(`${due ? 'then ' : ''}a five-minute check on what you learned weeks ago`);
   if (step.kind === 'check') parts.push(`${due ? 'then ' : ''}the ${step.stageName} level check in ${step.subject.plan.title}`);
-  const nt = topicStep ? topicStep.topic : step.kind === 'check' ? null : firstTopic?.t;
+  if (step.kind === 'mixed') parts.push(`${due ? 'then ' : ''}mixed practice across ${step.topics.length} earlier topics in ${step.subject.plan.title}`);
+  const nt = topicStep ? topicStep.topic : step.kind === 'check' || step.kind === 'probe' || step.kind === 'mixed' ? null : firstTopic?.t;
   const ns = topicStep ? topicStep.subject : firstTopic?.s;
   if (nt) {
     // A topic that comes back: it missed the mark last time, or a level check reopened it.

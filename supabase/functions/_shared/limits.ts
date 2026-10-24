@@ -29,7 +29,7 @@ export const MODELS = {
 // with a function secret MODEL_<TASK> (for example MODEL_LESSON=claude-opus-5-5).
 export type Task =
   | 'plan' | 'review' | 'extend' | 'adapt' | 'role' | 'check' | 'placement' | 'lessonDeep' // the course and its checks
-  | 'lesson' | 'warm' | 'practice' | 'bridge' | 'more' | 'tutor' | 'debrief' | 'photo' // teaching, on the critical path
+  | 'lesson' | 'warm' | 'practice' | 'bridge' | 'mixed' | 'more' | 'tutor' | 'debrief' | 'photo' // teaching, on the critical path
   | 'grade' | 'model' | 'intake' | 'know' // marking and the learner record
   | 'start'; // bounded extraction
 const TASK_TIER: Record<Task, keyof typeof MODELS> = {
@@ -45,6 +45,7 @@ const TASK_TIER: Record<Task, keyof typeof MODELS> = {
   warm: 'mid', // the warm-up questions, first thing the learner waits for
   practice: 'mid', // the recall and practice set, written from the lesson text while the learner reads
   bridge: 'small', // two sentences answering the warm-up, written while the learner opens the lesson
+  mixed: 'mid', // the weekly set across learned topics
   more: 'mid', // more practice items
   tutor: 'mid', // the teach-back student and the role-play partner, turn by turn
   debrief: 'mid', // marking a role-play against its criteria
