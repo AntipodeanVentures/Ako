@@ -10,7 +10,7 @@ import {
   makeCards, reviewCard, recallChance, dueCards,
   mergeKnowItems, renderKnow, withoutKnowItem,
   newLesson, useLesson, stepOrder, nextStep, pickNextItem, scorePractice, practiceDone, metCriterion, finishTopic, recordRelearn, sameAnswer, ROLE_LEVEL_GOOD,
-  normaliseIntake, normaliseAdaptation, reopenTopics, placeKnown, intakePrompt, adaptPrompt,
+  normaliseIntake, normaliseAdaptation, reopenTopics, placeKnown, intakePrompt, adaptPrompt, cleanOutcome,
 } from '../index.js';
 import { lesson, planPortuguese, planJudo } from '../fixtures.js';
 
@@ -34,6 +34,16 @@ describe('ladder', () => {
     expect(stageName('s5')).toBe('Expert');
     expect(STAGES[1].fheq).toContain('CEFR B1');
     expect(START_LEVELS).toHaveLength(4);
+  });
+});
+
+describe('cleanOutcome', () => {
+  it('drops a leading "can" so outcomes read under "means you can"', () => {
+    expect(cleanOutcome('can explain volts and amps')).toBe('Explain volts and amps');
+    expect(cleanOutcome('You can name the parts')).toBe('Name the parts');
+    expect(cleanOutcome('be able to trace energy to the socket')).toBe('Trace energy to the socket');
+    expect(cleanOutcome('Explain why panels underperform')).toBe('Explain why panels underperform');
+    expect(cleanOutcome('')).toBe('');
   });
 });
 

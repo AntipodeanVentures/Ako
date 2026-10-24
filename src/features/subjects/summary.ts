@@ -74,7 +74,8 @@ export function todayLine(subjects: LiveSubject[]): string {
   }
   if (!parts.length) return 'Nothing due. Add a subject to keep going.';
   const line = parts.join(', ');
-  return line.charAt(0).toUpperCase() + line.slice(1) + '.';
+  // A topic title may end in its own question mark; do not add a full stop after it.
+  return line.charAt(0).toUpperCase() + line.slice(1) + (/[.!?]$/.test(line) ? '' : '.');
 }
 
 export type SubjectLine = {
@@ -86,7 +87,7 @@ export type SubjectLine = {
   position: string;
   // "about CEFR B1"
   marker: string;
-  // "Proficient by Feb to Mar"
+  // "Proficient expected in about 6 weeks", "Capable level check ready now"
   estimate: string;
   learned: number;
   total: number;
@@ -106,7 +107,7 @@ export function subjectLine(subj: LiveSubject): SubjectLine {
         ? `${cur.name}, ${pct}% evidenced`
         : `${cur.name} not planned yet`;
   const est = nextStageEstimate(subj);
-  const estimate = est ? `${est.name} ${est.text.startsWith('level') ? est.text : 'in ' + est.text.replace(/ \(.*\)$/, '')}` : '';
+  const estimate = est ? `${est.name} ${est.text.startsWith('level') ? est.text : 'expected in ' + est.text.replace(/ \(.*\)$/, '')}` : '';
   return {
     title: subj.plan.title || String(subj.intake.subject || ''),
     reached: pos.reached,

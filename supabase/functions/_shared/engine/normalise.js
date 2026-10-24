@@ -8,13 +8,19 @@ import { KNOW_KINDS } from './know.js';
 
 // ---------- normalising Claude's answers ----------
 const DEFAULT_HOURS = [40, 150, 600, 1500, 5000];
+// Level outcomes are shown under "<Level> means you can", so a leading
+// "can" or "be able to" from the model would read "you can can explain".
+function cleanOutcome(o) {
+  const t = str(o, 200).replace(/^(you\s+)?(can|could|will be able to|be able to|is able to|are able to|able to)\s+/i, '').trim();
+  return t ? t.charAt(0).toUpperCase() + t.slice(1) : '';
+}
 function normaliseStages(raw, fallback) {
   const given = arr(raw).filter((s) => s && typeof s === 'object');
   const out = STAGES.map((sg, i) => {
     const r = given.find((x) => str(x.id, 10) === sg.id) || given[i] || {};
     const fb = fallback && fallback[i] ? fallback[i] : {};
     return { id: sg.id, means: str(r.means, 400) || str(fb.means, 400) || sg.blurb, basis: str(r.basis, 200) || str(fb.basis, 200), equivalent: str(r.equivalent, 160) || str(fb.equivalent, 160),
-      outcomes: arr(r.outcomes).map((o) => str(o, 200)).filter(Boolean).slice(0, 8), external: str(r.external, 300) || str(fb.external, 300),
+      outcomes: arr(r.outcomes).map(cleanOutcome).filter(Boolean).slice(0, 8), external: str(r.external, 300) || str(fb.external, 300),
       hours: Math.round(clampNum(num(r.hours, num(fb.hours, DEFAULT_HOURS[i])), 1, 50000)) };
   });
   for (let i = 1; i < out.length; i++) if (out[i].hours <= out[i - 1].hours) out[i].hours = Math.round(out[i - 1].hours * 2.5);
@@ -286,4 +292,4 @@ function normaliseModel(raw) {
   return { strengths: list(M.strengths), misconceptions: list(M.misconceptions), analogies: list(M.analogies), note: str(M.note, 500), updatedAt: nowMs() };
 }
 
-export { DEFAULT_HOURS, normaliseStages, normaliseTopics, normalisePlan, normaliseExtension, upgradePlan, normQ, normaliseLesson, normaliseWarm, normaliseRole, normaliseKnow, normaliseStart, INTAKE_SLOTS, INTAKE_FALLBACK, normaliseIntake, normaliseAdaptation, normaliseDebrief, normaliseModel };
+export { DEFAULT_HOURS, cleanOutcome, normaliseStages, normaliseTopics, normalisePlan, normaliseExtension, upgradePlan, normQ, normaliseLesson, normaliseWarm, normaliseRole, normaliseKnow, normaliseStart, INTAKE_SLOTS, INTAKE_FALLBACK, normaliseIntake, normaliseAdaptation, normaliseDebrief, normaliseModel };

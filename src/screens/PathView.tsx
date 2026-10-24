@@ -5,6 +5,7 @@ import { Pressable, View } from 'react-native';
 
 import { Button, Ladder, Text, TextField } from '@/src/components/ui';
 import { STAGES, stageName } from '@/src/engine/ladder';
+import { cleanOutcome } from '@/src/engine/normalise';
 import { estimateText, levelCheckReady, stagePosition, stageProgress, topicStatus } from '@/src/engine/progress';
 import type { StageId, Topic } from '@/src/engine/types';
 import { aiErrorCopy } from '@/src/features/ai/client';
@@ -28,7 +29,6 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
   const target = String(subj.intake.target || 's3') as StageId;
   const targetDef = STAGES.find((s) => s.id === target);
   const targetEst = estimateText(subj, target);
-  const markers = subj.plan.stages.map((s) => s.equivalent || null);
   const checkStage = levelCheckReady(subj) as { id: string; name: string } | null;
   // A level reached but not yet planned (the extension failed, or the target moved).
   const toPlan = !pos.inPlan && !pos.done ? nextStageToPlan(subj) : null;
@@ -74,7 +74,7 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
     <View>
       <Text variant="title">{line.title}</Text>
       <View style={{ marginTop: spacing.xl }}>
-        <Ladder reached={line.reached} current={line.current} progress={line.progress} labels markers={markers} height={8} />
+        <Ladder reached={line.reached} current={line.current} progress={line.progress} labels height={8} />
       </View>
 
       <View style={{ marginTop: spacing.xl, gap: spacing.xs }}>
@@ -82,6 +82,11 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
           {line.position}
         </Text>
         {def?.means ? <Text variant="body">{def.means}</Text> : null}
+        {def?.equivalent ? (
+          <Text variant="caption" color="textMuted">
+            Comparable to {def.equivalent}
+          </Text>
+        ) : null}
       </View>
 
       {checkStage ? (
@@ -134,7 +139,7 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
                 –
               </Text>
               <Text variant="body" style={{ flex: 1 }}>
-                {o}
+                {cleanOutcome(o)}
               </Text>
             </View>
           ))}
@@ -251,7 +256,7 @@ function TopicRow({ topic, status, note, onPress }: { topic: Topic; status: stri
       accessibilityRole="button"
       style={({ pressed }) => ({
         flexDirection: 'row',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         gap: spacing.md,
         paddingVertical: spacing.md,
         borderTopWidth: 1,
@@ -259,11 +264,10 @@ function TopicRow({ topic, status, note, onPress }: { topic: Topic; status: stri
         opacity: pressed ? 0.7 : 1,
       })}
     >
-      <Ionicons name={icon} size={18} color={iconColor} />
+      <Ionicons name={icon} size={18} color={iconColor} style={{ marginTop: 3 }} />
       <View style={{ flex: 1, gap: 2 }}>
         <Text variant="body" color={open || learned ? 'text' : 'textMuted'}>
           {topic.title}
-          {topic.threshold ? '  ·  threshold' : ''}
           {note ? (
             <Text variant="body" color="accent">
               {'  ·  ' + note}
@@ -273,10 +277,10 @@ function TopicRow({ topic, status, note, onPress }: { topic: Topic; status: stri
         <Text variant="caption" color="textMuted" numberOfLines={2}>
           {topic.summary}
         </Text>
+        <Text variant="caption" color="textMuted">
+          {topic.minutes} min{topic.threshold ? '  ·  key idea' : ''}
+        </Text>
       </View>
-      <Text variant="caption" color="textMuted">
-        {topic.minutes} min
-      </Text>
     </Pressable>
   );
 }

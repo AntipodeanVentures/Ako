@@ -85,24 +85,15 @@ export function LearnView({ subjects, loading, onStart, onOpenSubject, onAddSubj
                   opacity: pressed ? 0.7 : 1,
                 })}
               >
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: spacing.md }}>
-                  <Text variant="heading" style={{ flexShrink: 1 }}>
-                    {line.title}
-                  </Text>
-                  {line.estimate ? (
-                    <Text variant="caption" color="textMuted" numberOfLines={1}>
-                      {line.estimate}
-                    </Text>
-                  ) : null}
-                </View>
+                <Text variant="heading">{line.title}</Text>
                 <Ladder reached={line.reached} current={line.current} progress={line.progress} />
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md }}>
+                <View style={{ gap: 2 }}>
                   <Text variant="caption" color="accent">
                     {line.position}
                   </Text>
-                  {line.marker ? (
+                  {line.estimate ? (
                     <Text variant="caption" color="textMuted">
-                      {line.marker}
+                      {line.estimate}
                     </Text>
                   ) : null}
                 </View>
