@@ -29,7 +29,7 @@ export type Debrief = { scores: number[]; feedback: string; mean: number };
 export type Confidence = 'sure' | 'unsure' | 'guess';
 export type Grade = { score: number; feedback: string };
 
-type WarmQuestion = { q: string; a: string };
+export type WarmQuestion = { q: string; a: string; purpose?: 'prior' | 'predict'; type?: 'short' | 'choice'; options?: string[]; answer?: number | null };
 type Warm = { hook: string; questions: WarmQuestion[] };
 
 export type SessionState = {

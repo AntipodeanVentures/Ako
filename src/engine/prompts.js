@@ -295,19 +295,30 @@ For "mcq", "answer" is the 0-based index of the correct option.`;
 }
 
 function warmupPrompt(subj, topic) {
-  return `Write a short warm-up for an adult who is about to learn one topic. It makes them curious, finds out what they already know, and gets them thinking before the lesson.
+  return `Write the warm-up for an adult about to learn one topic: two short questions they answer before any teaching. The questions wake up what they already know and get a first guess down, so the lesson can build on it or correct it. A question that is hard to read defeats that purpose, so clarity comes first.
 
 Subject: ${subj.plan.title}. This topic: "${topic.title}". ${topic.summary}
 ${learnerLines(subj)}
 
-Write:
-- "hook": one genuinely surprising question or fact about this topic, at most 35 words, that makes the learner want the answer. Do not give the answer. No technical terms.
-- "questions": exactly 2 questions they answer in a sentence or two BEFORE any teaching:
-  1. A question that draws on what they already know: everyday experience, an earlier topic, or one of their own fields when there is a natural link. Do not force a link.
-  2. A question that asks them to guess or predict the core idea of this topic. If a listed misconception or struggled-with idea bears on this topic, make this the question that would reveal whether they still hold it.
-  Use plain, everyday words, and no technical term they have not learned yet. Each question has "a": a short model answer in plain words, 1 to 3 sentences.
+Rules for each question:
+- Ask one thing. One question mark. Never "A or B, and say why".
+- At most 28 words in all. If it needs a setup, one concrete everyday situation in one short sentence.
+- Plain words; no technical term the learner has not met in an earlier topic. Every number has its unit.
+- A newcomer understands what is being asked on the first read.
+- Speak to the learner as "you".
 
-Return ONLY JSON: {"hook":"...","questions":[{"q":"...","a":"..."},{"q":"...","a":"..."}]}`;
+Question 1, "purpose": "prior". Draws on what they already know from everyday life, an earlier topic or one of their own fields, where the link is natural; do not force one. "type": "short", answered in a sentence.
+Question 2, "purpose": "predict". Asks them to guess the core idea of this topic. "type": "choice" with "options": 3 short options (at most 8 words each), exactly one right, the other two being what people commonly believe instead; if a listed misconception bears on this topic, make it one of them. "answer" is the 0-based index of the right option.
+Each question has "a": the model answer in one or two plain sentences, enough for a grader to judge a guess against.
+
+"hook": one sentence of at most 18 words that makes this topic worth ten minutes: something surprising, or a use they will recognise. A statement, not a question. Do not give the answer away. No technical terms.
+
+The standard, from a topic on power versus energy:
+Too much at once: "Think of your home electricity bill, or a phone charger. What do you think the bill is actually charging you for: how hard your appliances pull at one moment, or how much they used over time? Say why in a sentence or two."
+Right: {"q":"A kettle runs for three minutes a day; a fridge hums all day. Which adds more to your bill?","a":"The fridge: it uses less power at any moment, but for far longer, so it uses more energy overall.","purpose":"prior","type":"short"}
+Right: {"q":"A solar panel is labelled 5 kW. What does that number describe?","options":["How much electricity it makes in a day","How fast it can make electricity at its best","How much electricity it has made so far"],"answer":1,"a":"The kW figure is a rate: how fast the panel makes electricity in full sun. Electricity made over time is measured in kWh.","purpose":"predict","type":"choice"}
+
+Return ONLY JSON: {"hook":"...","questions":[{"q":"...","a":"...","purpose":"prior","type":"short"},{"q":"...","options":["...","...","..."],"answer":0,"a":"...","purpose":"predict","type":"choice"}]}`;
 }
 
 function lessonPrompt(subj, topic, ctx) {

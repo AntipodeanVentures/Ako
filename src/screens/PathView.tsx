@@ -6,13 +6,13 @@ import { Pressable, View } from 'react-native';
 import { Button, Ladder, Text, TextField } from '@/src/components/ui';
 import { STAGES, stageName } from '@/src/engine/ladder';
 import { cleanOutcome } from '@/src/engine/normalise';
-import { estimateText, levelCheckReady, stagePosition, stageProgress, topicStatus } from '@/src/engine/progress';
-import type { StageId, Topic } from '@/src/engine/types';
+import { levelCheckReady, stagePosition, stageProgress, topicStatus } from '@/src/engine/progress';
+import type { Topic } from '@/src/engine/types';
 import { aiErrorCopy } from '@/src/features/ai/client';
 import { useInvalidateSubject, type LiveSubject } from '@/src/features/subjects';
 import { adaptPlan } from '@/src/features/subjects/adapt';
 import { extendPlanTo, nextStageToPlan } from '@/src/features/subjects/extend';
-import { subjectLine } from '@/src/features/subjects/summary';
+import { aimLine, subjectLine } from '@/src/features/subjects/summary';
 import { useTheme } from '@/src/theme';
 
 // One subject's ladder: where you stand, what the next level means here,
@@ -26,9 +26,9 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
   const pos = stagePosition(subj);
   const cur = STAGES[pos.currentIdx];
   const def = subj.plan.stages.find((s) => s.id === cur.id);
-  const target = String(subj.intake.target || 's3') as StageId;
-  const targetDef = STAGES.find((s) => s.id === target);
-  const targetEst = estimateText(subj, target);
+  const aim = aimLine(subj);
+  // The level's outcomes are a long list; shown on request.
+  const [showOutcomes, setShowOutcomes] = useState(false);
   const checkStage = levelCheckReady(subj) as { id: string; name: string } | null;
   // A level reached but not yet planned (the extension failed, or the target moved).
   const toPlan = !pos.inPlan && !pos.done ? nextStageToPlan(subj) : null;
@@ -91,8 +91,8 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
 
       {checkStage ? (
         <View style={{ marginTop: spacing.lg, gap: spacing.sm }}>
-          <Text variant="body" color="textMuted">
-            Every {checkStage.name} topic is learned and three days have passed. The level check is from memory, eight to ten questions.
+          <Text variant="caption" color="textMuted">
+            Every {checkStage.name} topic is learned. Eight to ten questions, from memory.
           </Text>
           <Button
             label={`Take the ${checkStage.name} level check`}
@@ -103,22 +103,19 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
 
       {!subj.placement && String(subj.intake.current || '') !== 'Complete beginner' && line.learned < 3 ? (
         <View style={{ marginTop: spacing.lg, gap: spacing.sm }}>
-          <Text variant="body" color="textMuted">
-            You said you were not starting from nothing. Ten questions, basic to advanced, and the topics you already know are skipped.
-          </Text>
           <Button
             label="Skip what I already know"
             variant="secondary"
             onPress={() => router.push({ pathname: '/placement/[subjectId]', params: { subjectId: subj.id } })}
           />
+          <Text variant="caption" color="textMuted">
+            Ten questions, basic to advanced. Topics you already know are skipped.
+          </Text>
         </View>
       ) : null}
 
       {toPlan ? (
         <View style={{ marginTop: spacing.lg, gap: spacing.sm }}>
-          <Text variant="body" color="textMuted">
-            The {stageName(toPlan)} topics have not been written yet.
-          </Text>
           <Button label={`Write the ${stageName(toPlan)} topics`} onPress={extend} loading={extending} variant="secondary" />
           {extendError ? (
             <Text variant="caption" color="danger">
@@ -129,36 +126,50 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
       ) : null}
 
       {def?.outcomes?.length ? (
-        <View style={{ marginTop: spacing.xl, gap: spacing.sm }}>
-          <Text variant="eyebrow" color="textMuted">
-            {cur.name} means you can
-          </Text>
-          {def.outcomes.map((o, i) => (
-            <View key={i} style={{ flexDirection: 'row', gap: spacing.sm }}>
-              <Text variant="body" color="textMuted">
-                –
-              </Text>
-              <Text variant="body" style={{ flex: 1 }}>
-                {cleanOutcome(o)}
-              </Text>
-            </View>
-          ))}
-          {def.external ? (
-            <Text variant="caption" color="textMuted" style={{ marginTop: spacing.xs }}>
-              Outside check: {def.external}
+        <View style={{ marginTop: spacing.lg }}>
+          <Pressable
+            onPress={() => setShowOutcomes((v) => !v)}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: showOutcomes }}
+            style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.sm, opacity: pressed ? 0.7 : 1 })}
+          >
+            <Text variant="bodyStrong" style={{ flex: 1 }}>
+              What {cur.name} means here
             </Text>
+            <Ionicons name={showOutcomes ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} />
+          </Pressable>
+          {showOutcomes ? (
+            <View style={{ gap: spacing.sm, paddingTop: spacing.xs }}>
+              {def.outcomes.map((o, i) => (
+                <View key={i} style={{ flexDirection: 'row', gap: spacing.sm }}>
+                  <Text variant="body" color="textMuted">
+                    –
+                  </Text>
+                  <Text variant="body" style={{ flex: 1 }}>
+                    {cleanOutcome(o)}
+                  </Text>
+                </View>
+              ))}
+              {def.external ? (
+                <Text variant="caption" color="textMuted" style={{ marginTop: spacing.xs }}>
+                  Outside check: {def.external}
+                </Text>
+              ) : null}
+            </View>
           ) : null}
         </View>
       ) : null}
 
-      {targetDef && targetEst ? (
+      {aim ? (
         <View style={{ marginTop: spacing.xl, paddingTop: spacing.xl, borderTopWidth: 1, borderTopColor: colors.border, gap: spacing.xs }}>
           <Text variant="eyebrow" color="textMuted">
-            {targetDef.name} expected
+            Your aim
           </Text>
-          <Text variant="heading">{targetEst}</Text>
+          <Text variant="heading">
+            {aim.name}, {aim.when}
+          </Text>
           <Text variant="caption" color="textMuted">
-            From your planned time until two weeks of real study set the pace. It moves as you go.
+            {aim.how}
           </Text>
         </View>
       ) : null}
@@ -192,8 +203,8 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
           <Text variant="eyebrow" color="textMuted">
             The path adapts
           </Text>
-          <Text variant="body" color="textMuted">
-            Topics still ahead are revised when one keeps slipping, when a level check is failed and at each milestone. You can also ask.
+          <Text variant="caption" color="textMuted">
+            Topics ahead are revised when one keeps slipping, after a failed level check and at each milestone. You can also ask.
           </Text>
         </View>
         {rethinkOpen ? (

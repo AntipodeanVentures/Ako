@@ -260,7 +260,21 @@ function fmtWeeks(w) {
   if (w < 1) return 'under a week';
   if (w < 9) { const n = Math.round(w); return n === 1 ? 'about a week' : 'about ' + n + ' weeks'; }
   if (w < 78) { const n = Math.round(w / 4.345); return n === 1 ? 'about a month' : 'about ' + n + ' months'; }
-  const y = w / 52; return y < 1.5 ? 'about a year' : 'about ' + (y < 3 ? y.toFixed(1) : Math.round(y)) + ' years';
+  // Years in words: "1.6 years" reads like a spreadsheet.
+  const y = w / 52;
+  if (y < 1.25) return 'about a year';
+  if (y < 1.75) return 'about a year and a half';
+  if (y < 2.25) return 'about two years';
+  if (y < 2.75) return 'about two and a half years';
+  return 'about ' + Math.round(y) + ' years';
+}
+// A plain date for a moment that far off: a month soon, a part of a year later.
+function fmtWhen(ms) {
+  const d = new Date(ms), now = new Date(nowMs());
+  const weeksAway = (ms - nowMs()) / (7 * DAY);
+  if (weeksAway < 26) return d.toLocaleDateString('en-GB', d.getFullYear() === now.getFullYear() ? { month: 'long' } : { month: 'short', year: 'numeric' });
+  const m = d.getMonth();
+  return (m < 4 ? 'early ' : m < 8 ? 'mid-' : 'late ') + d.getFullYear();
 }
 function fmtHours(min) { const hh = min / 60; return (hh < 10 ? hh.toFixed(1) : Math.round(hh)) + ' h'; }
 function estimateText(subj, stageId) {
@@ -321,4 +335,4 @@ function roleReadiness(role, subjects) {
 }
 const roleForSubject = (roles, sid) => arr(roles).find((r) => arr(r.map && r.map.areas).some((a) => a.subjectId === sid)) || null;
 
-export { reopenTopics, placeKnown, topicById, learnerAbout, learnerModel, subjectCards, topicStatus, isLearned, learnedCount, studiedCount, nextTopic, practisingTopics, currentMilestone, relearnCount, isSecure, secureCount, dueCards, stageTopics, stageProgress, firstPlannedIdx, stagePosition, isSkippedStage, daysUntil, positionText, levelCheckReady, coveredStage, dayAgo, minutesSince, checkEligible, checkMilestones, markStageReached, recordMinutes, logReview, retentionRate, paceStats, paceBasis, stageHours, remainingMinutes, estimateStage, fmtMonth, fmtWeeks, fmtHours, estimateText, nextStageEstimate, activityDays, conceptKey, noteConcept, weakConcepts, lessonConceptName, areaCredit, roleReadiness, roleForSubject };
+export { reopenTopics, placeKnown, topicById, learnerAbout, learnerModel, subjectCards, topicStatus, isLearned, learnedCount, studiedCount, nextTopic, practisingTopics, currentMilestone, relearnCount, isSecure, secureCount, dueCards, stageTopics, stageProgress, firstPlannedIdx, stagePosition, isSkippedStage, daysUntil, positionText, levelCheckReady, coveredStage, dayAgo, minutesSince, checkEligible, checkMilestones, markStageReached, recordMinutes, logReview, retentionRate, paceStats, paceBasis, stageHours, remainingMinutes, estimateStage, fmtMonth, fmtWeeks, fmtWhen, fmtHours, estimateText, nextStageEstimate, activityDays, conceptKey, noteConcept, weakConcepts, lessonConceptName, areaCredit, roleReadiness, roleForSubject };

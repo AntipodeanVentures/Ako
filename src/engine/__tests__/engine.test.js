@@ -37,6 +37,19 @@ describe('ladder', () => {
   });
 });
 
+describe('normaliseWarm', () => {
+  it('keeps only questions that can be read once: one question mark, not too long', () => {
+    const w = normaliseWarm({ hook: 'h', questions: [
+      { q: 'Think of your bill, or a charger. What is the bill charging you for: how hard appliances pull at one moment, or how much they used over time? Say why in a sentence or two, and give an example from your own home if you can think of one.', a: 'x' },
+      { q: 'A solar panel is labelled 5 kW. What does that number describe?', options: ['a', 'b', 'c'], answer: 1, a: 'rate', type: 'choice', purpose: 'predict' },
+    ] });
+    expect(w.questions).toHaveLength(1);
+    expect(w.questions[0]).toMatchObject({ type: 'choice', answer: 1, purpose: 'predict' });
+    expect(() => normaliseWarm({ questions: [{ q: 'A? B?', a: 'x' }] })).toThrow();
+    expect(normaliseWarm({ questions: [{ q: 'Why?', a: 'x', type: 'choice', options: ['only one'] }] }).questions[0].type).toBe('short');
+  });
+});
+
 describe('cleanOutcome', () => {
   it('drops a leading "can" so outcomes read under "means you can"', () => {
     expect(cleanOutcome('can explain volts and amps')).toBe('Explain volts and amps');

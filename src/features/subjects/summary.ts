@@ -2,11 +2,15 @@ import { dayKey, nowMs } from '@/src/engine/core';
 import { STAGES, stageIdx } from '@/src/engine/ladder';
 import {
   dueCards,
+  estimateStage,
   estimateText,
+  fmtWeeks,
+  fmtWhen,
   learnedCount,
   levelCheckReady,
   nextStageEstimate,
   nextTopic,
+  paceStats,
   stagePosition,
   stageProgress,
 } from '@/src/engine/progress';
@@ -119,6 +123,30 @@ export function subjectLine(subj: LiveSubject): SubjectLine {
     learned: learnedCount(subj),
     total: subj.plan.topics.length,
   };
+}
+
+// The level the learner is aiming for and when it is expected, in plain
+// words: "Advanced, around mid-2028" and why.
+export type AimLine = { name: string; when: string; how: string };
+
+export function aimLine(subj: LiveSubject): AimLine | null {
+  const target = String(subj.intake.target || 's3');
+  const idx = stageIdx(target);
+  if (idx < 0) return null;
+  const name = STAGES[idx].name;
+  const e = estimateStage(subj, target) as { weeks: number; at: number; checkOnly: boolean } | null;
+  if (!e) return null;
+  if (e.checkOnly) {
+    const prog = stageProgress(subj, target);
+    return { name, when: prog.ready ? 'level check ready now' : `level check in ${Math.max(1, Math.ceil((prog.eligibleAt - Date.now()) / 86400000))} days`, how: 'Every topic at this level is learned; the check waits a few days so it tests memory.' };
+  }
+  const when = e.weeks < 6 ? `in ${fmtWeeks(e.weeks)}` : `around ${fmtWhen(e.at)}`;
+  const span = fmtWeeks(e.weeks);
+  const pace = paceStats(subj) as { measured: boolean };
+  const how = pace.measured
+    ? `${span.charAt(0).toUpperCase() + span.slice(1)} at your pace over the last few weeks. It moves as you go.`
+    : `${span.charAt(0).toUpperCase() + span.slice(1)} at the time you planned. After two weeks of study, your real pace sets it.`;
+  return { name, when, how };
 }
 
 export function targetEstimate(subj: LiveSubject): string | null {

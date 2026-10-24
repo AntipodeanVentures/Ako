@@ -165,12 +165,25 @@ function normaliseLesson(raw, topic) {
     resources: arr(L.resources).filter((r) => r && typeof r === 'object').slice(0, 3).map((r) => ({ title: str(r.title, 160), creator: str(r.creator, 120), search: str(r.search, 200) })).filter((r) => r.title)
   };
 }
+// A warm-up question earns its place only if it can be read once and
+// answered: one thing asked, not too long. Anything else is dropped, and
+// a warm-up with nothing left is reported as invalid so the lesson goes
+// ahead without one.
+const WARM_MAX_WORDS = 40;
 function normaliseWarm(raw) {
   const W = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
   const questions = arr(W.questions).filter((q) => q && typeof q === 'object')
-    .map((q) => ({ q: str(q.q || q.question, 600), a: str(q.a || q.answer, 900) })).filter((q) => q.q && q.a).slice(0, 3);
+    .map((q) => {
+      const text = str(q.q || q.question, 400);
+      const options = arr(q.options).map((o) => str(o, 80)).filter(Boolean).slice(0, 4);
+      const choice = q.type === 'choice' && options.length >= 2;
+      const answer = choice && Number.isInteger(q.answer) && q.answer >= 0 && q.answer < options.length ? q.answer : null;
+      return { q: text, a: str(q.a || q.answer_text || q.model, 600), purpose: q.purpose === 'predict' ? 'predict' : 'prior', type: choice ? 'choice' : 'short', options: choice ? options : [], answer };
+    })
+    .filter((q) => q.q && q.a && q.q.split(/\s+/).length <= WARM_MAX_WORDS && (q.q.match(/\?/g) || []).length <= 1)
+    .slice(0, 2);
   if (!questions.length) throw { code: 'invalid_json' };
-  return { hook: str(W.hook || W.intro, 500), questions };
+  return { hook: str(W.hook || W.intro, 200), questions };
 }
 function normaliseRole(raw) {
   const R = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};

@@ -3,7 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 
-import { Button, Screen, Segmented, Text, TextField } from '@/src/components/ui';
+import { Button, Chips, Screen, Segmented, Text, TextField } from '@/src/components/ui';
 import { fmtDate } from '@/src/engine/core';
 import { useProfile } from '@/src/features/profile';
 import { useSession, type Confidence, type Grade } from '@/src/features/session/useSession';
@@ -172,52 +172,77 @@ function Footer({ children }: { children: ReactNode }) {
 function WarmStep({ S }: { S: SessionApi }) {
   const { s } = S;
   const { spacing } = useTheme();
+  // One question at a time; the marked answers come back together.
+  const [idx, setIdx] = useState(0);
   if (!s.warm) return <Waiting label={s.busy || 'Writing your warm-up'} />;
   const marked = Boolean(s.warmGrades);
+  const qs = s.warm.questions;
+  const n = qs.length;
+  const i = Math.min(idx, n - 1);
+  const q = qs[i];
+  const last = i >= n - 1;
+  const answered = s.warmAnswers.some((a) => a.trim());
   return (
     <View style={{ gap: spacing.xl }}>
-      <Text variant="prose">{s.warm.hook}</Text>
-      <Text variant="body" color="textMuted">
-        Before the lesson, two questions. Guesses are welcome; a wrong first attempt helps the right answer stick.
-      </Text>
-      {s.warm.questions.map((q, i) => (
-        <View key={i} style={{ gap: spacing.sm }}>
-          <Text variant="bodyStrong">{q.q}</Text>
-          {marked ? (
-            <>
-              <Text variant="body" color="textMuted">
-                {s.warmAnswers[i] || '(left blank)'}
+      {s.warm.hook ? <Text variant="body">{s.warm.hook}</Text> : null}
+      {!marked ? (
+        <>
+          <Text variant="caption" color="textMuted">
+            {n === 1 ? 'One quick question before the lesson.' : 'Two quick questions before the lesson.'} Guessing is fine; a wrong guess helps the right answer stick.
+          </Text>
+          <View style={{ gap: spacing.md }}>
+            {n > 1 ? (
+              <Text variant="eyebrow" color="textMuted">
+                {i + 1} of {n}
               </Text>
-              {s.warmGrades?.[i] ? <FeedbackBlock grade={s.warmGrades[i]} /> : null}
-            </>
-          ) : (
-            <TextField
-              label=""
-              value={s.warmAnswers[i]}
-              onChangeText={(t) => S.setWarmAnswer(i, t)}
-              placeholder="A sentence or two, in your own words"
-              multiline
-              style={{ minHeight: 72, textAlignVertical: 'top' }}
-            />
-          )}
-        </View>
-      ))}
-      <Footer>
-        {!marked ? (
-          <>
-            <Button label="Check my answers" onPress={S.checkWarm} loading={s.busy === 'Marking'} disabled={!s.warmAnswers.some((a) => a.trim())} />
+            ) : null}
+            <Text variant="prose">{q.q}</Text>
+            {q.type === 'choice' && q.options?.length ? (
+              <Chips options={q.options} value={s.warmAnswers[i] ? [s.warmAnswers[i]] : []} onChange={(v) => S.setWarmAnswer(i, v[0] ?? '')} />
+            ) : (
+              <TextField
+                label=""
+                value={s.warmAnswers[i]}
+                onChangeText={(t) => S.setWarmAnswer(i, t)}
+                placeholder="A sentence, in your own words"
+                multiline
+                style={{ minHeight: 72, textAlignVertical: 'top' }}
+              />
+            )}
+          </View>
+          <Footer>
+            {!last ? (
+              <Button label="Next" onPress={() => setIdx(i + 1)} />
+            ) : (
+              <Button label={n === 1 ? 'Check my answer' : 'Check my answers'} onPress={S.checkWarm} loading={s.busy === 'Marking'} disabled={!answered} />
+            )}
             <Pressable onPress={S.skipWarm} style={{ alignSelf: 'center', padding: spacing.sm }}>
               <Text variant="caption" color="textMuted">
                 I don&apos;t know yet, go to the lesson
               </Text>
             </Pressable>
-          </>
-        ) : s.lesson ? (
-          <Button label="Continue to the lesson" onPress={S.toLearn} />
-        ) : (
-          <Waiting label="Writing your lesson" detail={s.lessonProgress.sections ? `${s.lessonProgress.sections} sections so far` : 'Starting from your answers'} />
-        )}
-      </Footer>
+          </Footer>
+        </>
+      ) : (
+        <>
+          {qs.map((wq, j) => (
+            <View key={j} style={{ gap: spacing.xs }}>
+              <Text variant="bodyStrong">{wq.q}</Text>
+              <Text variant="body" color="textMuted">
+                {s.warmAnswers[j] || '(left blank)'}
+              </Text>
+              {s.warmGrades?.[j] ? <FeedbackBlock grade={s.warmGrades[j]} /> : null}
+            </View>
+          ))}
+          <Footer>
+            {s.lesson ? (
+              <Button label="Continue to the lesson" onPress={S.toLearn} />
+            ) : (
+              <Waiting label="Writing your lesson" detail={s.lessonProgress.sections ? `${s.lessonProgress.sections} sections so far` : 'Starting from your answers'} />
+            )}
+          </Footer>
+        </>
+      )}
     </View>
   );
 }
