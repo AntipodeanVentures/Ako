@@ -23,6 +23,7 @@ import type { LiveSubject } from './context';
 // engine so the app and the artifact agree.
 
 export type NextStep =
+  | { kind: 'resume'; subject: LiveSubject; topic: Topic; step: string }
   | { kind: 'review'; count: number }
   | { kind: 'probe'; count: number }
   | { kind: 'check'; subject: LiveSubject; stageId: string; stageName: string }
@@ -30,8 +31,12 @@ export type NextStep =
   | { kind: 'topic'; subject: LiveSubject; topic: Topic }
   | { kind: 'none' };
 
-// What the screen knows that the subjects do not: whether this week's retention probe is ready.
-export type NextStepExtras = { probe?: { due: boolean; count: number } };
+// What the screen knows that the subjects do not: whether this week's retention probe is ready,
+// and a sitting left unfinished on this device.
+export type NextStepExtras = {
+  probe?: { due: boolean; count: number };
+  resume?: { subjectId: string; topicId: string; title: string; step: string } | null;
+};
 
 export function minutesToday(subjects: LiveSubject[]): number {
   const d = dayKey(nowMs());
@@ -45,6 +50,12 @@ export function dueCount(subjects: LiveSubject[]): number {
 // The thing to do now: reviews first (they are the evidence), then a level
 // check that has come due, then one new topic.
 export function nextStep(subjects: LiveSubject[], extras: NextStepExtras = {}): NextStep {
+  // A sitting left halfway is finished first: the lesson is read, the evidence is not yet in.
+  if (extras.resume) {
+    const subject = subjects.find((s) => s.id === extras.resume?.subjectId);
+    const topic = subject?.plan.topics.find((t) => t.id === extras.resume?.topicId);
+    if (subject && topic) return { kind: 'resume', subject, topic, step: extras.resume.step };
+  }
   const due = dueCount(subjects);
   if (due > 0) return { kind: 'review', count: due };
   // A few questions never seen before, on topics learned about three weeks ago: the evidence that it stuck.
@@ -78,11 +89,15 @@ export function todayLine(subjects: LiveSubject[], extras: NextStepExtras = {}):
     return null;
   })();
   const parts: string[] = [];
+  if (step.kind === 'resume') {
+    const where: Record<string, string> = { warm: 'at the warm-up', learn: 'partway through the lesson', drill: 'at the drill', recall: 'at the recall step', practice: 'partway through practice', teach: 'at the teach-back', roleplay: 'in the role-play' };
+    parts.push(`you stopped ${where[step.step] ?? 'partway through'} ${step.topic.title.toLowerCase()}; pick it up where you left off`);
+  }
   if (due) parts.push(`${due} ${due === 1 ? 'review' : 'reviews'}${subjects.length > 1 ? ' across your subjects' : ''}`);
   if (step.kind === 'probe') parts.push(`${due ? 'then ' : ''}a five-minute check on what you learned weeks ago`);
   if (step.kind === 'check') parts.push(`${due ? 'then ' : ''}the ${step.stageName} level check in ${step.subject.plan.title}`);
   if (step.kind === 'mixed') parts.push(`${due ? 'then ' : ''}mixed practice across ${step.topics.length} earlier topics in ${step.subject.plan.title}`);
-  const nt = topicStep ? topicStep.topic : step.kind === 'check' || step.kind === 'probe' || step.kind === 'mixed' ? null : firstTopic?.t;
+  const nt = topicStep ? topicStep.topic : step.kind === 'check' || step.kind === 'probe' || step.kind === 'mixed' || step.kind === 'resume' ? null : firstTopic?.t;
   const ns = topicStep ? topicStep.subject : firstTopic?.s;
   if (nt) {
     // A topic that comes back: it missed the mark last time, or a level check reopened it.

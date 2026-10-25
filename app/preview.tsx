@@ -10,7 +10,7 @@ import { planPortuguese } from '@/src/engine/fixtures';
 import { seedBuildForPreview } from '@/src/features/subjects/planBuilder';
 import { LearnView } from '@/src/screens/LearnView';
 import { SubjectPath } from '@/src/screens/PathView';
-import { DoneStep, LearnStep, PracticeStep, RecallStep, WarmStep, type SessionApi } from '@/src/screens/SessionSteps';
+import { DoneStep, LearnStep, PracticeStep, RecallStep, StepStrip, WarmStep, type SessionApi } from '@/src/screens/SessionSteps';
 import { useTheme } from '@/src/theme';
 
 import PlaceScreen from './(onboarding)/place';
@@ -130,7 +130,7 @@ function mockSession(step: string): SessionApi {
   const prac = { items: LESSON.practice, asked: [0], idx: 1, re: false, correct: 1, requeue: [], log: [] };
   const s = {
     step: base,
-    topic: { id: 'p4', title: 'Ser and estar' },
+    topic: { id: 'p4', title: 'Ser and estar', kind: 'concept' },
     busy: null,
     error: null,
     warm: base === 'warm' ? warm : null,
@@ -159,7 +159,7 @@ function mockSession(step: string): SessionApi {
   };
   const L = { checked: marked, warm, data: LESSON, prac, rec: { idx: 0, items: [{ key: 'recall', prompt: LESSON.recall, answer: LESSON.recallAnswer }, { key: 'why', prompt: LESSON.why, answer: LESSON.whyAnswer }] }, teach: { turns: 0 } };
   return {
-    s, L, topic: s.topic, currentItem: LESSON.practice[1],
+    s, L, topic: s.topic, currentItem: LESSON.practice[1], resumed: step === 'practice', restart: noop,
     setWarmAnswer: noop, checkWarm: noop, skipWarm: noop, toLearn: noop, toRecall: noop, setRecText: noop, setRecConf: noop, checkRecall: noop, nextRecall: noop,
     setPracPicked: noop, setPracText: noop, setPracConf: noop, checkPractice: noop, nextPractice: noop, setChatInput: noop, sendChat: noop, endRoleplay: noop, finish: noop, retryLesson: noop, clearError: noop,
   } as unknown as SessionApi;
@@ -169,15 +169,15 @@ function SessionPreview({ step }: { step: string }) {
   const { spacing } = useTheme();
   const S = mockSession(step);
   const base = step.replace('-marked', '');
-  const label: Record<string, string> = { warm: 'Warm-up', learn: 'Learn', recall: 'Recall, from memory', practice: 'Practise', done: 'Done' };
   return (
     <Screen scroll width="reading">
       <View style={{ gap: 2 }}>
         <Text variant="eyebrow" color="textMuted">
-          Brazilian Portuguese · {label[base]}
+          Brazilian Portuguese
         </Text>
         <Text variant="title">Ser and estar</Text>
       </View>
+      <StepStrip S={S} />
       <View style={{ marginTop: spacing.xl, flex: 1 }}>
         {base === 'warm' ? <WarmStep S={S} /> : null}
         {base === 'learn' ? <LearnStep S={S} /> : null}

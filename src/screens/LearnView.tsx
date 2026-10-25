@@ -46,8 +46,10 @@ export function LearnView({ subjects, loading, extras = {}, onStart, onOpenSubje
         <View style={{ marginTop: spacing.md }}>
           <Button
             label={
-              step.kind === 'review'
-                ? 'Start reviews'
+              step.kind === 'resume'
+                ? `Continue ${step.topic.title}`
+                : step.kind === 'review'
+                  ? 'Start reviews'
                 : step.kind === 'probe'
                   ? 'Start the five-minute check'
                   : step.kind === 'check'

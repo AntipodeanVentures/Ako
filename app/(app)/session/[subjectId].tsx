@@ -7,7 +7,7 @@ import { Screen, Text } from '@/src/components/ui';
 import { useProfile } from '@/src/features/profile';
 import { useSession } from '@/src/features/session/useSession';
 import { useInvalidateSubject, useLiveSubjects, type LiveSubject } from '@/src/features/subjects';
-import { DoneStep, DrillStep, LearnStep, Notice, PracticeStep, RecallStep, RoleplayStep, TeachStep, WarmStep } from '@/src/screens/SessionSteps';
+import { DoneStep, DrillStep, LearnStep, Notice, PracticeStep, RecallStep, RoleplayStep, StepStrip, TeachStep, WarmStep } from '@/src/screens/SessionSteps';
 import { useTheme } from '@/src/theme';
 
 export default function SessionRoute() {
@@ -44,23 +44,12 @@ function SessionScreen({ subj, topicId, retention }: { subj: LiveSubject; topicI
 
   const close = () => (router.canGoBack() ? router.back() : router.replace('/learn'));
 
-  const stepLabel: Record<string, string> = {
-    warm: 'Warm-up',
-    learn: 'Learn',
-    drill: 'Practise away from the screen',
-    recall: 'Recall, from memory',
-    practice: 'Practise',
-    teach: 'Teach it back',
-    roleplay: 'Role-play',
-    done: 'Done',
-  };
-
   return (
     <Screen scroll width="reading">
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md }}>
         <View style={{ flex: 1, gap: 2 }}>
           <Text variant="eyebrow" color="textMuted">
-            {subj.plan.title} · {stepLabel[s.step]}
+            {subj.plan.title}
           </Text>
           <Text variant="title">{topic.title}</Text>
         </View>
@@ -68,6 +57,7 @@ function SessionScreen({ subj, topicId, retention }: { subj: LiveSubject; topicI
           <Ionicons name="close" size={22} color={colors.textMuted} />
         </Pressable>
       </View>
+      <StepStrip S={S} />
 
       <View style={{ marginTop: spacing.xl, flex: 1 }}>
         {s.error ? (

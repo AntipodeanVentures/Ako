@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, View } from 'react-native';
 
 import { Button, Chips, Segmented, Text, TextField } from '@/src/components/ui';
 import { fmtDate } from '@/src/engine/core';
+import { stepOrder } from '@/src/engine/session';
 import type { useSession, Confidence, Grade } from '@/src/features/session/useSession';
 import { useTheme } from '@/src/theme';
 
@@ -20,6 +21,47 @@ const CONF: { value: Confidence; label: string }[] = [
 
 
 // ---------- pieces ----------
+
+// Where the sitting is: the steps in order, the current one in ink, the ones done in grey, the ones to come fainter.
+// A resumed sitting says so, with a way to start the topic over.
+export function StepStrip({ S }: { S: SessionApi }) {
+  const { s, L, topic } = S;
+  const { spacing } = useTheme();
+  const steps = (stepOrder(L, topic) as { key: string; label: string }[]).filter((x) => x.key !== 'done');
+  const cur = s.step === 'warm' ? 'attempt' : s.step;
+  const idx = steps.findIndex((x) => x.key === cur);
+  if (s.step === 'done') return null;
+  return (
+    <View style={{ marginTop: spacing.md, gap: spacing.xs }}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' }} accessibilityLabel={`Step ${idx + 1} of ${steps.length}: ${steps[idx]?.label ?? ''}`}>
+        {steps.map((st, i) => (
+          <View key={st.key} style={{ flexDirection: 'row', alignItems: 'center', opacity: i > idx ? 0.55 : 1 }}>
+            <Text variant={i === idx ? 'bodyStrong' : 'caption'} color={i === idx ? 'text' : 'textMuted'} style={i === idx ? { fontSize: 13, lineHeight: 18 } : undefined}>
+              {st.label}
+            </Text>
+            {i < steps.length - 1 ? (
+              <Text variant="caption" color="textMuted">
+                {'  ·  '}
+              </Text>
+            ) : null}
+          </View>
+        ))}
+      </View>
+      {S.resumed ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+          <Text variant="caption" color="textMuted">
+            Picked up where you left off.
+          </Text>
+          <Pressable onPress={S.restart} hitSlop={8} accessibilityRole="button">
+            <Text variant="caption" color="text">
+              Start over
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
+    </View>
+  );
+}
 
 export function Waiting({ label, detail }: { label: string; detail?: string }) {
   const { spacing } = useTheme();

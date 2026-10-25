@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { arr, clampNum } from '@/src/engine/core';
-import { topicById } from '@/src/engine/progress';
+import { lessonConceptName, noteConcept, topicById } from '@/src/engine/progress';
 import {
   addPractice,
   addQuestionSet,
@@ -17,6 +17,8 @@ import type { Lesson, PlanRevision, Topic } from '@/src/engine/types';
 import { aiErrorCopy, callJson, callStream } from '@/src/features/ai/client';
 import { recordActivity, replaceProbeItems, saveSubject, type LiveSubject } from '@/src/features/subjects';
 import { afterTopic } from '@/src/features/subjects/adapt';
+
+import { clearSitting, loadSitting, saveSitting, type Sitting } from './sitting';
 
 // One topic, start to finish: warm-up, lesson, recall, practice, done.
 // The engine owns the rules (what to ask next, when practice is done, what
@@ -208,11 +210,126 @@ export function useSession(subj: LiveSubject, topicId: string, retention: number
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subj, topicId]);
 
-  useEffect(() => {
+  // ---- resume ----
+  // A sitting saved on this device (see sitting.ts) is picked up where it stopped; otherwise the
+  // warm-up and the lesson text are requested together.
+  const [resumed, setResumed] = useState(false);
+  const startFresh = useCallback(() => {
     void startCore();
     void loadWarm();
+  }, [loadWarm, startCore]);
+
+  const restore = useCallback(
+    (snap: Sitting) => {
+      L.warm = snap.warm;
+      L.checked = snap.checked;
+      L.answers = snap.answers ?? [];
+      startedAt.current = Date.now() - Number(snap.elapsedMs || 0);
+      lastAnswers.current = snap.checked ? snap.warmAnswers : null;
+      const lesson = snap.lesson as Lesson | null;
+      if (!lesson) {
+        // Interrupted during the warm-up: keep its questions and answers, write the lesson again (usually a cache hit).
+        patch({ warm: snap.warm as Warm | null, warmAnswers: snap.warmAnswers, warmGrades: snap.warmGrades as Grade[] | null, busy: snap.checked ? 'Writing your lesson' : null });
+        if (snap.checked) {
+          advanceWhenReady.current = true;
+          void startCore();
+          void requestQuestions(snap.warmAnswers);
+        } else {
+          void startCore();
+          if (!snap.warm) void loadWarm();
+        }
+        return;
+      }
+      L.data = lesson;
+      L.prac = snap.prac;
+      L.rec = snap.rec;
+      L.teach = snap.teach ?? { started: false, skipped: false, turns: 0 };
+      L.rp = snap.rp ?? { debrief: null, runs: 0 };
+      L.step = snap.step;
+      corePromise.current = Promise.resolve(lesson);
+      questionsRequested.current = snap.questionsReady;
+      // The per-idea record was lost with the page; replay this sitting's marks into it.
+      const P = L.prac as { items: { concept?: number | null }[]; log: { idx: number; score: number }[] } | null;
+      for (const e of arr(P?.log) as { idx: number; score: number }[]) {
+        const q = P?.items[e.idx];
+        if (q) noteConcept(subj, topicId, q.concept ?? null, lessonConceptName(lesson, q.concept), e.score >= 1);
+      }
+      patch({
+        step: snap.step as Step,
+        warm: snap.warm as Warm | null,
+        warmAnswers: snap.warmAnswers,
+        warmGrades: snap.warmGrades as Grade[] | null,
+        lessonStarted: true,
+        lesson,
+        questionsReady: snap.questionsReady,
+        recIdx: snap.recIdx,
+        chat: (snap.chat ?? []) as ChatMessage[],
+        chatTurns: snap.chatTurns ?? 0,
+        debrief: (snap.debrief ?? null) as Debrief | null,
+        busy: null,
+      });
+      if (!snap.questionsReady) void requestQuestions(snap.checked ? snap.warmAnswers : null);
+      setResumed(true);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [L, patch, subj, topicId],
+  );
+
+  useEffect(() => {
+    let live = true;
+    loadSitting(subj.id, topicId)
+      .then((snap) => {
+        if (!live) return;
+        if (snap && snap.step !== 'done') restore(snap);
+        else startFresh();
+      })
+      .catch(() => { if (live) startFresh(); });
+    return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Throw the saved sitting away and begin the topic again.
+  const restart = useCallback(() => {
+    void clearSitting(subj.id, topicId);
+    L.warm = null; L.checked = false; L.answers = []; L.data = null; L.step = 'loading';
+    corePromise.current = null;
+    questionsRequested.current = false;
+    advanceWhenReady.current = false;
+    startedAt.current = Date.now();
+    setResumed(false);
+    setS((prev) => ({ ...prev, step: 'warm', busy: 'Writing your warm-up', error: null, warm: null, warmAnswers: ['', ''], warmGrades: null, lessonStarted: false, lesson: null, questionsReady: false, questionsError: null, recIdx: 0, recText: '', recConf: null, recResult: null, pracPicked: null, pracText: '', pracConf: null, pracResult: null, chat: [], chatDraft: '', chatInput: '', chatTurns: 0, debrief: null }));
+    startFresh();
+  }, [L, startFresh, subj.id, topicId]);
+
+  // Save the sitting at each transition (not on every keystroke), so it can be resumed.
+  useEffect(() => {
+    if (s.step === 'done' || (!s.warm && !s.lesson)) return;
+    void saveSitting({
+      v: 1,
+      subjectId: subj.id,
+      topicId,
+      title: topic.title,
+      step: s.step,
+      at: Date.now(),
+      elapsedMs: Date.now() - startedAt.current,
+      warm: L.warm,
+      warmAnswers: s.warmAnswers,
+      warmGrades: s.warmGrades,
+      checked: Boolean(L.checked),
+      answers: L.answers ?? [],
+      lesson: L.data,
+      questionsReady: s.questionsReady,
+      rec: L.rec,
+      recIdx: s.recIdx,
+      prac: L.prac,
+      teach: L.teach,
+      rp: L.rp,
+      chat: s.chat,
+      chatTurns: s.chatTurns,
+      debrief: s.debrief,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [s.step, s.warm, s.warmGrades, s.lesson, s.questionsReady, s.recIdx, s.recResult, s.pracResult, s.chat, s.debrief]);
 
   const checkWarm = useCallback(async () => {
     if (!s.warm || s.busy === 'Marking' || L.checked) return;
@@ -361,6 +478,7 @@ export function useSession(subj: LiveSubject, topicId: string, retention: number
         }
         onSaved();
         patch({ busy: null });
+        void clearSitting(subj.id, topicId);
       } catch (e) {
         patch({ busy: null, error: e instanceof Error ? e.message : 'Could not save. Your progress is kept on this screen; try again.' });
         return;
@@ -492,6 +610,8 @@ export function useSession(subj: LiveSubject, topicId: string, retention: number
     endRoleplay,
     finish,
     retryLesson,
+    resumed,
+    restart,
     clearError: () => patch({ error: null }),
   };
 }
@@ -501,7 +621,7 @@ export function useSession(subj: LiveSubject, topicId: string, retention: number
 // and why answers with their marks, every practice answer with its mark
 // and confidence, the role-play debrief and whether the idea was taught back.
 type LogEntry = { prompt: string; response: string; score: number; conf: string | null; difficulty: number; re: boolean };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 function evidenceFromLesson(s: SessionState, L: any): string {
   const lines: string[] = [];
   const pct = (x: number) => Math.round(x * 100) + '%';
