@@ -16,7 +16,7 @@ type Props = {
 };
 
 // Quick answers to a question: short labels that wrap, sized to their
-// text. A picked chip is ink on white, like a selected segment. Use this
+// text. A picked chip is outlined in ink on the muted fill, like a selected segment. Use this
 // where the answers are the model's suggestions and the learner may also
 // type their own; use Segmented for a fixed set of equal choices.
 export function Chips({ options, value, onChange, multi = false, other }: Props) {
@@ -44,13 +44,13 @@ export function Chips({ options, value, onChange, multi = false, other }: Props)
               borderRadius: radius.sm,
               borderWidth: 1,
               borderStyle: isOther && !selected ? 'dashed' : 'solid',
-              borderColor: selected ? colors.primary : colors.border,
-              backgroundColor: selected ? colors.primary : isOther ? 'transparent' : colors.surface,
+              borderColor: selected ? colors.text : colors.border,
+              backgroundColor: selected ? colors.primaryMuted : isOther ? 'transparent' : colors.surface,
               justifyContent: 'center',
               opacity: pressed ? 0.85 : 1,
             })}
           >
-            <Text variant="caption" color={selected ? 'onPrimary' : isOther ? 'textMuted' : 'text'}>
+            <Text variant={selected ? 'bodyStrong' : 'caption'} color={isOther && !selected ? 'textMuted' : 'text'} style={selected ? { fontSize: 13, lineHeight: 18 } : undefined}>
               {opt}
             </Text>
           </Pressable>

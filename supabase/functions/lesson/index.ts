@@ -3,7 +3,7 @@
 // learner does the warm-up; the set is written from the finished text while they read it. So the wait for a
 // lesson is a few seconds rather than the whole generation, and every question is grounded in what was taught.
 //
-// Request: { kind: 'warm' | 'lesson' | 'bridge' | 'practice' | 'more', subject, topicId, ctx?: { warm, answers, simpler, relearn }, lesson?, used?, ability? }
+// Request: { kind: 'warm' | 'lesson' | 'cached' | 'bridge' | 'practice' | 'more', subject, topicId, ctx?: { warm, answers, simpler, relearn }, lesson?, used?, ability? }
 // Response: 'lesson' streams ndjson (text deltas, then { type: 'done', data: { lesson, cached } }); the rest return JSON.
 
 import {
@@ -53,6 +53,12 @@ Deno.serve(async (req) => {
     const ctx = body.ctx ?? {};
     const pitchBand = pitchOf(subject);
     const key = await cacheKey([caller.profileId, subject.plan.title, topic.title, topic.stage, pitchBand, ctx.simpler?.length ? 'simpler' : '', ctx.relearn ? 'relearn:' + String(ctx.relearn).slice(0, 16) : '']);
+
+    if (kind === 'cached') {
+      // The lesson text if the server still has it, for the teach-back on the first review day; never written afresh.
+      const core = await readCache(caller, key);
+      return new Response(JSON.stringify({ lesson: core ?? null }), { headers: { 'content-type': 'application/json', ...CORS } });
+    }
 
     if (kind === 'practice') {
       // The set for this lesson, cached beside the lesson text. A lesson cached before the split carries its own set.

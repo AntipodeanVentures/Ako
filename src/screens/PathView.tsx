@@ -6,7 +6,7 @@ import { Pressable, View } from 'react-native';
 import { Button, Ladder, Text, TextField } from '@/src/components/ui';
 import { STAGES, stageName } from '@/src/engine/ladder';
 import { cleanOutcome } from '@/src/engine/normalise';
-import { learnedCount, levelCheckReady, mixedDue, stagePosition, stageProgress, stageRetention, topicStatus } from '@/src/engine/progress';
+import { learnedCount, levelCheckReady, mixedDue, sittingMinutes, stagePosition, stageProgress, stageRetention, topicStatus } from '@/src/engine/progress';
 import type { Topic } from '@/src/engine/types';
 import { aiErrorCopy } from '@/src/features/ai/client';
 import { useInvalidateSubject, type LiveSubject } from '@/src/features/subjects';
@@ -219,7 +219,7 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
                   ? (st?.reopenedAt ? 'again' : Number(st?.attempts) ? 'again, simpler' : null)
                   : status === 'known' ? 'known'
                     : st?.retained?.n ? (st.retained.last ? 'retained' : 'faded') : null;
-                return <TopicRow key={t.id} topic={t} status={status} note={note} onPress={() => open(t.id)} />;
+                return <TopicRow key={t.id} topic={t} status={status} note={note} minutes={sittingMinutes(subj, t) as number} onPress={() => open(t.id)} />;
               })}
               <View style={{ borderTopWidth: 1, borderTopColor: colors.border }} />
             </View>
@@ -283,7 +283,7 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
   );
 }
 
-function TopicRow({ topic, status, note, onPress }: { topic: Topic; status: string; note?: string | null; onPress: () => void }) {
+function TopicRow({ topic, status, note, minutes, onPress }: { topic: Topic; status: string; note?: string | null; minutes: number; onPress: () => void }) {
   const { colors, spacing } = useTheme();
   const learned = status === 'mastered' || status === 'known';
   const open = status === 'available' || status === 'learning' || status === 'practising';
@@ -318,7 +318,7 @@ function TopicRow({ topic, status, note, onPress }: { topic: Topic; status: stri
           {topic.summary}
         </Text>
         <Text variant="caption" color="textMuted">
-          {topic.minutes} min{topic.threshold ? '  ·  key idea' : ''}
+          about {minutes} min{topic.threshold ? '  ·  key idea' : ''}
         </Text>
       </View>
     </Pressable>

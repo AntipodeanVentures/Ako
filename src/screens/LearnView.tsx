@@ -2,7 +2,7 @@ import { Pressable, View } from 'react-native';
 
 import { Button, Ladder, Logo, Screen, Skeleton, Text } from '@/src/components/ui';
 import type { LiveSubject } from '@/src/features/subjects';
-import { minutesToday, nextStep, subjectLine, todayLine, type NextStepExtras } from '@/src/features/subjects/summary';
+import { aboutMinutes, minutesFor, minutesToday, nextStep, subjectLine, todayLine, type NextStepExtras } from '@/src/features/subjects/summary';
 import { useTheme } from '@/src/theme';
 
 type Props = {
@@ -17,6 +17,26 @@ type Props = {
 // The daily screen: how much today, what is next, and where each subject
 // stands on the ladder. One button. Pure presentation; app/(app)/(tabs)/learn.tsx
 // feeds it, and the dev preview renders it with fixtures.
+// The one button's label: what it starts, and about how long it takes.
+function startLabel(step: ReturnType<typeof nextStep>): string {
+  const base =
+    step.kind === 'resume'
+      ? `Continue ${step.topic.title}`
+      : step.kind === 'review'
+        ? 'Start reviews'
+        : step.kind === 'probe'
+          ? 'Start the five-minute check'
+          : step.kind === 'check'
+            ? `Take the ${step.stageName} level check`
+            : step.kind === 'mixed'
+              ? 'Start mixed practice'
+              : step.kind === 'topic'
+                ? 'Start'
+                : 'Add a subject';
+  const m = step.kind === 'probe' ? null : minutesFor(step);
+  return m == null ? base : `${base} · ${aboutMinutes(m)}${step.kind === 'resume' ? ' left' : ''}`;
+}
+
 export function LearnView({ subjects, loading, extras = {}, onStart, onOpenSubject, onAddSubject }: Props) {
   const { colors, spacing } = useTheme();
   const minutes = Math.round(minutesToday(subjects));
@@ -45,21 +65,7 @@ export function LearnView({ subjects, loading, extras = {}, onStart, onOpenSubje
         {loading ? <Skeleton height={23} width="80%" /> : <Text variant="body">{todayLine(subjects, extras)}</Text>}
         <View style={{ marginTop: spacing.md }}>
           <Button
-            label={
-              step.kind === 'resume'
-                ? `Continue ${step.topic.title}`
-                : step.kind === 'review'
-                  ? 'Start reviews'
-                : step.kind === 'probe'
-                  ? 'Start the five-minute check'
-                  : step.kind === 'check'
-                    ? `Take the ${step.stageName} level check`
-                    : step.kind === 'mixed'
-                      ? 'Start mixed practice'
-                      : step.kind === 'topic'
-                        ? 'Start'
-                        : 'Add a subject'
-            }
+            label={startLabel(step)}
             onPress={() => onStart(step)}
             disabled={loading}
           />

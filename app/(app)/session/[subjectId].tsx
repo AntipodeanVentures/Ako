@@ -7,7 +7,7 @@ import { Screen, Text } from '@/src/components/ui';
 import { useProfile } from '@/src/features/profile';
 import { useSession } from '@/src/features/session/useSession';
 import { useInvalidateSubject, useLiveSubjects, type LiveSubject } from '@/src/features/subjects';
-import { DoneStep, DrillStep, LearnStep, Notice, PracticeStep, RecallStep, RoleplayStep, StepStrip, TeachStep, WarmStep } from '@/src/screens/SessionSteps';
+import { DoneStep, DrillStep, LearnStep, Notice, PracticeStep, RecallStep, RoleplayStep, StepStrip, WarmStep } from '@/src/screens/SessionSteps';
 import { useTheme } from '@/src/theme';
 
 export default function SessionRoute() {
@@ -69,7 +69,6 @@ function SessionScreen({ subj, topicId, retention }: { subj: LiveSubject; topicI
         {s.step === 'recall' ? <RecallStep S={S} /> : null}
         {s.step === 'drill' && s.lesson?.drill ? <DrillStep S={S} /> : null}
         {s.step === 'practice' ? <PracticeStep S={S} item={currentItem} /> : null}
-        {s.step === 'teach' ? <TeachStep S={S} /> : null}
         {s.step === 'roleplay' ? <RoleplayStep S={S} /> : null}
         {s.step === 'done' ? <DoneStep S={S} onClose={() => router.replace('/learn')} /> : null}
       </View>

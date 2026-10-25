@@ -118,11 +118,54 @@ export function FeedbackBlock({ grade }: { grade: Grade }) {
   );
 }
 
+// The confidence tap is the submit: once an answer exists the three levels appear, and choosing one marks the
+// answer. Two taps per question instead of four, and the confidence is never skipped (it feeds calibration and
+// the requeue of confident misses).
+export function ConfidenceRow({ visible, value, busy, onPick }: { visible: boolean; value: Confidence | null; busy: boolean; onPick: (c: Confidence) => void }) {
+  const { spacing } = useTheme();
+  if (!visible) {
+    return (
+      <Text variant="caption" color="textMuted">
+        Answer, then say how sure you are.
+      </Text>
+    );
+  }
+  return (
+    <View style={{ gap: spacing.sm }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+        <Text variant="caption" color="textMuted">
+          How sure are you? Tap to check.
+        </Text>
+        {busy ? <ActivityIndicator size="small" /> : null}
+      </View>
+      <Segmented options={CONF} value={value} onChange={(c) => { if (!busy) onPick(c); }} />
+    </View>
+  );
+}
+
+// What practice still needs, in plain words: three fully right, including a harder one and one that mixes in an
+// earlier topic when the set offers them. Replaces a "2 of 6" count, which misled: practice ends on the criterion.
+export function practiceNeed(P: { items: { difficulty?: number; mix?: boolean }[]; correct: number; criterion: number; hardOk: boolean; mixOk: boolean; re: boolean }): string {
+  if (P.re) return 'Asked again: you were sure, and it was not right.';
+  const hasHard = P.items.some((q) => Number(q.difficulty ?? 3) >= 4);
+  const hasMix = P.items.some((q) => q.mix === true);
+  const left = Math.max(0, (P.criterion ?? 3) - P.correct);
+  const needs: string[] = [];
+  if (hasHard && !P.hardOk) needs.push('a harder one');
+  if (hasMix && !P.mixOk) needs.push('one that mixes in an earlier topic');
+  if (!left && !needs.length) return 'Last one.';
+  const count = left ? `${left} more fully right` : '';
+  const tail = needs.length ? `including ${needs.join(' and ')}` : '';
+  return `Needs ${[count, tail].filter(Boolean).join(', ')}.`;
+}
+
 export function Section({ title, children }: { title: string; children: ReactNode }) {
   const { spacing, colors } = useTheme();
   return (
     <View style={{ gap: spacing.sm, paddingTop: spacing.xl, marginTop: spacing.xl, borderTopWidth: 1, borderTopColor: colors.border }}>
-      <Text variant="heading">{title}</Text>
+      <Text variant="subtitle" style={{ marginBottom: spacing.xs }}>
+        {title}
+      </Text>
       {children}
     </View>
   );
@@ -169,7 +212,17 @@ export function WarmStep({ S }: { S: SessionApi }) {
             ) : null}
             <Text variant="prose">{q.q}</Text>
             {q.type === 'choice' && q.options?.length ? (
-              <Chips options={q.options} value={s.warmAnswers[i] ? [s.warmAnswers[i]] : []} onChange={(v) => S.setWarmAnswer(i, v[0] ?? '')} />
+              <Chips
+                options={q.options}
+                value={s.warmAnswers[i] ? [s.warmAnswers[i]] : []}
+                onChange={(v) => {
+                  const picked = v[0] ?? '';
+                  S.setWarmAnswer(i, picked);
+                  // A tap on a choice is the answer: move on, or on the last question, check.
+                  if (picked && !last) setTimeout(() => setIdx(i + 1), 150);
+                  else if (picked && last) setTimeout(() => void S.checkWarm({ [i]: picked }), 150);
+                }}
+              />
             ) : (
               <TextField
                 label=""
@@ -185,7 +238,7 @@ export function WarmStep({ S }: { S: SessionApi }) {
             {!last ? (
               <Button label="Next" onPress={() => setIdx(i + 1)} />
             ) : (
-              <Button label={n === 1 ? 'Check my answer' : 'Check my answers'} onPress={S.checkWarm} loading={s.busy === 'Marking'} disabled={!answered} />
+              <Button label={n === 1 ? 'Check my answer' : 'Check my answers'} onPress={() => void S.checkWarm()} loading={s.busy === 'Marking'} disabled={!answered} />
             )}
             <Pressable onPress={S.skipWarm} style={{ alignSelf: 'center', padding: spacing.sm }}>
               <Text variant="caption" color="textMuted">
@@ -239,7 +292,7 @@ export function LearnStep({ S }: { S: SessionApi }) {
           <Text variant="eyebrow" color="textMuted">
             Building on what you know
           </Text>
-          <Text variant="prose">{L.bridge}</Text>
+          <Text variant="lead">{L.bridge}</Text>
         </View>
       ) : null}
 
@@ -401,20 +454,11 @@ export function RecallStep({ S }: { S: SessionApi }) {
             multiline
             style={{ minHeight: 96, textAlignVertical: 'top' }}
           />
-          <View style={{ gap: spacing.sm }}>
-            <Text variant="caption" color="textMuted">
-              How sure are you?
-            </Text>
-            <Segmented options={CONF} value={s.recConf} onChange={S.setRecConf} />
-          </View>
+          <ConfidenceRow visible={Boolean(s.recText.trim())} value={s.recConf} busy={s.busy === 'Marking'} onPick={(c) => void S.checkRecall(c)} />
         </>
       )}
       <Footer>
-        {marked ? (
-          <Button label={s.recIdx + 1 < L.rec.items.length ? 'Next' : 'On to practice'} onPress={S.nextRecall} />
-        ) : (
-          <Button label="Check" onPress={S.checkRecall} loading={s.busy === 'Marking'} disabled={!s.recText.trim() || !s.recConf} />
-        )}
+        {marked ? <Button label={s.recIdx + 1 < L.rec.items.length ? 'Next' : 'On to practice'} onPress={S.nextRecall} /> : null}
       </Footer>
     </View>
   );
@@ -428,15 +472,15 @@ export function PracticeStep({ S, item }: { S: SessionApi; item: Record<string, 
   const q = item as { type: 'mcq' | 'short'; prompt: string; options?: string[]; answer: number | string; explanation?: string; difficulty: number };
   const marked = Boolean(s.pracResult);
   const P = L.prac;
+  const answered = q.type === 'mcq' ? s.pracPicked != null : Boolean(s.pracText.trim());
   return (
     <View style={{ gap: spacing.xl }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-        <Text variant="caption" color="textMuted">
-          {P.asked.length + 1} of {P.items.length}
-          {P.re ? ' · again' : ''}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md }}>
+        <Text variant="caption" color="textMuted" style={{ flex: 1 }}>
+          {practiceNeed(P)}
         </Text>
         <Text variant="caption" color="accent">
-          {P.correct} right
+          {P.correct} of {P.criterion ?? 3} right
         </Text>
       </View>
       <Text variant="prose">{q.prompt}</Text>
@@ -485,26 +529,10 @@ export function PracticeStep({ S, item }: { S: SessionApi; item: Record<string, 
       {marked ? (
         <FeedbackBlock grade={s.pracResult as Grade} />
       ) : (
-        <View style={{ gap: spacing.sm }}>
-          <Text variant="caption" color="textMuted">
-            How sure are you?
-          </Text>
-          <Segmented options={CONF} value={s.pracConf} onChange={S.setPracConf} />
-        </View>
+        <ConfidenceRow visible={answered} value={s.pracConf} busy={s.busy === 'Marking'} onPick={(c) => void S.checkPractice(c)} />
       )}
 
-      <Footer>
-        {marked ? (
-          <Button label="Next" onPress={S.nextPractice} />
-        ) : (
-          <Button
-            label="Check"
-            onPress={S.checkPractice}
-            loading={s.busy === 'Marking'}
-            disabled={!s.pracConf || (q.type === 'mcq' ? s.pracPicked == null : !s.pracText.trim())}
-          />
-        )}
-      </Footer>
+      <Footer>{marked ? <Button label="Next" onPress={S.nextPractice} /> : null}</Footer>
     </View>
   );
 }
@@ -521,12 +549,37 @@ export function DoneStep({ S, onClose }: { S: SessionApi; onClose: () => void })
       {sum ? (
         <View>
           <Row label="Practice" value={`${sum.correct} of ${sum.asked} right`} />
-          {sum.sure ? <Row label="Sure of" value={`${sum.sure}, right on ${sum.sureRight}`} /> : null}
           {sum.roleplay ? <Row label="Role-play" value={`${Math.round(sum.roleplay.mean * 100)}% of the criteria`} /> : null}
-          {sum.taught ? <Row label="Taught back" value="Yes" /> : null}
           <Row label="Cards for review" value={String(sum.added)} />
-          {sum.firstDue ? <Row label="First review" value={fmtDate(sum.firstDue)} /> : null}
+          {sum.firstDue ? <Row label="First review" value={fmtWhenDue(sum.firstDue)} /> : null}
           <Row label="Time" value={`${sum.minutes} min`} last />
+        </View>
+      ) : null}
+      {sum?.sure ? (
+        <Text variant="body" color="textMuted">
+          {calibrationLine(sum.sure, sum.sureRight)}
+        </Text>
+      ) : null}
+      {sum && sum.mastered && sum.added > 0 ? (
+        <View style={{ gap: spacing.sm, paddingTop: spacing.lg, borderTopWidth: 1, borderTopColor: colors.border }}>
+          <Text variant="bodyStrong">
+            {s.jol == null
+              ? `Of today's ${sum.added} ${sum.added === 1 ? 'card' : 'cards'}, how many will you still get right at the first review?`
+              : 'Noted. After the first review you will see how close that was.'}
+          </Text>
+          {s.jol == null ? (
+            <Segmented
+              options={[
+                { value: '1', label: 'All' },
+                { value: '0.75', label: 'Most' },
+                { value: '0.5', label: 'About half' },
+                { value: '0.25', label: 'Fewer' },
+              ]}
+              value={null}
+              onChange={(v) => S.answerJol(Number(v))}
+              wrap
+            />
+          ) : null}
         </View>
       ) : null}
       <Text variant="body" color="textMuted">
@@ -536,7 +589,7 @@ export function DoneStep({ S, onClose }: { S: SessionApi; onClose: () => void })
             : 'Practice did not reach the mark: three fully right, including a harder one. The topic is offered again next session in a simpler form, and its cards are already in review.'
           : sum?.motorPending
             ? 'The topic stays in practice until you log a session away from the screen where every check passed.'
-            : 'It counts as evidence once the reviews hold up over the coming days, so come back when the cards are due.'}
+            : 'It counts as evidence once the reviews hold up over the coming days. The first review ends with you explaining the idea to a beginner.'}
       </Text>
       {s.revision?.length ? (
         <View style={{ gap: spacing.sm, padding: spacing.lg, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md }}>
@@ -554,6 +607,21 @@ export function DoneStep({ S, onClose }: { S: SessionApi; onClose: () => void })
       <View style={{ height: 1, backgroundColor: colors.border, opacity: 0 }} />
     </View>
   );
+}
+
+// "tomorrow", "in 3 days", or the date.
+export function fmtWhenDue(ms: number): string {
+  const days = Math.round((ms - Date.now()) / 86400000);
+  if (days <= 0) return 'today';
+  if (days === 1) return 'tomorrow';
+  if (days < 14) return `in ${days} days`;
+  return fmtDate(ms);
+}
+// Calibration in a sentence: how many answers they were sure of, and how many of those were right.
+export function calibrationLine(sure: number, sureRight: number): string {
+  const misses = sure - sureRight;
+  if (!misses) return sure === 1 ? 'You were sure of one answer, and it was right.' : `You were sure of ${sure} answers, and all of them were right.`;
+  return `You were sure of ${sure} ${sure === 1 ? 'answer' : 'answers'} and right on ${sureRight}. ${misses === 1 ? 'The confident miss' : `The ${misses} confident misses`} came back in the sitting and ${misses === 1 ? 'comes' : 'come'} first in review.`;
 }
 
 export function Row({ label, value, last }: { label: string; value: string; last?: boolean }) {
@@ -683,31 +751,6 @@ export function ChatThread({ S, placeholder }: { S: SessionApi; placeholder: str
         editable={!s.busy}
       />
       <Button label="Send" onPress={S.sendChat} loading={s.busy === 'Replying'} disabled={!s.chatInput.trim()} />
-    </View>
-  );
-}
-
-export function TeachStep({ S }: { S: SessionApi }) {
-  const { s } = S;
-  const { spacing } = useTheme();
-  return (
-    <View style={{ gap: spacing.xl }}>
-      <Text variant="prose">Explain it to someone new.</Text>
-      <Text variant="body" color="textMuted">
-        A curious beginner is listening. Say what the topic is about in your own words; they will ask questions. Three exchanges is plenty. Explaining is one of the surest ways to make it stick.
-      </Text>
-      <ChatThread S={S} placeholder={s.chat.length ? 'Your reply' : 'Start explaining'} />
-      <Footer>
-        {s.chatTurns >= 2 ? (
-          <Button label="Done teaching" onPress={() => S.finish({ taught: true })} />
-        ) : (
-          <Pressable onPress={() => S.finish({ taught: false })} style={{ alignSelf: 'center', padding: spacing.sm }}>
-            <Text variant="caption" color="textMuted">
-              Skip this today
-            </Text>
-          </Pressable>
-        )}
-      </Footer>
     </View>
   );
 }

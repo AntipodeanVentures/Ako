@@ -45,8 +45,22 @@ export const typography = {
     lineHeight: 22,
     letterSpacing: -0.1,
   } as TextStyle,
-  // Questions and lesson prose: a size up from body so reading feels
-  // different from acting.
+  // Lesson section headings: a clear step above body, below the title.
+  subtitle: {
+    fontFamily: fontFamilies.semiBold,
+    ...weight('600'),
+    fontSize: 20,
+    lineHeight: 26,
+    letterSpacing: -0.3,
+  } as TextStyle,
+  // The opening paragraph of a lesson: read, not shouted. A size up from body, regular weight.
+  lead: {
+    fontFamily: fontFamilies.regular,
+    ...weight('400'),
+    fontSize: 18,
+    lineHeight: 27,
+  } as TextStyle,
+  // Questions: a size up from body so reading a question feels different from reading a lesson.
   prose: {
     fontFamily: fontFamilies.semiBold,
     ...weight('600'),

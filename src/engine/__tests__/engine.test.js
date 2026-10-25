@@ -10,6 +10,7 @@ import {
   makeCards, reviewCard, recallChance, dueCards,
   mergeKnowItems, renderKnow, withoutKnowItem,
   newLesson, useLesson, stepOrder, nextStep, pickNextItem, scorePractice, practiceDone, metCriterion, finishTopic, recordRelearn, sameAnswer, ROLE_LEVEL_GOOD,
+  teachDue, recordTeach, sittingMinutes, sittingMinutesLeft,
   normaliseIntake, normaliseAdaptation, reopenTopics, placeKnown, intakePrompt, adaptPrompt, cleanOutcome, normalisePractice, addQuestionSet, practicePrompt, bridgePrompt, cardFront, probeCandidates, pickProbe, recordProbe, calibrateFromProbes, criterionFor, retentionFor, stageRetention, mixedDue, recordMixed, mixedPrompt, normaliseMixed, probeDue,
 } from '../index.js';
 import { lesson, planPortuguese, planJudo } from '../fixtures.js';
@@ -299,7 +300,8 @@ describe('the session deck', () => {
     const subj = subjectFrom(plan);
     const t = plan.topics[0];
     const L = useLesson(newLesson(t.id), normaliseLesson(lesson('concept'), t), subj);
-    expect(stepOrder(L, t).map((s) => s.key)).toEqual(['attempt', 'learn', 'recall', 'practice', 'teach', 'done']);
+    // Teach-back is not a step of the sitting: it comes at the end of the first review run (see below).
+    expect(stepOrder(L, t).map((s) => s.key)).toEqual(['attempt', 'learn', 'recall', 'practice', 'done']);
     expect(nextStep({ ...L, step: 'recall' }, t)).toBe('practice');
     const P = L.prac;
     expect(P.idx).not.toBeNull();
@@ -322,6 +324,19 @@ describe('the session deck', () => {
     recordRelearn(subj, card, true, T0 + DAY);
     expect(card.relearnDays).toHaveLength(1);
     expect(card.firstReview.ok).toBe(true);
+    // teach-back: due from the next day, at the end of a review run that touched the topic; two exchanges count
+    expect(subj.topicState[t.id].teach.due).toBe(true);
+    expect(teachDue(subj, [t.id], T0)).toBeNull();
+    expect(teachDue(subj, [t.id], T0 + DAY).id).toBe(t.id);
+    recordTeach(subj, t.id, 0, T0 + DAY);
+    expect(teachDue(subj, [t.id], T0 + DAY).id).toBe(t.id);
+    recordTeach(subj, t.id, 0, T0 + 2 * DAY);
+    expect(teachDue(subj, [t.id], T0 + 2 * DAY)).toBeNull();
+    recordTeach(subj, t.id, 3, T0 + 3 * DAY);
+    expect(subj.topicState[t.id].taught).toBe(true);
+    // the sitting's expected length is honest before any measurement, and measured after two sittings
+    expect(sittingMinutes(subj, t)).toBe(15);
+    expect(sittingMinutesLeft(subj, t, 'practice')).toBe(5);
   });
   it('needs three fully right answers including a hard one and a mixed one before mastery', () => {
     const plan = normalisePlan(planPortuguese, intake, 's2');

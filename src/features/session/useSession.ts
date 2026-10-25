@@ -10,6 +10,7 @@ import {
   pickNextItem,
   practiceDone,
   practiceExhausted,
+  recordJol,
   scorePractice,
   useLesson as installLesson,
 } from '@/src/engine/session';
@@ -65,7 +66,8 @@ export type SessionState = {
   chatInput: string;
   chatTurns: number; // learner turns so far
   debrief: Debrief | null;
-  // done
+  // done: the judgement of learning, once answered (the share of today's cards expected right at the first review)
+  jol: number | null;
   summary: { added: number; firstDue: number | null; minutes: number; correct: number; asked: number; sure: number; sureRight: number; taught: boolean; roleplay: Debrief | null; motorPending: boolean; mastered: boolean } | null;
   // Changes the path revision made after this topic, if any (shown on Done).
   revision: PlanRevision['notes'] | null;
@@ -109,6 +111,7 @@ export function useSession(subj: LiveSubject, topicId: string, retention: number
     chatInput: '',
     chatTurns: 0,
     debrief: null,
+    jol: null,
     summary: null,
     revision: null,
   });
@@ -331,15 +334,17 @@ export function useSession(subj: LiveSubject, topicId: string, retention: number
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s.step, s.warm, s.warmGrades, s.lesson, s.questionsReady, s.recIdx, s.recResult, s.pracResult, s.chat, s.debrief]);
 
-  const checkWarm = useCallback(async () => {
+  // `override` carries an answer tapped a moment ago that state has not caught up with (a choice on the last question).
+  const checkWarm = useCallback(async (override?: Record<number, string>) => {
     if (!s.warm || s.busy === 'Marking' || L.checked) return;
-    patch({ busy: 'Marking', error: null });
+    const answers = s.warmAnswers.map((a, j) => override?.[j] ?? a);
+    patch({ busy: 'Marking', error: null, warmAnswers: answers });
     // The opening and the questions use the answers, not the marks.
-    void requestQuestions(s.warmAnswers);
+    void requestQuestions(answers);
     try {
-      const items = s.warm.questions.map((q, i) => ({ prompt: q.q, answer: q.a, response: s.warmAnswers[i] || '' }));
+      const items = s.warm.questions.map((q, i) => ({ prompt: q.q, answer: q.a, response: answers[i] || '' }));
       const r = await callJson<{ results: Grade[] }>('grade', { kind: 'answers', title: subj.plan.title, items, mode: 'warmup' });
-      L.answers = s.warmAnswers.map((text, i) => ({ text, ...r.results[i] }));
+      L.answers = answers.map((text, i) => ({ text, ...r.results[i] }));
       L.checked = true;
       patch({ warmGrades: r.results, busy: null });
     } catch {
@@ -389,20 +394,22 @@ export function useSession(subj: LiveSubject, topicId: string, retention: number
     [subj.plan.title],
   );
 
-  const checkRecall = useCallback(async () => {
+  // The confidence tap is the submit, so the chosen level is passed in rather than read from state.
+  const checkRecall = useCallback(async (conf?: Confidence) => {
     const item = L.rec.items[s.recIdx];
-    if (!item) return;
-    patch({ busy: 'Marking', error: null });
+    const c = conf ?? s.recConf;
+    if (!item || s.busy === 'Marking' || !s.recText.trim() || !c) return;
+    patch({ busy: 'Marking', error: null, recConf: c });
     try {
-      const g = await gradeShort(item.prompt, item.answer, s.recText, s.recConf);
+      const g = await gradeShort(item.prompt, item.answer, s.recText, c);
       item.text = s.recText;
-      item.conf = s.recConf;
+      item.conf = c;
       item.result = g;
       patch({ recResult: g, busy: null });
     } catch (e) {
       patch({ busy: null, error: aiErrorCopy(e) });
     }
-  }, [L, gradeShort, patch, s.recConf, s.recIdx, s.recText]);
+  }, [L, gradeShort, patch, s.busy, s.recConf, s.recIdx, s.recText]);
 
   const nextRecall = useCallback(() => {
     const next = s.recIdx + 1;
@@ -418,20 +425,22 @@ export function useSession(subj: LiveSubject, topicId: string, retention: number
   // ---- practice ----
   const currentItem = L.prac.idx == null ? null : L.prac.items[L.prac.idx];
 
-  const checkPractice = useCallback(async () => {
+  const checkPractice = useCallback(async (conf?: Confidence) => {
     const q = currentItem;
-    if (!q) return;
-    L.prac.conf = s.pracConf;
+    const c = conf ?? s.pracConf;
+    if (!q || s.busy === 'Marking' || !c) return;
+    if (q.type === 'mcq' ? s.pracPicked == null : !s.pracText.trim()) return;
+    L.prac.conf = c;
     L.prac.picked = s.pracPicked;
     L.prac.text = s.pracText;
-    patch({ busy: 'Marking', error: null });
+    patch({ busy: 'Marking', error: null, pracConf: c });
     try {
       let g: Grade;
       if (q.type === 'mcq') {
         const ok = s.pracPicked === q.answer;
         g = { score: ok ? 1 : 0, feedback: (ok ? 'Right. ' : `Not this one. The answer is "${arr(q.options)[Number(q.answer)]}". `) + (q.explanation || '') };
       } else {
-        g = await gradeShort(q.prompt, String(q.answer), s.pracText, s.pracConf);
+        g = await gradeShort(q.prompt, String(q.answer), s.pracText, c);
       }
       scorePractice(L, topic, subj, g);
       patch({ pracResult: g, busy: null });
@@ -439,7 +448,7 @@ export function useSession(subj: LiveSubject, topicId: string, retention: number
     } catch (e) {
       patch({ busy: null, error: aiErrorCopy(e) });
     }
-  }, [L, currentItem, gradeShort, patch, s.pracConf, s.pracPicked, s.pracText, subj, topic]);
+  }, [L, currentItem, gradeShort, patch, s.busy, s.pracConf, s.pracPicked, s.pracText, subj, topic]);
 
   const finish = useCallback(
     async (opts: { taught?: boolean } = {}) => {
@@ -496,7 +505,8 @@ export function useSession(subj: LiveSubject, topicId: string, retention: number
     [L, onSaved, patch, retention, s, subj, topic.minutes, topicId],
   );
 
-  // ---- after practice: role-play for conversational topics, otherwise teach it back ----
+  // ---- after practice: role-play for conversational topics; otherwise the sitting is done ----
+  // (Teaching the idea back comes on the first review day, at the end of that review run.)
   const afterPractice = useCallback(() => {
     const scenario = s.lesson?.scenario;
     if (topic.kind === 'roleplay' && scenario) {
@@ -504,10 +514,8 @@ export function useSession(subj: LiveSubject, topicId: string, retention: number
       patch({ step: 'roleplay', chat: scenario.opener ? [{ role: 'assistant', content: scenario.opener }] : [], chatDraft: '', chatInput: '', chatTurns: 0, debrief: null });
       return;
     }
-    L.step = 'teach';
-    L.teach.started = true;
-    patch({ step: 'teach', chat: [], chatDraft: '', chatInput: '', chatTurns: 0 });
-  }, [L, patch, s.lesson, topic.kind]);
+    void finish();
+  }, [L, finish, patch, s.lesson, topic.kind]);
 
   const sendChat = useCallback(async () => {
     const text = s.chatInput.trim();
@@ -577,6 +585,16 @@ export function useSession(subj: LiveSubject, topicId: string, retention: number
     tick();
   }, [L, afterPractice, patch, s.lesson, subj, topicId]);
 
+  // The judgement of learning on the Done screen; resolved by the first review of the topic's cards.
+  const answerJol = useCallback(
+    (fraction: number) => {
+      recordJol(subj, topicId, fraction);
+      patch({ jol: fraction });
+      saveSubject(subj).catch(() => { /* kept in memory; the next save carries it */ });
+    },
+    [patch, subj, topicId],
+  );
+
   const retryLesson = useCallback(() => {
     if (!L.data) {
       advanceWhenReady.current = L.checked;
@@ -609,6 +627,7 @@ export function useSession(subj: LiveSubject, topicId: string, retention: number
     sendChat,
     endRoleplay,
     finish,
+    answerJol,
     retryLesson,
     resumed,
     restart,

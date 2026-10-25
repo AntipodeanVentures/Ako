@@ -12,6 +12,8 @@ import {
   nextStageEstimate,
   nextTopic,
   paceStats,
+  sittingMinutes,
+  sittingMinutesLeft,
   stagePosition,
   stageProgress,
 } from '@/src/engine/progress';
@@ -76,6 +78,25 @@ export function nextStep(subjects: LiveSubject[], extras: NextStepExtras = {}): 
   }
   return { kind: 'none' };
 }
+
+// A typed review takes about half a minute; a run is capped (see review.tsx).
+export const REVIEW_CAP = 20;
+export const REVIEW_MINUTES_EACH = 0.5;
+
+// How long the next step is likely to take, in whole minutes, so the Start button is an honest promise.
+export function minutesFor(step: NextStep): number | null {
+  switch (step.kind) {
+    case 'resume': return sittingMinutesLeft(step.subject, step.topic, step.step) as number;
+    case 'review': return Math.max(1, Math.round(Math.min(step.count, REVIEW_CAP) * REVIEW_MINUTES_EACH));
+    case 'probe': return 5;
+    case 'check': return 8;
+    case 'mixed': return 10;
+    case 'topic': return sittingMinutes(step.subject, step.topic) as number;
+    default: return null;
+  }
+}
+
+export const aboutMinutes = (m: number | null) => (m == null ? '' : m <= 1 ? 'about a minute' : `about ${m} min`);
 
 export function todayLine(subjects: LiveSubject[], extras: NextStepExtras = {}): string {
   const due = dueCount(subjects);

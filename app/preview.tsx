@@ -127,7 +127,7 @@ function mockSession(step: string): SessionApi {
   };
   const marked = step.endsWith('-marked');
   const base = step.replace('-marked', '');
-  const prac = { items: LESSON.practice, asked: [0], idx: 1, re: false, correct: 1, requeue: [], log: [] };
+  const prac = { items: LESSON.practice, asked: [0], idx: 1, re: false, correct: 1, criterion: 3, hardOk: false, mixOk: false, requeue: [], log: [] };
   const s = {
     step: base,
     topic: { id: 'p4', title: 'Ser and estar', kind: 'concept' },
@@ -154,12 +154,13 @@ function mockSession(step: string): SessionApi {
     chatInput: '',
     chatTurns: 0,
     debrief: null,
+    jol: null,
     summary: base === 'done' ? { added: 4, firstDue: Date.now() + 86400000, minutes: 19, correct: 3, asked: 5, sure: 3, sureRight: 2, taught: true, roleplay: null, motorPending: false, mastered: true } : null,
     revision: null,
   };
   const L = { checked: marked, warm, data: LESSON, prac, rec: { idx: 0, items: [{ key: 'recall', prompt: LESSON.recall, answer: LESSON.recallAnswer }, { key: 'why', prompt: LESSON.why, answer: LESSON.whyAnswer }] }, teach: { turns: 0 } };
   return {
-    s, L, topic: s.topic, currentItem: LESSON.practice[1], resumed: step === 'practice', restart: noop,
+    s, L, topic: s.topic, currentItem: LESSON.practice[1], resumed: step === 'practice', restart: noop, answerJol: noop,
     setWarmAnswer: noop, checkWarm: noop, skipWarm: noop, toLearn: noop, toRecall: noop, setRecText: noop, setRecConf: noop, checkRecall: noop, nextRecall: noop,
     setPracPicked: noop, setPracText: noop, setPracConf: noop, checkPractice: noop, nextPractice: noop, setChatInput: noop, sendChat: noop, endRoleplay: noop, finish: noop, retryLesson: noop, clearError: noop,
   } as unknown as SessionApi;

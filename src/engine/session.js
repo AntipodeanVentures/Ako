@@ -54,8 +54,10 @@ const isRoleplay = (L, t) => t.kind === 'roleplay' && !!(L.data && L.data.scenar
 function stepOrder(L, t) {
   const steps = [['attempt', 'Warm-up'], ['learn', 'Learn']];
   if (t.kind === 'motor' || (L.data && L.data.drill)) steps.push(['drill', 'Practise away']);
+  // Teaching the idea back happens on the day the first card comes due, at the end of that review run, where it is
+  // real spaced retrieval rather than a second telling minutes after the first; so it is not a step of the sitting.
   if (isRoleplay(L, t)) steps.push(['recall', 'Recall'], ['roleplay', 'Role-play'], ['done', 'Done']);
-  else steps.push(['recall', 'Recall'], ['practice', 'Practise'], ['teach', 'Teach'], ['done', 'Done']);
+  else steps.push(['recall', 'Recall'], ['practice', 'Practise'], ['done', 'Done']);
   return steps.map(([key, label]) => ({ key, label }));
 }
 function nextStep(L, t) {
@@ -167,6 +169,8 @@ function finishTopic(subj, L, opts = {}) {
   st.practice = { correct: P.correct, partial: P.partial, asked: P.asked.length, misses: P.misses, confident: P.confident, hardOk: P.hardOk, mixOk: P.mixOk, at: nowMs() };
   if (L.rp && L.rp.debrief) st.roleplay = { mean: L.rp.debrief.mean, runs: L.rp.runs, at: nowMs() };
   st.taught = !!opts.taught && num(L.teach && L.teach.turns, 0) >= 2;
+  // Teach-back waits for the first review day (see teachDue in progress.js); a topic not yet learned comes back first.
+  if (mastered && !motorPending && !st.taught && !isRoleplay(L, t)) st.teach = { due: true, at: null };
   // Support fades only on real fluency (no misses and a hard item right), and comes back after a rough sitting.
   const sup = supportOf(subj);
   if (mastered && P.misses === 0 && P.hardOk && !P.usedBack) subj.support = SUPPORT[sup].next;
@@ -177,6 +181,24 @@ function finishTopic(subj, L, opts = {}) {
   return { added, motorPending, mastered, firstDue: L.firstDue };
 }
 
+// The learner's judgement of learning for a topic, asked on the Done screen as the share of today's cards they expect
+// to get right at the first review (Nelson & Dunlosky 1991: judgements made after a delay are the accurate ones, so the
+// comparison with the first review is what teaches calibration, not the guess itself).
+function recordJol(subj, tid, fraction, atMs = nowMs()) {
+  const st = subj.topicState[tid] || (subj.topicState[tid] = {});
+  st.jol = clampNum(num(fraction, 0.5), 0, 1);
+  st.jolAt = atMs;
+  return st;
+}
+// How the learner's predictions compare with their first reviews, across topics with both: the mean gap
+// (predicted minus recalled; positive runs high) and how many topics it rests on.
+function jolCalibration(subj) {
+  const pairs = Object.values(subj.topicState || {}).filter((st) => st && st.jol != null && st.jolActual != null);
+  if (!pairs.length) return { n: 0, bias: null };
+  const bias = pairs.reduce((a, st) => a + (num(st.jol, 0) - num(st.jolActual, 0)), 0) / pairs.length;
+  return { n: pairs.length, bias };
+}
+
 // A recalled card on a new day counts towards that topic's relearning (successive relearning: 3 sessions on separate
 // days). The first review of every card resolves the learner's prediction (JOL) for the topic.
 function recordRelearn(subj, card, ok, atMs = nowMs()) {
@@ -185,7 +207,7 @@ function recordRelearn(subj, card, ok, atMs = nowMs()) {
   if (!card.firstReview) {
     card.firstReview = { at: atMs, ok: !!ok };
     const st = subj.topicState[card.topicId];
-    if (st && st.jol && st.jolActual == null) {
+    if (st && st.jol != null && st.jolActual == null) {
       const mine = arr(subj.cards).filter((c) => c.topicId === card.topicId);
       if (mine.every((c) => c.firstReview)) st.jolActual = mine.filter((c) => c.firstReview.ok).length / mine.length;
     }
@@ -193,4 +215,4 @@ function recordRelearn(subj, card, ok, atMs = nowMs()) {
   return card;
 }
 
-export { newLesson, newPractice, startAbility, useLesson, addQuestionSet, isRoleplay, stepOrder, nextStep, sameAnswer, pickNextItem, scorePractice, metCriterion, practiceDone, practiceExhausted, addPractice, masteredThisSitting, finishTopic, recordRelearn };
+export { newLesson, newPractice, startAbility, useLesson, addQuestionSet, isRoleplay, stepOrder, nextStep, sameAnswer, pickNextItem, scorePractice, metCriterion, practiceDone, practiceExhausted, addPractice, masteredThisSitting, finishTopic, recordRelearn, recordJol, jolCalibration };

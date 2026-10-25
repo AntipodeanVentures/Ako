@@ -164,6 +164,43 @@ function markStageReached(subj, sid, score, total) {
   return STAGES[stageIdx(sid)];
 }
 
+// ---------- teach-back, on the first review day ----------
+// A learned topic is explained to a model student once its first review day has come: at the end of the review run
+// that touched its cards (Fiorella & Mayer 2016; spaced, it is retrieval rather than a second telling). One per run.
+function teachDue(subj, topicIds, atMs = nowMs()) {
+  const today = dayKey(atMs);
+  const ids = Array.from(new Set(arr(topicIds)));
+  for (const tid of ids) {
+    const st = subj.topicState[tid];
+    if (!st || !st.teach || !st.teach.due || st.taught) continue;
+    if (dayKey(num(st.masteredAt, 0)) === today) continue;
+    const t = topicById(subj, tid);
+    if (t) return t;
+  }
+  return null;
+}
+// Two exchanges count as taught. "Not today" twice stops the offer: it is a good extra, not a gate.
+function recordTeach(subj, tid, turns, atMs = nowMs()) {
+  const st = subj.topicState[tid] || (subj.topicState[tid] = {});
+  const done = num(turns, 0) >= 2;
+  const skips = num(st.teach && st.teach.skips, 0) + (done ? 0 : 1);
+  st.taught = done;
+  st.teach = { due: !done && skips < 2, at: atMs, turns: num(turns, 0), skips };
+  return st;
+}
+// What one sitting on a topic is likely to take: the learner's measured time per topic once two sittings exist,
+// otherwise the topic's reading time plus the recall and practice around it, kept honest for the first promise.
+function sittingMinutes(subj, topic) {
+  const p = paceStats(subj);
+  if (p.perTopicMeasured) return clampNum(Math.round(p.perTopic), 5, 60);
+  return clampNum(Math.round(num(topic && topic.minutes, 30) * 0.6), 8, 25);
+}
+// Minutes left in a sitting stopped at a step.
+const STEP_LEFT = { warm: 1, attempt: 1, learn: 0.9, drill: 0.55, recall: 0.45, practice: 0.3, roleplay: 0.3, teach: 0.15 };
+function sittingMinutesLeft(subj, topic, step) {
+  return Math.max(2, Math.round(sittingMinutes(subj, topic) * num(STEP_LEFT[step], 0.5)));
+}
+
 // ---------- time on task ----------
 // Gaps of up to 6 minutes between actions count as study time. Lesson and review time are kept apart for the pace estimate.
 // Minutes studied, recorded by the caller (the app measures active time on screen).
@@ -445,4 +482,4 @@ function roleReadiness(role, subjects) {
 }
 const roleForSubject = (roles, sid) => arr(roles).find((r) => arr(r.map && r.map.areas).some((a) => a.subjectId === sid)) || null;
 
-export { reopenTopics, placeKnown, topicById, learnerAbout, learnerModel, subjectCards, topicStatus, isLearned, learnedCount, studiedCount, nextTopic, practisingTopics, currentMilestone, relearnCount, isSecure, secureCount, dueCards, stageTopics, stageProgress, firstPlannedIdx, stagePosition, isSkippedStage, daysUntil, positionText, levelCheckReady, coveredStage, dayAgo, minutesSince, checkEligible, checkMilestones, markStageReached, recordMinutes, logReview, retentionRate, paceStats, paceBasis, stageHours, remainingMinutes, estimateStage, fmtMonth, fmtWeeks, fmtWhen, fmtHours, estimateText, nextStageEstimate, activityDays, conceptKey, noteConcept, weakConcepts, lessonConceptName, areaCredit, roleReadiness, roleForSubject, probeDue, probeDueAt, probeCandidates, pickProbe, recordProbe, stageRetention, calibrateFromProbes, criterionFor, retentionFor, mixedDue, recordMixed, PROBE_MIN_ITEMS, PROBE_FIRST_DAYS, PROBE_FIRST_TARGET, PROBE_SECOND_GAP, MIXED_MIN_LEARNED, MIXED_EVERY_LEARNED };
+export { teachDue, recordTeach, sittingMinutes, sittingMinutesLeft, reopenTopics, placeKnown, topicById, learnerAbout, learnerModel, subjectCards, topicStatus, isLearned, learnedCount, studiedCount, nextTopic, practisingTopics, currentMilestone, relearnCount, isSecure, secureCount, dueCards, stageTopics, stageProgress, firstPlannedIdx, stagePosition, isSkippedStage, daysUntil, positionText, levelCheckReady, coveredStage, dayAgo, minutesSince, checkEligible, checkMilestones, markStageReached, recordMinutes, logReview, retentionRate, paceStats, paceBasis, stageHours, remainingMinutes, estimateStage, fmtMonth, fmtWeeks, fmtWhen, fmtHours, estimateText, nextStageEstimate, activityDays, conceptKey, noteConcept, weakConcepts, lessonConceptName, areaCredit, roleReadiness, roleForSubject, probeDue, probeDueAt, probeCandidates, pickProbe, recordProbe, stageRetention, calibrateFromProbes, criterionFor, retentionFor, mixedDue, recordMixed, PROBE_MIN_ITEMS, PROBE_FIRST_DAYS, PROBE_FIRST_TARGET, PROBE_SECOND_GAP, MIXED_MIN_LEARNED, MIXED_EVERY_LEARNED };

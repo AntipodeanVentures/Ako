@@ -54,8 +54,10 @@ const isRoleplay = (L, t) => t.kind === 'roleplay' && !!(L.data && L.data.scenar
 function stepOrder(L, t) {
   const steps = [['attempt', 'Warm-up'], ['learn', 'Learn']];
   if (t.kind === 'motor' || (L.data && L.data.drill)) steps.push(['drill', 'Practise away']);
+  // Teaching the idea back happens on the day the first card comes due, at the end of that review run, where it is
+  // real spaced retrieval rather than a second telling minutes after the first; so it is not a step of the sitting.
   if (isRoleplay(L, t)) steps.push(['recall', 'Recall'], ['roleplay', 'Role-play'], ['done', 'Done']);
-  else steps.push(['recall', 'Recall'], ['practice', 'Practise'], ['teach', 'Teach'], ['done', 'Done']);
+  else steps.push(['recall', 'Recall'], ['practice', 'Practise'], ['done', 'Done']);
   return steps.map(([key, label]) => ({ key, label }));
 }
 function nextStep(L, t) {
@@ -167,6 +169,8 @@ function finishTopic(subj, L, opts = {}) {
   st.practice = { correct: P.correct, partial: P.partial, asked: P.asked.length, misses: P.misses, confident: P.confident, hardOk: P.hardOk, mixOk: P.mixOk, at: nowMs() };
   if (L.rp && L.rp.debrief) st.roleplay = { mean: L.rp.debrief.mean, runs: L.rp.runs, at: nowMs() };
   st.taught = !!opts.taught && num(L.teach && L.teach.turns, 0) >= 2;
+  // Teach-back waits for the first review day (see teachDue in progress.js); a topic not yet learned comes back first.
+  if (mastered && !motorPending && !st.taught && !isRoleplay(L, t)) st.teach = { due: true, at: null };
   // Support fades only on real fluency (no misses and a hard item right), and comes back after a rough sitting.
   const sup = supportOf(subj);
   if (mastered && P.misses === 0 && P.hardOk && !P.usedBack) subj.support = SUPPORT[sup].next;
