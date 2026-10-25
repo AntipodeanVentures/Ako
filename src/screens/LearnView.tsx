@@ -40,6 +40,15 @@ function startLabel(step: ReturnType<typeof nextStep>): string {
   return m == null ? base : `${base} · ${aboutMinutes(m)}${step.kind === 'resume' ? ' left' : ''}`;
 }
 
+// The line under the heading: the day's shape, without repeating the heading.
+function subline(step: ReturnType<typeof nextStep>, line: string): string {
+  if (step.kind === 'review') {
+    const rest = line.replace(/^\d+ reviews?( across your subjects)?(, then |\.$)/, (_m, _a, sep) => (sep === '.' ? '' : 'Then '));
+    return rest || 'Nothing else is due today.';
+  }
+  return line;
+}
+
 // What is next, as a heading: the thing itself, not the verb.
 function nextTitle(step: ReturnType<typeof nextStep>): string {
   switch (step.kind) {
@@ -77,7 +86,7 @@ export function LearnView({ subjects, loading, extras = {}, apply, onApply, onSt
           {step.kind === 'resume' ? 'Pick up where you left off' : 'Next'}
         </Text>
         {loading ? <Skeleton height={30} width="60%" /> : <Text variant="title">{nextTitle(step)}</Text>}
-        {loading ? <Skeleton height={23} width="80%" /> : <Text variant="body">{todayLine(subjects, extras)}</Text>}
+        {loading ? <Skeleton height={23} width="80%" /> : <Text variant="body">{subline(step, todayLine(subjects, extras))}</Text>}
         <View style={{ marginTop: spacing.md }}>
           <Button label={startLabel(step)} onPress={() => onStart(step)} disabled={loading} />
         </View>

@@ -120,6 +120,39 @@ ask for a typed answer before the reveal. Still to do:
 - [ ] Web push for review reminders on Android and on iPhones with the app
       on the home screen; native push with the store builds.
 
+## The full review (25 October 2026)
+
+Done, from the review of the whole app:
+
+- [x] Resume a sitting where it stopped (saved on the device at each step; Continue on Learn; Start over).
+- [x] Reviews by typed or spoken recall, marked by the grader; the mark sets the rating, with an override;
+      self-rating only as the fallback. Runs capped at 20, most-at-risk first, the rest offered after.
+- [x] Teach-back moved to the end of the first review run that touches the topic (`teachDue`, `TeachBack.tsx`).
+- [x] Two taps per practice and recall question; a tapped warm-up choice moves on by itself.
+- [x] Expected minutes on the Start button and the Path rows (`sittingMinutes`).
+- [x] Lesson screen: lead paragraph, larger section headings, step strip; worked-example answer no longer leaks.
+- [x] Practice shows what the criterion still needs; Done shows calibration as a sentence, "tomorrow", the
+      judgement of learning (resolved at the first review, shown on the topic page).
+- [x] Sound: Listen on the lesson; a speaker beside target-language phrases; Speak instead under answer fields.
+- [x] Topic page with cards, drill, practice log, today's task, learn again; Path opens it for learned topics.
+- [x] Use it today: one real-world task per topic, asked about the next morning.
+- [x] A second model reads every new question set before the learner sees it, and the lesson text in the
+      background (`verify` task, mid model); "This looks wrong" on answers and cards (suspends the card).
+- [x] Milestones with their tests on the Path; Learn leads with what is next; muted selected controls in dark
+      mode; one optional "what you already know" line in onboarding.
+- [x] Lesson function v13 (`cached` kind, `QUESTIONS_VERSION`, the two checks); migration 0012 (`cards.suspended`).
+
+Still to do from it:
+
+- [ ] Watch `usage` for a week: each typed review that is not an exact match is one grade call, and each new
+      question set now carries one `verify` call (plus one in the background per new lesson). If the bill
+      climbs, batch review marking (grade five typed answers in one call) before touching the checks.
+- [ ] Native speech recognition for the Android build (`expo-speech-recognition`); the web uses the browser's.
+- [ ] Review the first week of `meta.fixes` on question sets and lessons: what the checker changes says where
+      the writing prompts need tightening, and whether the checker itself over-corrects.
+- [ ] A short "set aside" list on the You tab for flagged cards, with "put it back" once checked.
+- [ ] Dual coding (a described diagram or table where the content is structural) is still open.
+
 ## The evidence base (24 October 2026)
 
 - [x] `docs/evidence-base.md`: the literature the method rests on, banked

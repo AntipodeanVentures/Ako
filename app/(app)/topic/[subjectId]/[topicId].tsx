@@ -280,13 +280,13 @@ function TopicScreen({ subj, topic }: { subj: LiveSubject; topic: Topic }) {
                     <Text variant="bodyStrong" style={{ flex: 1 }}>
                       {cardFront(c)}
                     </Text>
-                    {locale ? <Say text={withoutTranslation(c.front)} locale={voiceFor(c.front)} /> : null}
+                    {voiceFor(c.front) ? <Say text={withoutTranslation(c.front)} locale={voiceFor(c.front)} /> : null}
                   </View>
                   <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
                     <Text variant="body" color="textMuted" style={{ flex: 1 }}>
                       {c.back}
                     </Text>
-                    {locale ? <Say text={withoutTranslation(c.back)} locale={voiceFor(c.back)} /> : null}
+                    {voiceFor(c.back) ? <Say text={withoutTranslation(c.back)} locale={voiceFor(c.back)} /> : null}
                   </View>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Text variant="caption" color="textMuted">

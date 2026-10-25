@@ -10,6 +10,7 @@ import { planPortuguese } from '@/src/engine/fixtures';
 import { seedBuildForPreview } from '@/src/features/subjects/planBuilder';
 import { LearnView } from '@/src/screens/LearnView';
 import { SubjectPath } from '@/src/screens/PathView';
+import { ReviewRun } from '@/src/screens/ReviewRun';
 import { DoneStep, LearnStep, PracticeStep, RecallStep, StepStrip, WarmStep, type SessionApi } from '@/src/screens/SessionSteps';
 import { useTheme } from '@/src/theme';
 
@@ -49,8 +50,12 @@ function fixtureSubject(): LiveSubject {
     [],
   );
   const t = plan.topics[0];
-  const cards = makeCards(t, [{ front: 'How is the nasal "ão" in "pão" made?', back: 'Air through the nose as the vowel glides; no hard n.', concept: 0 }], 3);
-  cards[0].due = Date.now() - 1000;
+  const cards = makeCards(t, [
+    { front: 'How is the nasal "ão" in "pão" made?', back: 'Air through the nose as the vowel glides; no hard n.', concept: 0 },
+    { front: 'How do you say "good morning"?', back: 'Bom dia', concept: 1 },
+    { front: 'Which verb: "Ana está cansada"?', back: 'Estar: being tired is how she is right now.', concept: 0 },
+  ], 3);
+  cards.forEach((c: { due: number }) => { c.due = Date.now() - 1000; });
   subj.cards = cards;
   return subj;
 }
@@ -206,6 +211,7 @@ export default function PreviewScreen() {
   }
   if (screen === 'goal') return <GoalScreen />;
   if (screen === 'session') return <SessionPreview step={step || 'learn'} />;
+  if (screen === 'review') return <ReviewRun items={(subj.cards ?? []).map((card) => ({ subj, card }))} total={27} retention={0.9} title={subj.plan.title} />;
   if (screen === 'path') {
     return (
       <Screen scroll>
@@ -223,7 +229,7 @@ export default function PreviewScreen() {
     <ScrollView contentContainerStyle={{ padding: spacing.xl, gap: spacing.md }}>
       <Text variant="title">Preview</Text>
       <View style={{ gap: spacing.xs }}>
-        {['learn', 'empty', 'path', 'goal', 'place', 'session&step=warm', 'session&step=learn', 'session&step=recall', 'session&step=practice', 'session&step=practice-marked', 'session&step=done'].map((s) => (
+        {['learn', 'empty', 'path', 'goal', 'place', 'review', 'session&step=warm', 'session&step=learn', 'session&step=recall', 'session&step=practice', 'session&step=practice-marked', 'session&step=done'].map((s) => (
           <Text key={s} variant="body">
             /preview?screen={s}
           </Text>
