@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 
-import { Button, Screen, Text, TextField } from '@/src/components/ui';
+import { Button, Dictate, Say, Screen, Text, TextField } from '@/src/components/ui';
 import { fmtInterval } from '@/src/engine/core';
 import { dueCards, logReview, noteConcept, recordMinutes, recordTeach, reopenTopics, retentionFor, teachDue, topicById } from '@/src/engine/progress';
 import { cardFront, recallChance, reviewCard } from '@/src/engine/scheduling';
@@ -20,6 +20,7 @@ import {
   type LiveSubject,
 } from '@/src/features/subjects';
 import { afterReviews } from '@/src/features/subjects/adapt';
+import { localeFor, looksEnglish, withoutTranslation } from '@/src/features/speech';
 import { REVIEW_CAP, aboutMinutes, REVIEW_MINUTES_EACH } from '@/src/features/subjects/summary';
 import { TeachBack } from '@/src/screens/TeachBack';
 import { useTheme } from '@/src/theme';
@@ -285,6 +286,10 @@ function ReviewScreen({ items, total, retention, title }: { items: Item[]; total
   };
   const tone = mark ? (mark.score >= 1 ? colors.accent : mark.score > 0 ? colors.warning : colors.danger) : colors.border;
   const label = mark ? (mark.score >= 1 ? 'Right' : mark.score > 0 ? 'Partly' : 'Not yet') : '';
+  // In a language subject the card's phrases are spoken in that language; English prompts in the device's English.
+  const locale = localeFor(item.subj.plan.language);
+  const voiceFor = (text: string) => (locale && !looksEnglish(withoutTranslation(text)) ? locale : null);
+  const front = cardFront(item.card);
 
   return (
     <Screen scroll width="reading">
@@ -295,11 +300,19 @@ function ReviewScreen({ items, total, retention, title }: { items: Item[]; total
       />
 
       <View style={{ flex: 1, justifyContent: 'center', gap: spacing.xl, paddingVertical: spacing.xl }}>
-        <Text variant="prose">{cardFront(item.card)}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
+          <Text variant="prose" style={{ flex: 1 }}>
+            {front}
+          </Text>
+          {locale ? <Say text={withoutTranslation(front)} locale={voiceFor(front)} /> : null}
+        </View>
 
         {!shown ? (
           <>
-            <TextField label="From memory" value={text} onChangeText={setText} placeholder="Say it in your own words" multiline style={{ minHeight: 80, textAlignVertical: 'top' }} />
+            <View style={{ gap: spacing.sm }}>
+              <TextField label="From memory" value={text} onChangeText={setText} placeholder="Say it in your own words" multiline style={{ minHeight: 80, textAlignVertical: 'top' }} />
+              <Dictate value={text} onChangeText={setText} lang={locale && !looksEnglish(front) ? locale : null} />
+            </View>
             <Button label="Check" onPress={() => void check()} disabled={!text.trim()} />
             <Pressable onPress={() => void check(true)} style={{ alignSelf: 'center', padding: spacing.sm }} accessibilityRole="button">
               <Text variant="caption" color="textMuted">
@@ -314,8 +327,11 @@ function ReviewScreen({ items, total, retention, title }: { items: Item[]; total
                 {text.trim()}
               </Text>
             ) : null}
-            <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.xl }}>
-              <Text variant="body">{item.card.back}</Text>
+            <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.xl, flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
+              <Text variant="body" style={{ flex: 1 }}>
+                {item.card.back}
+              </Text>
+              {locale ? <Say text={withoutTranslation(item.card.back)} locale={voiceFor(item.card.back)} /> : null}
             </View>
             {marking ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>

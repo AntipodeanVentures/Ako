@@ -160,7 +160,7 @@ function mockSession(step: string): SessionApi {
   };
   const L = { checked: marked, warm, data: LESSON, prac, rec: { idx: 0, items: [{ key: 'recall', prompt: LESSON.recall, answer: LESSON.recallAnswer }, { key: 'why', prompt: LESSON.why, answer: LESSON.whyAnswer }] }, teach: { turns: 0 } };
   return {
-    s, L, topic: s.topic, currentItem: LESSON.practice[1], resumed: step === 'practice', restart: noop, answerJol: noop,
+    s, L, topic: s.topic, currentItem: LESSON.practice[1], resumed: step === 'practice', restart: noop, answerJol: noop, locale: 'pt-BR',
     setWarmAnswer: noop, checkWarm: noop, skipWarm: noop, toLearn: noop, toRecall: noop, setRecText: noop, setRecConf: noop, checkRecall: noop, nextRecall: noop,
     setPracPicked: noop, setPracText: noop, setPracConf: noop, checkPractice: noop, nextPractice: noop, setChatInput: noop, sendChat: noop, endRoleplay: noop, finish: noop, retryLesson: noop, clearError: noop,
   } as unknown as SessionApi;

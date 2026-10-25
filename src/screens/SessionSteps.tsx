@@ -1,10 +1,11 @@
 import { useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 
-import { Button, Chips, Segmented, Text, TextField } from '@/src/components/ui';
+import { Button, Chips, Dictate, Say, Segmented, Text, TextField } from '@/src/components/ui';
 import { fmtDate } from '@/src/engine/core';
 import { stepOrder } from '@/src/engine/session';
 import type { useSession, Confidence, Grade } from '@/src/features/session/useSession';
+import { looksEnglish, withoutTranslation } from '@/src/features/speech';
 import { useTheme } from '@/src/theme';
 
 // The steps of one topic's sitting, as pure views over the session api: warm-up, lesson, drill, recall,
@@ -285,8 +286,15 @@ export function LearnStep({ S }: { S: SessionApi }) {
   const [gapsText, setGapsText] = useState('');
   const cmp = L.compare;
   const worked = L.workedExample;
+  // The whole lesson read aloud, in the device's English voice: the opening, each section, the common mistakes.
+  const readAloud = [L.bridge, ...L.sections.flatMap((sec) => [sec.heading, ...sec.paragraphs, ...(sec.points ?? [])]), ...(L.mistakes?.length ? ['Common mistakes.', ...L.mistakes] : [])].filter(Boolean) as string[];
+  // In a language subject, each case is spoken in that language (its bracketed translation is for the eye).
+  const phrase = (text: string) => (S.locale && !looksEnglish(withoutTranslation(text)) ? <Say text={withoutTranslation(text)} locale={S.locale} /> : null);
   return (
     <View>
+      <View style={{ alignItems: 'flex-end', marginBottom: spacing.md }}>
+        <Say text={readAloud} label="Listen" />
+      </View>
       {L.bridge ? (
         <View style={{ gap: spacing.sm }}>
           <Text variant="eyebrow" color="textMuted">
@@ -298,8 +306,18 @@ export function LearnStep({ S }: { S: SessionApi }) {
 
       {cmp && cmp.a ? (
         <Section title="Two cases">
-          <Text variant="body">{cmp.a}</Text>
-          <Text variant="body">{cmp.b}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
+            <Text variant="body" style={{ flex: 1 }}>
+              {cmp.a}
+            </Text>
+            {phrase(cmp.a)}
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
+            <Text variant="body" style={{ flex: 1 }}>
+              {cmp.b}
+            </Text>
+            {phrase(cmp.b)}
+          </View>
           <Text variant="bodyStrong" style={{ marginTop: spacing.sm }}>
             {cmp.question}
           </Text>
@@ -454,6 +472,7 @@ export function RecallStep({ S }: { S: SessionApi }) {
             multiline
             style={{ minHeight: 96, textAlignVertical: 'top' }}
           />
+          <Dictate value={s.recText} onChangeText={S.setRecText} />
           <ConfidenceRow visible={Boolean(s.recText.trim())} value={s.recConf} busy={s.busy === 'Marking'} onPick={(c) => void S.checkRecall(c)} />
         </>
       )}
@@ -483,7 +502,12 @@ export function PracticeStep({ S, item }: { S: SessionApi; item: Record<string, 
           {P.correct} of {P.criterion ?? 3} right
         </Text>
       </View>
-      <Text variant="prose">{q.prompt}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm }}>
+        <Text variant="prose" style={{ flex: 1 }}>
+          {q.prompt}
+        </Text>
+        {S.locale && !looksEnglish(withoutTranslation(q.prompt)) ? <Say text={withoutTranslation(q.prompt)} locale={S.locale} /> : null}
+      </View>
 
       {q.type === 'mcq' ? (
         <View style={{ gap: spacing.sm }}>
@@ -499,6 +523,9 @@ export function PracticeStep({ S, item }: { S: SessionApi; item: Record<string, 
                 accessibilityRole="radio"
                 accessibilityState={{ selected: picked }}
                 style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: spacing.sm,
                   padding: spacing.lg,
                   borderRadius: radius.md,
                   borderWidth: 1,
@@ -506,7 +533,10 @@ export function PracticeStep({ S, item }: { S: SessionApi; item: Record<string, 
                   backgroundColor: isAnswer ? colors.accentMuted : picked && !marked ? colors.primaryMuted : colors.surface,
                 }}
               >
-                <Text variant="body">{opt}</Text>
+                <Text variant="body" style={{ flex: 1 }}>
+                  {opt}
+                </Text>
+                {S.locale && !looksEnglish(opt) ? <Say text={opt} locale={S.locale} /> : null}
               </Pressable>
             );
           })}
@@ -516,14 +546,17 @@ export function PracticeStep({ S, item }: { S: SessionApi; item: Record<string, 
           {s.pracText || '(left blank)'}
         </Text>
       ) : (
-        <TextField
-          label="Your answer"
-          value={s.pracText}
-          onChangeText={S.setPracText}
-          placeholder="In your own words"
-          multiline
-          style={{ minHeight: 80, textAlignVertical: 'top' }}
-        />
+        <View style={{ gap: spacing.sm }}>
+          <TextField
+            label="Your answer"
+            value={s.pracText}
+            onChangeText={S.setPracText}
+            placeholder="In your own words"
+            multiline
+            style={{ minHeight: 80, textAlignVertical: 'top' }}
+          />
+          <Dictate value={s.pracText} onChangeText={S.setPracText} />
+        </View>
       )}
 
       {marked ? (
@@ -727,9 +760,15 @@ export function ChatThread({ S, placeholder }: { S: SessionApi; placeholder: str
             backgroundColor: m.role === 'user' ? colors.primaryMuted : 'transparent',
             borderWidth: m.role === 'user' ? 0 : 1,
             borderColor: colors.border,
+            flexDirection: 'row',
+            alignItems: 'flex-start',
+            gap: spacing.sm,
           }}
         >
-          <Text variant="body">{m.content}</Text>
+          <Text variant="body" style={{ flexShrink: 1 }}>
+            {m.content}
+          </Text>
+          {m.role === 'assistant' && s.step === 'roleplay' && S.locale ? <Say text={m.content} locale={S.locale} /> : null}
         </View>
       ))}
       {s.chatDraft ? (
@@ -750,6 +789,7 @@ export function ChatThread({ S, placeholder }: { S: SessionApi; placeholder: str
         style={{ minHeight: 72, textAlignVertical: 'top' }}
         editable={!s.busy}
       />
+      <Dictate value={s.chatInput} onChangeText={S.setChatInput} lang={s.step === 'roleplay' ? S.locale : null} />
       <Button label="Send" onPress={S.sendChat} loading={s.busy === 'Replying'} disabled={!s.chatInput.trim()} />
     </View>
   );

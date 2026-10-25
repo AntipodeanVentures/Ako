@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 
-import { Button, Text, TextField } from '@/src/components/ui';
+import { Button, Dictate, Text, TextField } from '@/src/components/ui';
 import type { Card, Lesson, Topic } from '@/src/engine/types';
 import { aiErrorCopy, callJson, callStream } from '@/src/features/ai/client';
 import type { LiveSubject } from '@/src/features/subjects';
@@ -125,6 +125,7 @@ export function TeachBack({ subj, topic, onDone }: Props) {
           </Text>
         ) : null}
         <TextField label="" value={input} onChangeText={setInput} placeholder={chat.length ? 'Your reply' : 'Start explaining'} multiline style={{ minHeight: 72, textAlignVertical: 'top' }} editable={!busy} />
+        <Dictate value={input} onChangeText={setInput} />
         <Button label="Send" onPress={() => void send()} loading={busy} disabled={!input.trim()} />
       </View>
       <View style={{ gap: spacing.md }}>

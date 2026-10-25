@@ -60,6 +60,8 @@ vi.mock('@/src/features/subjects', () => ({
   replaceProbeItems: async () => {},
 }));
 vi.mock('@/src/features/subjects/adapt', () => ({ afterTopic: async () => null }));
+// The speech module reaches for the device; the hook only asks it for the subject's voice.
+vi.mock('@/src/features/speech', () => ({ localeFor: (l: string | null) => (l ? 'pt-BR' : null), looksEnglish: () => true, withoutTranslation: (t: string) => t }));
 
 const intake = { subject: 'Brazilian Portuguese', target: 's3', current: 'Complete beginner', hours: 5, minutes: 15, background: '', why: '' };
 const PLAN = normalisePlan(planPortuguese as never, intake as never, 's2');

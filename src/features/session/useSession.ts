@@ -18,6 +18,7 @@ import type { Lesson, PlanRevision, Topic } from '@/src/engine/types';
 import { aiErrorCopy, callJson, callStream } from '@/src/features/ai/client';
 import { recordActivity, replaceProbeItems, saveSubject, type LiveSubject } from '@/src/features/subjects';
 import { afterTopic } from '@/src/features/subjects/adapt';
+import { localeFor } from '@/src/features/speech';
 
 import { clearSitting, loadSitting, saveSitting, type Sitting } from './sitting';
 
@@ -609,6 +610,8 @@ export function useSession(subj: LiveSubject, topicId: string, retention: number
     L,
     topic,
     currentItem,
+    // The voice for the subject's phrases ("pt-BR"), or null for a subject taught in English.
+    locale: localeFor(subj.plan.language),
     setWarmAnswer: (i: number, text: string) => patch({ warmAnswers: s.warmAnswers.map((a, j) => (j === i ? text : a)) }),
     checkWarm,
     skipWarm,
