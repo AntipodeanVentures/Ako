@@ -41,6 +41,7 @@ function addQuestionSet(L, part, subj) {
   if (str(part.why)) { d.why = str(part.why, 600); d.whyAnswer = str(part.whyAnswer, 900); }
   d.practice = arr(part.practice).map((q) => Object.assign({ kind: 'question' }, q, { difficulty: Math.round(clampNum(num(q.difficulty, 3), 1, 5)) }));
   if (arr(part.cards).length) d.cards = arr(part.cards);
+  if (str(part.apply)) d.apply = str(part.apply, 220);
   L.prac = newPractice(d.practice, startAbility(subj), criterionFor(subj));
   pickNextItem(L.prac);
   L.rec = { idx: 0, items: [{ key: 'recall', prompt: d.recall, answer: d.recallAnswer || 'A clear explanation of the core idea.', text: '', conf: null, result: null }]
@@ -167,6 +168,12 @@ function finishTopic(subj, L, opts = {}) {
     if (!motorPending) st.masteredAt = nowMs();
   }
   st.practice = { correct: P.correct, partial: P.partial, asked: P.asked.length, misses: P.misses, confident: P.confident, hardOk: P.hardOk, mixOk: P.mixOk, at: nowMs() };
+  // What the topic page shows after the sitting: the ideas, the drill to practise from, and today's task.
+  if (L.data) {
+    st.concepts = arr(L.data.concepts).map((c) => str(c, 80)).filter(Boolean).slice(0, 6);
+    if (L.data.drill) st.drill = L.data.drill;
+    if (str(L.data.apply) && mastered) st.apply = { text: str(L.data.apply, 220), at: nowMs(), done: null };
+  }
   if (L.rp && L.rp.debrief) st.roleplay = { mean: L.rp.debrief.mean, runs: L.rp.runs, at: nowMs() };
   st.taught = !!opts.taught && num(L.teach && L.teach.turns, 0) >= 2;
   // Teach-back waits for the first review day (see teachDue in progress.js); a topic not yet learned comes back first.

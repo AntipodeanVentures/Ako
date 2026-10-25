@@ -6,6 +6,8 @@ import { Button, Chips, Screen, Segmented, Text, TextField } from '@/src/compone
 import { STAGES, START_LEVELS } from '@/src/engine/ladder';
 import type { StageId } from '@/src/engine/types';
 import { useAuth } from '@/src/features/auth';
+import { useKnowItems, useProfile, useSaveKnowItems } from '@/src/features/profile';
+import { proposeItems, recomputeAbout, toRows } from '@/src/features/profile/know';
 import {
   OTHER,
   answersToIntake,
@@ -56,6 +58,13 @@ export default function PlaceScreen() {
   const [target, setTarget] = useState<StageId>('s3');
   const [minutes, setMinutes] = useState<number>(15);
   const [step, setStep] = useState<'levels' | 'focus'>('levels');
+  // One optional line on what they already know, asked only the first time: every lesson's opening
+  // and comparisons draw on it, and the You tab is where nobody looks on day one.
+  const { profile, refresh } = useProfile();
+  const know = useKnowItems();
+  const saveKnow = useSaveKnowItems(profile?.id);
+  const askKnow = know.isSuccess && !(know.data ?? []).length;
+  const [knowLine, setKnowLine] = useState('');
   const [questions, setQuestions] = useState<IntakeQuestion[] | null>(null);
   const [answers, setAnswers] = useState<Record<number, IntakeAnswer>>({});
   const answerAt = (i: number): IntakeAnswer => answers[i] ?? { picked: [], other: '' };
@@ -92,14 +101,29 @@ export default function PlaceScreen() {
 
   const begin = () => {
     if (!session?.user.id || !subject) return;
+    const intake = answersToIntake(questions ?? fallbackQuestions, answers);
+    const line = knowLine.trim();
     startBuild(session.user.id, {
       subject,
       target,
       current,
       hours: Math.max(1, Math.round((minutes * 6) / 60)),
       minutes,
-      ...answersToIntake(questions ?? fallbackQuestions, answers),
+      ...intake,
+      background: [line, intake.background].filter(Boolean).join('; '),
     });
+    // What they typed becomes "what you already know", read into items in the background; the You tab can prune it.
+    if (line && profile) {
+      proposeItems(line)
+        .then(async (p) => {
+          const rows = toRows(p.items, 'typed');
+          if (!rows.length) return;
+          await saveKnow.mutateAsync(rows);
+          await recomputeAbout(profile, rows.map((r, i) => ({ ...r, id: `new-${i}`, profile_id: profile.id, confirmed_at: '', created_at: '' })) as never, p.summary);
+          await refresh();
+        })
+        .catch(() => { /* the line still shaped the plan */ });
+    }
   };
 
   const aimHint = STAGES.find((s) => s.id === target)?.blurb ?? '';
@@ -176,6 +200,22 @@ export default function PlaceScreen() {
               onChange={(v) => setMinutes(Number(v))}
             />
           </View>
+          {askKnow ? (
+            <View style={{ gap: spacing.sm }}>
+              <Text variant="bodyStrong">Anything you already know that might help? Optional</Text>
+              <TextField
+                label=""
+                value={knowLine}
+                onChangeText={setKnowLine}
+                placeholder="Airline captain, 12 years. Brown belt in judo. Conversational French."
+                multiline
+                style={{ minHeight: 64, textAlignVertical: 'top' }}
+              />
+              <Text variant="caption" color="textMuted">
+                Lessons compare new ideas with what you know and skip what you can already do.
+              </Text>
+            </View>
+          ) : null}
         </View>
       ) : (
         <View style={{ marginTop: spacing.xxl, gap: spacing.lg }}>

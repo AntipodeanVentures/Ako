@@ -86,6 +86,8 @@ export type Lesson = {
   cards: { front: string; back: string; concept: number | null; variants?: string[] }[];
   // Questions never shown in the lesson, kept for the retention probe weeks later.
   heldBack?: PracticeItem[];
+  // One real-world task for today, set with the question set.
+  apply?: string;
   // Which prompt version and model produced it, so retention can be compared across them.
   meta?: { prompt?: string; model?: string; questions?: string; questionsModel?: string };
   drill: { steps: string[]; dose: string; checks: string[]; cues: string[]; feedback: string; imagery: string; safety: string } | null;
@@ -120,6 +122,9 @@ export type Card = {
   learnedDay?: string;
   relearnDays?: string[];
   firstReview?: { at: number; ok: boolean } | null;
+  // Flagged as wrong by the learner: out of the review queue until checked.
+  suspended?: boolean;
+  suspendedAt?: number;
 };
 
 export type RoleArea = {

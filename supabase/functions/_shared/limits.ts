@@ -31,6 +31,7 @@ export type Task =
   | 'plan' | 'review' | 'extend' | 'adapt' | 'role' | 'check' | 'placement' | 'lessonDeep' // the course and its checks
   | 'lesson' | 'warm' | 'practice' | 'bridge' | 'mixed' | 'more' | 'tutor' | 'debrief' | 'photo' // teaching, on the critical path
   | 'grade' | 'model' | 'intake' | 'know' // marking and the learner record
+  | 'verify' // the second-model check of a new question set and lesson: errors here become cards rehearsed for months
   | 'start'; // bounded extraction
 const TASK_TIER: Record<Task, keyof typeof MODELS> = {
   plan: 'frontier', // the course design: weeks of study depend on it
@@ -54,6 +55,7 @@ const TASK_TIER: Record<Task, keyof typeof MODELS> = {
   model: 'mid', // rewriting the learner model after a topic: what every later lesson reads
   intake: 'mid', // choosing the questions to ask before the path
   know: 'mid', // reading a CV into what the learner knows
+  verify: 'mid', // the strict-expert check of a question set before the learner sees it, and of the lesson behind it
   start: 'small', // suggesting a starting level from the profile
 };
 export function modelFor(task: Task): string {

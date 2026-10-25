@@ -10,7 +10,7 @@ import {
   makeCards, reviewCard, recallChance, dueCards,
   mergeKnowItems, renderKnow, withoutKnowItem,
   newLesson, useLesson, stepOrder, nextStep, pickNextItem, scorePractice, practiceDone, metCriterion, finishTopic, recordRelearn, sameAnswer, ROLE_LEVEL_GOOD,
-  teachDue, recordTeach, sittingMinutes, sittingMinutesLeft,
+  teachDue, recordTeach, sittingMinutes, sittingMinutesLeft, applyDue, recordApply, logPractice, suspendCard, recordJol, jolCalibration,
   normaliseIntake, normaliseAdaptation, reopenTopics, placeKnown, intakePrompt, adaptPrompt, cleanOutcome, normalisePractice, addQuestionSet, practicePrompt, bridgePrompt, cardFront, probeCandidates, pickProbe, recordProbe, calibrateFromProbes, criterionFor, retentionFor, stageRetention, mixedDue, recordMixed, mixedPrompt, normaliseMixed, probeDue,
 } from '../index.js';
 import { lesson, planPortuguese, planJudo } from '../fixtures.js';
@@ -478,6 +478,65 @@ describe('the path adapts', () => {
     expect(subj.cards[0].due).toBeLessThanOrEqual(T0);
     expect(subj.cards[1].due).toBeGreaterThan(T0);
     expect(nextTopic(subj).id).toBe(t1.id);
+  });
+});
+
+describe('after the sitting', () => {
+  it('keeps the use-it-today task, asks about it on a later day once, and drops it after three days', () => {
+    const plan = normalisePlan(planPortuguese, intake, 's2');
+    const subj = subjectFrom(plan);
+    const t = plan.topics[0];
+    const L = useLesson(newLesson(t.id), normaliseLesson(lesson('concept'), t), subj);
+    addQuestionSet(L, normalisePractice({ ...lesson('concept'), apply: 'Greet the barista in Portuguese.' }), subj);
+    expect(L.data.apply).toBe('Greet the barista in Portuguese.');
+    const P = L.prac;
+    let guard = 0;
+    while (!practiceDone(P) && guard++ < 10) { if (P.idx == null) break; P.conf = 'unsure'; scorePractice(L, t, subj, { score: 1, feedback: '' }); pickNextItem(P); }
+    finishTopic(subj, L, { minutes: 10 });
+    expect(subj.topicState[t.id].apply.text).toBe('Greet the barista in Portuguese.');
+    expect(subj.topicState[t.id].concepts).toEqual(['Verb endings', 'Subject pronouns']);
+    expect(applyDue(subj, T0)).toBeNull();
+    expect(applyDue(subj, T0 + DAY).topic.id).toBe(t.id);
+    expect(applyDue(subj, T0 + 4 * DAY)).toBeNull();
+    recordApply(subj, t.id, true, T0 + DAY);
+    expect(applyDue(subj, T0 + DAY)).toBeNull();
+    expect(subj.topicState[t.id].apply.done).toBe(true);
+  });
+  it('logs practice sessions for a physical topic and counts it learned once every check passes', () => {
+    const plan = normalisePlan(planJudo, intake, 's2');
+    const subj = subjectFrom(plan);
+    const t = plan.topics[0];
+    subj.topicState[t.id] = { status: 'practising' };
+    logPractice(subj, t.id, [true, false, true], 'chin kept dropping');
+    expect(subj.topicState[t.id].status).toBe('practising');
+    expect(subj.topicState[t.id].logs).toHaveLength(1);
+    logPractice(subj, t.id, [true, true, true], '');
+    expect(subj.topicState[t.id].status).toBe('mastered');
+    expect(subj.topicState[t.id].masteredAt).toBe(T0);
+  });
+  it('takes a flagged card out of the review queue', () => {
+    const plan = normalisePlan(planPortuguese, intake, 's2');
+    const subj = subjectFrom(plan);
+    const t = plan.topics[0];
+    subj.cards = makeCards(t, [{ front: 'a', back: 'b' }, { front: 'c', back: 'd' }], 3);
+    subj.cards.forEach((c) => { c.due = T0 - 1000; });
+    expect(dueCards(subj.cards, T0)).toHaveLength(2);
+    suspendCard(subj, subj.cards[0].id);
+    expect(dueCards(subj.cards, T0)).toHaveLength(1);
+  });
+  it('records the judgement of learning and compares it with the first reviews', () => {
+    const plan = normalisePlan(planPortuguese, intake, 's2');
+    const subj = subjectFrom(plan);
+    const t = plan.topics[0];
+    subj.topicState[t.id] = { status: 'mastered' };
+    subj.cards = makeCards(t, [{ front: 'a', back: 'b' }, { front: 'c', back: 'd' }], 3);
+    recordJol(subj, t.id, 1);
+    expect(subj.topicState[t.id].jol).toBe(1);
+    recordRelearn(subj, subj.cards[0], true, T0 + DAY);
+    expect(subj.topicState[t.id].jolActual).toBeUndefined();
+    recordRelearn(subj, subj.cards[1], false, T0 + DAY);
+    expect(subj.topicState[t.id].jolActual).toBe(0.5);
+    expect(jolCalibration(subj)).toEqual({ n: 1, bias: 0.5 });
   });
 });
 

@@ -612,6 +612,7 @@ export function useSession(subj: LiveSubject, topicId: string, retention: number
     currentItem,
     // The voice for the subject's phrases ("pt-BR"), or null for a subject taught in English.
     locale: localeFor(subj.plan.language),
+    title: subj.plan.title,
     setWarmAnswer: (i: number, text: string) => patch({ warmAnswers: s.warmAnswers.map((a, j) => (j === i ? text : a)) }),
     checkWarm,
     skipWarm,

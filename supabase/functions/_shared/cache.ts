@@ -4,6 +4,8 @@
 import type { Caller } from './auth.ts';
 
 export const PROMPT_VERSION = 'v5';
+// The question set has its own version: a change to how questions are written does not throw away cached lesson text.
+export const QUESTIONS_VERSION = 'q2';
 
 export async function cacheKey(parts: (string | number)[]): Promise<string> {
   const data = new TextEncoder().encode([PROMPT_VERSION, ...parts].join('\u0001').toLowerCase());

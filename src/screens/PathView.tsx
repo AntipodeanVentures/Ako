@@ -4,9 +4,9 @@ import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { Button, Ladder, Text, TextField } from '@/src/components/ui';
-import { STAGES, stageName } from '@/src/engine/ladder';
+import { STAGES, stageName , stageName as nameOf } from '@/src/engine/ladder';
 import { cleanOutcome } from '@/src/engine/normalise';
-import { learnedCount, levelCheckReady, mixedDue, sittingMinutes, stagePosition, stageProgress, stageRetention, topicStatus } from '@/src/engine/progress';
+import { currentMilestone, learnedCount, levelCheckReady, mixedDue, sittingMinutes, stagePosition, stageProgress, stageRetention, topicStatus } from '@/src/engine/progress';
 import type { Topic } from '@/src/engine/types';
 import { aiErrorCopy } from '@/src/features/ai/client';
 import { useInvalidateSubject, type LiveSubject } from '@/src/features/subjects';
@@ -22,6 +22,10 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
   const router = useRouter();
   const open = (topicId: string) =>
     onOpenTopic ? onOpenTopic(topicId) : router.push({ pathname: '/session/[subjectId]', params: { subjectId: subj.id, topicId } });
+  // A learned topic opens its page (cards, drill, today's task), not a whole new lesson.
+  const show = (topicId: string) =>
+    onOpenTopic ? onOpenTopic(topicId) : router.push({ pathname: '/topic/[subjectId]/[topicId]', params: { subjectId: subj.id, topicId } });
+  const nextMilestone = currentMilestone(subj) as { id: string } | null;
   const line = subjectLine(subj);
   const pos = stagePosition(subj);
   const cur = STAGES[pos.currentIdx];
@@ -185,6 +189,40 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
         </View>
       ) : null}
 
+      {subj.plan.milestones?.length ? (
+        <View style={{ marginTop: spacing.xl, paddingTop: spacing.xl, borderTopWidth: 1, borderTopColor: colors.border, gap: spacing.sm }}>
+          <Text variant="eyebrow" color="textMuted">
+            Milestones
+          </Text>
+          <Text variant="caption" color="textMuted">
+            Whole things you will be able to do, each with a test you can set yourself.
+          </Text>
+          <View style={{ marginTop: spacing.xs }}>
+            {subj.plan.milestones.map((m) => {
+              const reached = (subj.milestones as Record<string, { at: number }>)[m.id];
+              const current = !reached && nextMilestone?.id === m.id;
+              const icon = reached ? 'checkmark-circle' : current ? 'ellipse-outline' : 'lock-closed-outline';
+              return (
+                <View key={m.id} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md, paddingVertical: spacing.md, borderTopWidth: 1, borderTopColor: colors.border }}>
+                  <Ionicons name={icon} size={18} color={reached ? colors.accent : current ? colors.text : colors.border} style={{ marginTop: 3 }} />
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text variant="body" color={reached || current ? 'text' : 'textMuted'}>
+                      {m.title}
+                    </Text>
+                    <Text variant="caption" color="textMuted">
+                      {current ? 'Try it: ' : 'Test: '}
+                      {m.test}
+                      {m.stage ? ` · ${nameOf(m.stage)}` : ''}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })}
+            <View style={{ borderTopWidth: 1, borderTopColor: colors.border }} />
+          </View>
+        </View>
+      ) : null}
+
       {learned >= 4 ? (
         <View style={{ marginTop: spacing.xl, gap: spacing.sm }}>
           <Button
@@ -219,7 +257,8 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
                   ? (st?.reopenedAt ? 'again' : Number(st?.attempts) ? 'again, simpler' : null)
                   : status === 'known' ? 'known'
                     : st?.retained?.n ? (st.retained.last ? 'retained' : 'faded') : null;
-                return <TopicRow key={t.id} topic={t} status={status} note={note} minutes={sittingMinutes(subj, t) as number} onPress={() => open(t.id)} />;
+                const learnedOrPractising = status === 'mastered' || status === 'known' || status === 'practising';
+                return <TopicRow key={t.id} topic={t} status={status} note={note} minutes={sittingMinutes(subj, t) as number} onPress={() => (learnedOrPractising ? show(t.id) : open(t.id))} />;
               })}
               <View style={{ borderTopWidth: 1, borderTopColor: colors.border }} />
             </View>

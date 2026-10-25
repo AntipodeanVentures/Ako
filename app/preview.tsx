@@ -102,6 +102,7 @@ const LESSON = {
     'Using ser for a location because the place is permanent. A building takes estar; only an event takes ser.',
     'Translating "I am hot" as eu sou quente, which means something quite different. Temperature and feelings take estar: estou com calor.',
   ],
+  apply: 'Describe three things around you right now, one with ser and two with estar, out loud.',
   recall: 'In your own words: what decides whether a Portuguese sentence uses ser or estar?',
   recallAnswer: 'Ser for what something is (identity, origin, profession, lasting traits, and where an event takes place); estar for how something is now (feelings, health, passing states, and where a thing is).',
   why: 'Why does a party take ser for its location when a bank takes estar?',
@@ -160,7 +161,7 @@ function mockSession(step: string): SessionApi {
   };
   const L = { checked: marked, warm, data: LESSON, prac, rec: { idx: 0, items: [{ key: 'recall', prompt: LESSON.recall, answer: LESSON.recallAnswer }, { key: 'why', prompt: LESSON.why, answer: LESSON.whyAnswer }] }, teach: { turns: 0 } };
   return {
-    s, L, topic: s.topic, currentItem: LESSON.practice[1], resumed: step === 'practice', restart: noop, answerJol: noop, locale: 'pt-BR',
+    s, L, topic: s.topic, currentItem: LESSON.practice[1], resumed: step === 'practice', restart: noop, answerJol: noop, locale: 'pt-BR', title: 'Brazilian Portuguese',
     setWarmAnswer: noop, checkWarm: noop, skipWarm: noop, toLearn: noop, toRecall: noop, setRecText: noop, setRecConf: noop, checkRecall: noop, nextRecall: noop,
     setPracPicked: noop, setPracText: noop, setPracConf: noop, checkPractice: noop, nextPractice: noop, setChatInput: noop, sendChat: noop, endRoleplay: noop, finish: noop, retryLesson: noop, clearError: noop,
   } as unknown as SessionApi;

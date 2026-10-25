@@ -8,7 +8,7 @@ The literature Ako's method rests on, banked in one place, with what the app doe
 
 Status key: **aligned** (does what the evidence says), **partial** (does it, but not fully or not everywhere), **gap** (does not yet), **provisional** (a value chosen by reasoning, to be set from Ako's own data).
 
-Last reviewed 24 October 2026. The earlier audit (`learning-science-audit.md`, 21 October) found that much of the method existed on paper but was not wired up; the fixes from it are in, and this file is the standing reference.
+Last reviewed 25 October 2026. The earlier audit (`learning-science-audit.md`, 21 October) found that much of the method existed on paper but was not wired up; the fixes from it are in, and this file is the standing reference.
 
 ---
 
@@ -17,7 +17,7 @@ Last reviewed 24 October 2026. The earlier audit (`learning-science-audit.md`, 2
 ### 1. Retrieval practice beats restudy, for retention and for transfer
 **Finding.** Recalling from memory strengthens learning far more than rereading or re-explaining, and the advantage grows with the delay before the test. The effect transfers to new questions and situations, not only the tested items.
 **Sources.** Roediger and Karpicke (2006), *Psychological Science* 17: the classic demonstration. Karpicke and Blunt (2011), *Science* 331: retrieval beat concept mapping. Rowland (2014), *Psychological Bulletin* 140: meta-analysis, g about 0.5. Adesope, Trevisan and Sundararajan (2017), *Review of Educational Research* 87: meta-analysis across formats. Pan and Rickard (2018), *Psychological Bulletin* 144: transfer meta-analysis. Dunlosky, Rawson, Marsh, Nathan and Willingham (2013), *Psychological Science in the Public Interest* 14: practice testing and distributed practice rated the two high-utility techniques; rereading, highlighting and summarising low.
-**Ako.** Every lesson ends in free recall in the learner's own words, a why question and six practice questions; reviews are FSRS-scheduled recall; the level check, the retention probe and mixed practice are all retrieval from memory. `prompts.js` (`practicePrompt`), `session.js`, `review.tsx`.
+**Ako.** Every lesson ends in free recall in the learner's own words, a why question and six practice questions; reviews are FSRS-scheduled recall in which the learner types or says the answer before the back is shown and the grader's mark sets the rating (a self-rating made after seeing the answer runs high, see 18); the level check, the retention probe and mixed practice are all retrieval from memory. `prompts.js` (`practicePrompt`), `session.js`, `review.tsx`.
 **Status.** Aligned.
 
 ### 2. Spacing, and the gap that fits the retention interval
@@ -97,7 +97,7 @@ Last reviewed 24 October 2026. The earlier audit (`learning-science-audit.md`, 2
 ### 14. Self-explanation, elaboration and teaching back
 **Finding.** Generating an explanation of why something is so, or teaching it to someone else, produces deeper learning than receiving the explanation; the learner's constructive activity matters more than the tutor's moves.
 **Sources.** Chi, de Leeuw, Chiu and LaVancher (1994), *Cognitive Science* 18; Bisra, Liu, Nesbit, Salimi and Winne (2018), *Educational Psychology Review* 30: meta-analysis. Pressley et al. (1987), *JEP: LMC* 13: elaborative interrogation. Fiorella and Mayer (2013), *Contemporary Educational Psychology* 38; Fiorella and Mayer (2016), *Educational Psychology Review* 28: eight generative strategies. Kobayashi (2019), *British Journal of Educational Psychology* 89: learning by teaching meta-analysis. Chi, Siler, Jeong, Yamauchi and Hausmann (2001), *Cognitive Science* 25.
-**Ako.** The why question in every lesson; the learner types their own answer before the principle or the missing steps are revealed; the teach-back step with a model playing a student who asks for clarification. `session/[subjectId].tsx` (LearnStep, TeachStep), `tutor/index.ts`.
+**Ako.** The why question in every lesson; the learner types their own answer before the principle or the missing steps are revealed; the teach-back with a model playing a student who asks for clarification comes at the end of the first review run that touches the topic, a day or more after the lesson, so that explaining is retrieval rather than a second telling. `SessionSteps.tsx` (LearnStep), `TeachBack.tsx`, `progress.js` (`teachDue`), `tutor/index.ts`.
 **Status.** Aligned.
 
 ### 15. Interleaving builds discrimination
@@ -123,13 +123,13 @@ Last reviewed 24 October 2026. The earlier audit (`learning-science-audit.md`, 2
 ### 18. Calibration: overconfidence undermines learning
 **Finding.** Learners who judge themselves as knowing more than they do stop studying too early; judgements made after a delay are more accurate than those made immediately; fluency of reading is mistaken for knowing.
 **Sources.** Dunlosky and Rawson (2012), *Learning and Instruction* 22. Nelson and Dunlosky (1991), *Psychological Science* 2: the delayed-JOL effect. Bjork, Dunlosky and Kornell (2013), *Annual Review of Psychology* 64. Koriat (1997), *JEP: General* 126.
-**Ako.** Confidence is stated before every practice answer and shown against outcomes on the Done screen; a judgement of learning is recorded and compared with the first review. The judgement is asked at the end of the sitting, where the evidence says a delayed judgement would be more accurate.
-**Status.** Partial (ask the judgement at the first review instead).
+**Ako.** Confidence is stated before every practice answer, in the same tap that submits it, and shown against outcomes on the Done screen in a sentence; the Done screen asks a judgement of learning (how many of today's cards will be right at the first review), which the first review resolves, and the topic page shows the two side by side. The judgement is immediate by design: the comparison with the delayed result is what teaches calibration. Reviews no longer rest on a self-rating made after seeing the answer. `SessionSteps.tsx` (DoneStep), `session.js` (`recordJol`, `jolCalibration`), `topic/[subjectId]/[topicId].tsx`.
+**Status.** Aligned.
 
 ### 19. Autonomy, purpose and relevance
 **Finding.** Learning that the learner has chosen, that connects to their purposes, and that gives them a sense of growing competence is sustained; writing about why material matters to oneself raises interest and performance. Specific, challenging goals beat vague ones; implementation intentions (when and where) make habits form.
 **Sources.** Ryan and Deci (2000), *American Psychologist* 55. Hulleman and Harackiewicz (2009), *Science* 326. Locke and Latham (2002), *American Psychologist* 57. Gollwitzer and Sheeran (2006), *Advances in Experimental Social Psychology* 38. Lally et al. (2010), *European Journal of Social Psychology* 40: habit formation takes weeks to months.
-**Ako.** The intake asks why and what for, and the path is written to it; the learner picks the level aimed for and the minutes on most days; the daily reminder at a chosen hour; "Rethink my path" on request. No streaks: progress is levels reached and evidenced.
+**Ako.** The intake asks why and what for, and the path is written to it; the learner picks the level aimed for and the minutes on most days; the daily reminder at a chosen hour; "Rethink my path" on request. No streaks: progress is levels reached and evidenced, and the milestones (whole things the learner will be able to do, each with a test) are shown on the Path. Each learned topic ends with one concrete real-world use for the same day ("use it today"), asked about the next morning: an implementation intention for transfer. The Start button says how long the next step will take.
 **Status.** Aligned.
 
 ## D. Physical skills
@@ -154,6 +154,11 @@ Last reviewed 24 October 2026. The earlier audit (`learning-science-audit.md`, 2
 **Ako.** Four held-back questions per topic, never shown; a retention probe at about three and eight weeks; results per topic, per idea and per subject; each lesson tagged with the prompt version and model that taught it so retention can be compared across them. `probe.tsx`, `probe_items`, `progress.js`.
 **Status.** Aligned; the calibration thresholds (60 and 75 percent) are provisional until the probes supply the curve.
 
+### 23. Accuracy of the material
+**Finding.** None of the above helps if what is rehearsed is wrong; an error in a card is rehearsed for months. Generated text needs an independent check before it is committed to memory.
+**Ako.** Every new question set is read by a second model as a strict subject expert before the learner sees it, and corrected where wrong (the list of fixes is kept with the set); the lesson text gets the same reading in the background and the corrected version replaces the cached one. Every marked answer and every card carries "This looks wrong", which reports the item and takes a card out of the review queue until it is checked. `lesson/index.ts` (`checkQuestionsPrompt`, `checkLessonPrompt`), `progress.js` (`suspendCard`).
+**Status.** Aligned.
+
 ---
 
 ## F. Claims Ako deliberately does not build on
@@ -168,9 +173,9 @@ Last reviewed 24 October 2026. The earlier audit (`learning-science-audit.md`, 2
 
 1. **Split the lesson's recall and practice to the next day** (6). Strong evidence; deferred by product choice.
 2. **Dual coding.** Words with a relevant picture beat words alone (Paivio, 1986; Mayer, 2009, *Multimedia Learning*; Butcher, 2006). Lessons are text only.
-3. **Judgement of learning at the first review**, not at the end of the sitting (18).
-4. **Opportunities per idea.** Track that each concept gets its seven or so retrieval opportunities across the first fortnight (17), and top up where one is short.
-5. **Hook as a seductive detail.** The one-sentence hook is kept short so it does not become the kind of interesting-but-irrelevant detail that harms learning (Harp and Mayer, 1998, *JEP* 90). Keep an eye on it.
+3. **Opportunities per idea.** Track that each concept gets its seven or so retrieval opportunities across the first fortnight (17), and top up where one is short.
+4. **Hook as a seductive detail.** The one-sentence hook is kept short so it does not become the kind of interesting-but-irrelevant detail that harms learning (Harp and Mayer, 1998, *JEP* 90). Keep an eye on it.
+5. **Speaking practice marked for pronunciation.** Phrases are now spoken to the learner and answers can be dictated; nothing yet judges how the learner's own speech sounds.
 
 ## H. Reading list (full references)
 

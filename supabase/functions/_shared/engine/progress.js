@@ -35,7 +35,15 @@ function relearnCount(subj, tid) {
 }
 const isSecure = (subj, t) => (subj.topicState[t.id] || {}).status === 'mastered' && relearnCount(subj, t.id) >= relearnTarget(t) + relearnBump(subj);
 const secureCount = (subj) => subj.plan.topics.filter((t) => isSecure(subj, t)).length;
-function dueCards(cards, endMs = endOfToday()) { return arr(cards).filter((c) => c.due <= endMs); }
+function dueCards(cards, endMs = endOfToday()) { return arr(cards).filter((c) => !c.suspended && c.due <= endMs); }
+// A card the learner flagged as wrong leaves the review queue until it is checked; it stays on the topic page.
+function suspendCard(subj, cardId, atMs = nowMs()) {
+  const c = arr(subj.cards).find((x) => x.id === cardId);
+  if (!c) return null;
+  c.suspended = true; c.suspendedAt = atMs;
+  if (subj.dirtyCards && subj.dirtyCards.add) subj.dirtyCards.add(cardId);
+  return c;
+}
 
 const stageTopics = (subj, sid) => subj.plan.topics.filter((t) => t.stage === sid);
 // A level is reached when every topic planned for it is learned AND a delayed level check from memory is passed
@@ -162,6 +170,34 @@ function markStageReached(subj, sid, score, total) {
   subj.stages = subj.stages || {};
   subj.stages[sid] = { at: nowMs(), minutes: subj.stats.minutes || 0, score, total };
   return STAGES[stageIdx(sid)];
+}
+
+// ---------- practice away from the screen, and using the idea today ----------
+// A physical topic stays 'practising' until a logged session passes every check; then it counts as learned.
+function logPractice(subj, tid, checks, note, atMs = nowMs()) {
+  const st = subj.topicState[tid] || (subj.topicState[tid] = {});
+  const list = arr(checks).map(Boolean);
+  const allChecks = list.length > 0 && list.every(Boolean);
+  st.logs = arr(st.logs).concat([{ at: atMs, checks: list, allChecks, note: str(note, 300) }]).slice(-30);
+  if (allChecks && st.status === 'practising') { st.status = 'mastered'; st.masteredAt = atMs; }
+  return st;
+}
+// The one real-world task set at the end of a sitting ("use it today"); asked about on a later day, once.
+function applyDue(subj, atMs = nowMs()) {
+  const today = dayKey(atMs);
+  for (const t of arr(subj.plan.topics)) {
+    const a = subj.topicState[t.id] && subj.topicState[t.id].apply;
+    if (!a || !a.text || a.done != null) continue;
+    if (dayKey(num(a.at, 0)) >= today) continue;
+    if (atMs - num(a.at, 0) > 3 * DAY) continue;
+    return { topic: t, text: a.text };
+  }
+  return null;
+}
+function recordApply(subj, tid, done, atMs = nowMs()) {
+  const st = subj.topicState[tid] || (subj.topicState[tid] = {});
+  st.apply = Object.assign({}, st.apply || {}, { done: !!done, answeredAt: atMs });
+  return st;
 }
 
 // ---------- teach-back, on the first review day ----------
@@ -482,4 +518,4 @@ function roleReadiness(role, subjects) {
 }
 const roleForSubject = (roles, sid) => arr(roles).find((r) => arr(r.map && r.map.areas).some((a) => a.subjectId === sid)) || null;
 
-export { teachDue, recordTeach, sittingMinutes, sittingMinutesLeft, reopenTopics, placeKnown, topicById, learnerAbout, learnerModel, subjectCards, topicStatus, isLearned, learnedCount, studiedCount, nextTopic, practisingTopics, currentMilestone, relearnCount, isSecure, secureCount, dueCards, stageTopics, stageProgress, firstPlannedIdx, stagePosition, isSkippedStage, daysUntil, positionText, levelCheckReady, coveredStage, dayAgo, minutesSince, checkEligible, checkMilestones, markStageReached, recordMinutes, logReview, retentionRate, paceStats, paceBasis, stageHours, remainingMinutes, estimateStage, fmtMonth, fmtWeeks, fmtWhen, fmtHours, estimateText, nextStageEstimate, activityDays, conceptKey, noteConcept, weakConcepts, lessonConceptName, areaCredit, roleReadiness, roleForSubject, probeDue, probeDueAt, probeCandidates, pickProbe, recordProbe, stageRetention, calibrateFromProbes, criterionFor, retentionFor, mixedDue, recordMixed, PROBE_MIN_ITEMS, PROBE_FIRST_DAYS, PROBE_FIRST_TARGET, PROBE_SECOND_GAP, MIXED_MIN_LEARNED, MIXED_EVERY_LEARNED };
+export { teachDue, recordTeach, sittingMinutes, sittingMinutesLeft, suspendCard, logPractice, applyDue, recordApply, reopenTopics, placeKnown, topicById, learnerAbout, learnerModel, subjectCards, topicStatus, isLearned, learnedCount, studiedCount, nextTopic, practisingTopics, currentMilestone, relearnCount, isSecure, secureCount, dueCards, stageTopics, stageProgress, firstPlannedIdx, stagePosition, isSkippedStage, daysUntil, positionText, levelCheckReady, coveredStage, dayAgo, minutesSince, checkEligible, checkMilestones, markStageReached, recordMinutes, logReview, retentionRate, paceStats, paceBasis, stageHours, remainingMinutes, estimateStage, fmtMonth, fmtWeeks, fmtWhen, fmtHours, estimateText, nextStageEstimate, activityDays, conceptKey, noteConcept, weakConcepts, lessonConceptName, areaCredit, roleReadiness, roleForSubject, probeDue, probeDueAt, probeCandidates, pickProbe, recordProbe, stageRetention, calibrateFromProbes, criterionFor, retentionFor, mixedDue, recordMixed, PROBE_MIN_ITEMS, PROBE_FIRST_DAYS, PROBE_FIRST_TARGET, PROBE_SECOND_GAP, MIXED_MIN_LEARNED, MIXED_EVERY_LEARNED };

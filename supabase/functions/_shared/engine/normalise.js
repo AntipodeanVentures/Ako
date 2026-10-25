@@ -182,7 +182,9 @@ function normalisePractice(raw) {
   if (practice.length < 2 || !cards.length) throw { code: 'invalid_json' };
   // Held back for the retention probe weeks later; never shown in the lesson.
   const heldBack = arr(r.heldBack).map(normQ).filter(Boolean).slice(0, 6);
-  return { recall: str(r.recall, 600), recallAnswer: str(r.recallAnswer, 1500), why: str(r.why, 600), whyAnswer: str(r.whyAnswer, 900), practice, cards, heldBack };
+  // One real-world task for today, in the imperative; shown on the Done screen and asked about tomorrow.
+  const apply = str(r.apply, 220);
+  return { recall: str(r.recall, 600), recallAnswer: str(r.recallAnswer, 1500), why: str(r.why, 600), whyAnswer: str(r.whyAnswer, 900), practice, cards, heldBack, apply };
 }
 function normaliseMixed(raw, topicIds) {
   const r = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};

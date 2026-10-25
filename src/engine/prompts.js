@@ -404,8 +404,43 @@ Produce:
 - "practice": 6 questions. Tag each with "difficulty" from 1 (recognise the idea) to 5 (apply it in a new situation with a twist), including at least one each of 1 or 2, 3, and 4 or 5, and with "concept" (the index of the concept it tests); every concept is tested at least once, and the main one at least twice. Mix "mcq" (4 options, one correct; "answer" is its 0-based index) and "short" (model answer in "answer").${earlier.length ? ' Make 2 of the 6 "mix": true questions that set this topic against earlier topics (' + earlier.join('; ') + '), so the learner must tell them apart or combine them; the rest test this topic alone.' : ''}${motor ? ' Include 2 "decision" questions: a short scenario from live practice and the question "what do you do next and why", as "short" questions with "kind":"decision".' : ''} Each has a one-sentence "explanation" that says why the right answer is right.
 - "cards": 4 to 6 flashcards for spaced review over the coming months. One idea per card, each with "concept". "front" is a question or prompt, "back" a short answer. Favour why, how and when over trivia. Each card also has "variants": two other fronts with the same back, so a review tests the idea rather than the wording: one asks it in different words, one gives a two-sentence situation in which the back is the answer.
 - "heldBack": 4 questions the learner will never see in this lesson. They are asked weeks from now to find out whether the idea stayed learned, so each sets the idea in a situation unlike the lesson's examples and unlike the practice questions. Two "mcq" and two "short", difficulty 3 or 4, each with "concept" and a one-sentence "explanation".
+- "apply": one real thing to do today, away from the app, that uses this idea in the learner's own life (under 25 words, in the imperative, concrete enough to know when it is done: "Order your coffee and say whether it is hot or cold, out loud, in Portuguese"). Transfer happens in use, not in reading.
 
-Return ONLY JSON: {"recall":"...","recallAnswer":"...","why":"...","whyAnswer":"...","practice":[{"type":"mcq","difficulty":1,"concept":0,"mix":false,"prompt":"...","options":["...","...","...","..."],"answer":0,"explanation":"..."},{"type":"short","difficulty":3,"concept":1,"mix":false,"prompt":"...","answer":"...","explanation":"..."}],"cards":[{"front":"...","back":"...","concept":0,"variants":["...","..."]}],"heldBack":[{"type":"mcq","difficulty":3,"concept":0,"prompt":"...","options":["...","...","...","..."],"answer":0,"explanation":"..."},{"type":"short","difficulty":4,"concept":1,"prompt":"...","answer":"...","explanation":"..."}]}`;
+Return ONLY JSON: {"recall":"...","recallAnswer":"...","why":"...","whyAnswer":"...","practice":[{"type":"mcq","difficulty":1,"concept":0,"mix":false,"prompt":"...","options":["...","...","...","..."],"answer":0,"explanation":"..."},{"type":"short","difficulty":3,"concept":1,"mix":false,"prompt":"...","answer":"...","explanation":"..."}],"cards":[{"front":"...","back":"...","concept":0,"variants":["...","..."]}],"heldBack":[{"type":"mcq","difficulty":3,"concept":0,"prompt":"...","options":["...","...","...","..."],"answer":0,"explanation":"..."},{"type":"short","difficulty":4,"concept":1,"prompt":"...","answer":"...","explanation":"..."}],"apply":"..."}`;
+}
+
+// A second model reads a new question set as a strict subject expert, before it reaches the learner: every answer
+// marked correct must be correct, every explanation true, every translation right. Errors here become cards that are
+// rehearsed for months, so this is where a check pays most. It returns the set unchanged when nothing is wrong.
+function checkQuestionsPrompt(subj, topic, lesson, questions) {
+  const body = arr(lesson && lesson.sections).map((x) => `${x.heading}: ${arr(x.paragraphs).join(' ')}`).join('\n').slice(0, 5000);
+  return `You are a strict subject expert checking a question set written for an adult learner of ${subj.plan.title}, topic "${topic.title}"${subj.plan.language ? ' (a language course in ' + subj.plan.language + ')' : ''}, before the learner sees it. Check facts, not style.
+
+The lesson it was written from:
+${body}
+
+The question set (JSON):
+${JSON.stringify(questions).slice(0, 12000)}
+
+Check every item: is the answer marked correct actually correct, and the only correct option? Is each explanation true? Are translations, numbers, dates, names and technical claims right? Does each card's back answer its front correctly? If the lesson itself contains an error that a question repeats, correct the question against the truth, not the lesson.
+
+If everything is right, return ONLY {"changed":false}.
+If anything is wrong, return ONLY {"changed":true,"fixes":["one short line per fix, saying what was wrong"],"questions":<the complete corrected set in exactly the same JSON shape, every field present>}. Change only what is wrong; keep ids, order, difficulty, concept and wording otherwise intact.`;
+}
+
+// The same check for the lesson text itself, run in the background after it is served (the learner is already
+// reading); a corrected lesson replaces the cached one for the next sitting on this topic.
+function checkLessonPrompt(subj, topic, lesson) {
+  const slim = { bridge: lesson.bridge, compare: lesson.compare, sections: lesson.sections, workedExample: lesson.workedExample, mistakes: lesson.mistakes, drill: lesson.drill };
+  return `You are a strict subject expert checking a lesson written for an adult learner of ${subj.plan.title}, topic "${topic.title}"${subj.plan.language ? ' (a language course in ' + subj.plan.language + ')' : ''}. Check facts, not style.
+
+The lesson (JSON):
+${JSON.stringify(slim).slice(0, 14000)}
+
+Check every factual claim, example, translation, number, name and step: is it right? Is the compare answer right? Does the worked example reach the right result by right steps? Are the common mistakes real mistakes, described correctly?${topic.kind === 'motor' ? ' Is the drill safe and is each cue correct coaching?' : ''}
+
+If everything is right, return ONLY {"changed":false}.
+If anything is wrong, return ONLY {"changed":true,"fixes":["one short line per fix, saying what was wrong"],"lesson":<the same JSON with only the wrong parts corrected, every field present>}. Keep the structure, length and wording otherwise intact.`;
 }
 
 // Mixed practice: a weekly set across several learned topics, where each question needs two of them
@@ -575,4 +610,4 @@ function lessonDigest(lesson) {
   return pts.filter(Boolean).join('; ').slice(0, 1500);
 }
 
-export { METHOD, intakePrompt, intakeLines, adaptPrompt, learnerLines, stageLines, FRAMEWORK_GUIDE, planPrompt, reviewPlanPrompt, knowPrompt, startPrompt, rolePrompt, debriefPrompt, formCheckPrompt, extendPrompt, placementPrompt, warmupPrompt, lessonPrompt, practicePrompt, bridgePrompt, mixedPrompt, morePracticePrompt, gradePrompt, checkPrompt, modelPrompt, tutorRules, lessonDigest };
+export { METHOD, checkQuestionsPrompt, checkLessonPrompt, intakePrompt, intakeLines, adaptPrompt, learnerLines, stageLines, FRAMEWORK_GUIDE, planPrompt, reviewPlanPrompt, knowPrompt, startPrompt, rolePrompt, debriefPrompt, formCheckPrompt, extendPrompt, placementPrompt, warmupPrompt, lessonPrompt, practicePrompt, bridgePrompt, mixedPrompt, morePracticePrompt, gradePrompt, checkPrompt, modelPrompt, tutorRules, lessonDigest };

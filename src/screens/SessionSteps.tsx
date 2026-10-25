@@ -2,9 +2,10 @@ import { useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 
 import { Button, Chips, Dictate, Say, Segmented, Text, TextField } from '@/src/components/ui';
-import { fmtDate } from '@/src/engine/core';
+import { arr, fmtDate } from '@/src/engine/core';
 import { stepOrder } from '@/src/engine/session';
 import type { useSession, Confidence, Grade } from '@/src/features/session/useSession';
+import { sendReport } from '@/src/features/reporting';
 import { looksEnglish, withoutTranslation } from '@/src/features/speech';
 import { useTheme } from '@/src/theme';
 
@@ -158,6 +159,29 @@ export function practiceNeed(P: { items: { difficulty?: number; mix?: boolean }[
   const count = left ? `${left} more fully right` : '';
   const tail = needs.length ? `including ${needs.join(' and ')}` : '';
   return `Needs ${[count, tail].filter(Boolean).join(', ')}.`;
+}
+
+// "This looks wrong" under a marked answer: one tap sends the question, the model answer and the learner's answer
+// to the report inbox, so a wrong item is caught the first time it is seen rather than rehearsed for months.
+export function FlagWrong({ what, subject, topic }: { what: string; subject: string; topic: string }) {
+  const { spacing } = useTheme();
+  const [sent, setSent] = useState(false);
+  return (
+    <Pressable
+      onPress={() => {
+        if (sent) return;
+        setSent(true);
+        sendReport('problem', `Wrong content flagged in "${topic}" (${subject}): ${what}`, { kind: 'content' }).catch(() => {});
+      }}
+      hitSlop={8}
+      accessibilityRole="button"
+      style={{ alignSelf: 'flex-start', paddingVertical: spacing.xs }}
+    >
+      <Text variant="caption" color="textMuted">
+        {sent ? 'Flagged, thank you. It will be checked.' : 'This looks wrong'}
+      </Text>
+    </Pressable>
+  );
 }
 
 export function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -461,6 +485,7 @@ export function RecallStep({ S }: { S: SessionApi }) {
           <Text variant="caption" color="textMuted" style={{ marginTop: spacing.sm }}>
             A model answer: {item.answer}
           </Text>
+          <FlagWrong what={`Q: ${item.prompt} | model answer: ${item.answer} | learner: ${s.recText}`} subject={S.title} topic={S.topic.title} />
         </View>
       ) : (
         <>
@@ -560,7 +585,10 @@ export function PracticeStep({ S, item }: { S: SessionApi; item: Record<string, 
       )}
 
       {marked ? (
-        <FeedbackBlock grade={s.pracResult as Grade} />
+        <View style={{ gap: spacing.sm }}>
+          <FeedbackBlock grade={s.pracResult as Grade} />
+          <FlagWrong what={`Q: ${q.prompt} | answer: ${q.type === 'mcq' ? arr(q.options)[Number(q.answer)] : q.answer} | learner: ${q.type === 'mcq' ? arr(q.options)[Number(s.pracPicked)] : s.pracText}`} subject={S.title} topic={S.topic.title} />
+        </View>
       ) : (
         <ConfidenceRow visible={answered} value={s.pracConf} busy={s.busy === 'Marking'} onPick={(c) => void S.checkPractice(c)} />
       )}
@@ -592,6 +620,17 @@ export function DoneStep({ S, onClose }: { S: SessionApi; onClose: () => void })
         <Text variant="body" color="textMuted">
           {calibrationLine(sum.sure, sum.sureRight)}
         </Text>
+      ) : null}
+      {sum?.mastered && S.L.data?.apply ? (
+        <View style={{ gap: spacing.xs, padding: spacing.lg, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md }}>
+          <Text variant="eyebrow" color="textMuted">
+            Use it today
+          </Text>
+          <Text variant="body">{S.L.data.apply}</Text>
+          <Text variant="caption" color="textMuted">
+            Tomorrow&apos;s screen asks whether you did.
+          </Text>
+        </View>
       ) : null}
       {sum && sum.mastered && sum.added > 0 ? (
         <View style={{ gap: spacing.sm, paddingTop: spacing.lg, borderTopWidth: 1, borderTopColor: colors.border }}>

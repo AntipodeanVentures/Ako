@@ -105,6 +105,7 @@ export type CardRow = {
   first_review: { at: number; ok: boolean } | null;
   reviews: number;
   fronts: string[];
+  suspended: boolean;
   created_at: string;
 };
 

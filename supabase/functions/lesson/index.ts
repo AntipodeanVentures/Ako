@@ -7,14 +7,21 @@
 // Response: 'lesson' streams ndjson (text deltas, then { type: 'done', data: { lesson, cached } }); the rest return JSON.
 
 import {
-  lessonPrompt, practicePrompt, bridgePrompt, morePracticePrompt, warmupPrompt, normaliseLesson, normalisePractice, normaliseBridge, normaliseWarm, normQ, topicById, pitchOf, METHOD, arr,
+  lessonPrompt, practicePrompt, bridgePrompt, morePracticePrompt, warmupPrompt, checkQuestionsPrompt, checkLessonPrompt, normaliseLesson, normalisePractice, normaliseBridge, normaliseWarm, normQ, topicById, pitchOf, METHOD, arr,
 } from '../_shared/engine/index.js';
 import { CORS, errorResponse, requireCaller, HttpError } from '../_shared/auth.ts';
-import { PROMPT_VERSION, cacheKey, readCache, writeCache } from '../_shared/cache.ts';
+import { PROMPT_VERSION, QUESTIONS_VERSION, cacheKey, readCache, writeCache } from '../_shared/cache.ts';
 import { modelFor } from '../_shared/limits.ts';
 import { checkLimit, recordUsage } from '../_shared/metering.ts';
 import { parseJson, sample } from '../_shared/anthropic.ts';
 import { ndjsonStream } from '../_shared/stream.ts';
+
+// Work that outlives the response (Supabase's edge runtime keeps the instance alive for it).
+declare const EdgeRuntime: { waitUntil?: (p: Promise<unknown>) => void } | undefined;
+const waitUntil = (p: Promise<unknown>) => {
+  if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime?.waitUntil) EdgeRuntime.waitUntil(p);
+  else void p;
+};
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
@@ -62,18 +69,29 @@ Deno.serve(async (req) => {
 
     if (kind === 'practice') {
       // The set for this lesson, cached beside the lesson text. A lesson cached before the split carries its own set.
-      const pkey = key + ':q';
+      const pkey = key + ':' + QUESTIONS_VERSION;
       const hit = (await readCache(caller, pkey)) as { practice?: unknown[] } | null;
       if (hit?.practice?.length) return new Response(JSON.stringify({ questions: hit, cached: true }), { headers: { 'content-type': 'application/json', ...CORS } });
-      const core = (await readCache(caller, key)) as { practice?: unknown[]; cards?: unknown[]; recall?: string; recallAnswer?: string; why?: string; whyAnswer?: string } | null;
-      if (core?.practice?.length && core.cards?.length) {
-        const q = { recall: core.recall, recallAnswer: core.recallAnswer, why: core.why, whyAnswer: core.whyAnswer, practice: core.practice, cards: core.cards };
-        return new Response(JSON.stringify({ questions: q, cached: true }), { headers: { 'content-type': 'application/json', ...CORS } });
-      }
       const model = modelFor('practice');
       const r = await sample({ model, system: METHOD, prompt: practicePrompt(subject, topic, body.lesson, ctx), maxTokens: 5000 });
       await recordUsage(caller, 'lesson', r.inputTokens, r.outputTokens);
-      const questions = { ...normalisePractice(parseJson(r.text, r.stopReason)), meta: { prompt: PROMPT_VERSION, model } };
+      let questions: Record<string, unknown> = { ...normalisePractice(parseJson(r.text, r.stopReason)), meta: { prompt: PROMPT_VERSION + '/' + QUESTIONS_VERSION, model } };
+      // A strict second reading before anything becomes a card. If the checker fails or returns something unusable,
+      // the set stands as written; a check is a net, not a gate.
+      try {
+        const verifier = modelFor('verify');
+        const v = await sample({ model: verifier, prompt: checkQuestionsPrompt(subject, topic, body.lesson, questions), maxTokens: 6000 });
+        await recordUsage(caller, 'lesson', v.inputTokens, v.outputTokens);
+        const verdict = parseJson(v.text, v.stopReason) as { changed?: boolean; fixes?: string[]; questions?: unknown } | null;
+        if (verdict?.changed && verdict.questions) {
+          const fixed = normalisePractice(verdict.questions);
+          questions = { ...fixed, meta: { ...(questions.meta as Record<string, unknown>), checked: verifier, fixes: arr(verdict.fixes).slice(0, 8) } };
+        } else {
+          questions.meta = { ...(questions.meta as Record<string, unknown>), checked: verifier, fixes: [] };
+        }
+      } catch (e) {
+        console.warn('question check skipped', e instanceof Error ? e.message : e);
+      }
       await writeCache(caller, pkey, { subjectTitle: subject.plan.title, topicTitle: topic.title, stageId: topic.stage, pitchBand }, questions);
       return new Response(JSON.stringify({ questions, cached: false }), { headers: { 'content-type': 'application/json', ...CORS } });
     }
@@ -99,6 +117,25 @@ Deno.serve(async (req) => {
       const lesson = { ...normaliseLesson(parseJson(r.text, r.stopReason), topic), meta: { prompt: PROMPT_VERSION, model } };
       await writeCache(caller, key, { subjectTitle: subject.plan.title, topicTitle: topic.title, stageId: topic.stage, pitchBand }, lesson);
       emit({ type: 'done', data: { lesson, cached: false } });
+      // After the learner has it: a strict second reading of the text. A corrected lesson replaces the cached one, so a
+      // retry, a resumed sitting or the teach-back day sees the corrected version; the error list is kept with it.
+      waitUntil((async () => {
+        try {
+          const verifier = modelFor('verify');
+          const v = await sample({ model: verifier, prompt: checkLessonPrompt(subject, topic, lesson), maxTokens: 6000 });
+          await recordUsage(caller, 'lesson', v.inputTokens, v.outputTokens);
+          const verdict = parseJson(v.text, v.stopReason) as { changed?: boolean; fixes?: string[]; lesson?: Record<string, unknown> } | null;
+          const checked = { ...lesson.meta, checked: verifier, fixes: verdict?.changed ? arr(verdict.fixes).slice(0, 8) : [] };
+          if (verdict?.changed && verdict.lesson) {
+            const corrected = { ...normaliseLesson({ ...lesson, ...verdict.lesson }, topic), meta: checked };
+            await writeCache(caller, key, { subjectTitle: subject.plan.title, topicTitle: topic.title, stageId: topic.stage, pitchBand }, corrected);
+          } else {
+            await writeCache(caller, key, { subjectTitle: subject.plan.title, topicTitle: topic.title, stageId: topic.stage, pitchBand }, { ...lesson, meta: checked });
+          }
+        } catch (e) {
+          console.warn('lesson check skipped', e instanceof Error ? e.message : e);
+        }
+      })());
     });
   } catch (e) {
     return errorResponse(e);

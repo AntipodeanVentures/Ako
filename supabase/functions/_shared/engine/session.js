@@ -41,6 +41,7 @@ function addQuestionSet(L, part, subj) {
   if (str(part.why)) { d.why = str(part.why, 600); d.whyAnswer = str(part.whyAnswer, 900); }
   d.practice = arr(part.practice).map((q) => Object.assign({ kind: 'question' }, q, { difficulty: Math.round(clampNum(num(q.difficulty, 3), 1, 5)) }));
   if (arr(part.cards).length) d.cards = arr(part.cards);
+  if (str(part.apply)) d.apply = str(part.apply, 220);
   L.prac = newPractice(d.practice, startAbility(subj), criterionFor(subj));
   pickNextItem(L.prac);
   L.rec = { idx: 0, items: [{ key: 'recall', prompt: d.recall, answer: d.recallAnswer || 'A clear explanation of the core idea.', text: '', conf: null, result: null }]
@@ -167,6 +168,12 @@ function finishTopic(subj, L, opts = {}) {
     if (!motorPending) st.masteredAt = nowMs();
   }
   st.practice = { correct: P.correct, partial: P.partial, asked: P.asked.length, misses: P.misses, confident: P.confident, hardOk: P.hardOk, mixOk: P.mixOk, at: nowMs() };
+  // What the topic page shows after the sitting: the ideas, the drill to practise from, and today's task.
+  if (L.data) {
+    st.concepts = arr(L.data.concepts).map((c) => str(c, 80)).filter(Boolean).slice(0, 6);
+    if (L.data.drill) st.drill = L.data.drill;
+    if (str(L.data.apply) && mastered) st.apply = { text: str(L.data.apply, 220), at: nowMs(), done: null };
+  }
   if (L.rp && L.rp.debrief) st.roleplay = { mean: L.rp.debrief.mean, runs: L.rp.runs, at: nowMs() };
   st.taught = !!opts.taught && num(L.teach && L.teach.turns, 0) >= 2;
   // Teach-back waits for the first review day (see teachDue in progress.js); a topic not yet learned comes back first.
@@ -181,6 +188,24 @@ function finishTopic(subj, L, opts = {}) {
   return { added, motorPending, mastered, firstDue: L.firstDue };
 }
 
+// The learner's judgement of learning for a topic, asked on the Done screen as the share of today's cards they expect
+// to get right at the first review (Nelson & Dunlosky 1991: judgements made after a delay are the accurate ones, so the
+// comparison with the first review is what teaches calibration, not the guess itself).
+function recordJol(subj, tid, fraction, atMs = nowMs()) {
+  const st = subj.topicState[tid] || (subj.topicState[tid] = {});
+  st.jol = clampNum(num(fraction, 0.5), 0, 1);
+  st.jolAt = atMs;
+  return st;
+}
+// How the learner's predictions compare with their first reviews, across topics with both: the mean gap
+// (predicted minus recalled; positive runs high) and how many topics it rests on.
+function jolCalibration(subj) {
+  const pairs = Object.values(subj.topicState || {}).filter((st) => st && st.jol != null && st.jolActual != null);
+  if (!pairs.length) return { n: 0, bias: null };
+  const bias = pairs.reduce((a, st) => a + (num(st.jol, 0) - num(st.jolActual, 0)), 0) / pairs.length;
+  return { n: pairs.length, bias };
+}
+
 // A recalled card on a new day counts towards that topic's relearning (successive relearning: 3 sessions on separate
 // days). The first review of every card resolves the learner's prediction (JOL) for the topic.
 function recordRelearn(subj, card, ok, atMs = nowMs()) {
@@ -189,7 +214,7 @@ function recordRelearn(subj, card, ok, atMs = nowMs()) {
   if (!card.firstReview) {
     card.firstReview = { at: atMs, ok: !!ok };
     const st = subj.topicState[card.topicId];
-    if (st && st.jol && st.jolActual == null) {
+    if (st && st.jol != null && st.jolActual == null) {
       const mine = arr(subj.cards).filter((c) => c.topicId === card.topicId);
       if (mine.every((c) => c.firstReview)) st.jolActual = mine.filter((c) => c.firstReview.ok).length / mine.length;
     }
@@ -197,4 +222,4 @@ function recordRelearn(subj, card, ok, atMs = nowMs()) {
   return card;
 }
 
-export { newLesson, newPractice, startAbility, useLesson, addQuestionSet, isRoleplay, stepOrder, nextStep, sameAnswer, pickNextItem, scorePractice, metCriterion, practiceDone, practiceExhausted, addPractice, masteredThisSitting, finishTopic, recordRelearn };
+export { newLesson, newPractice, startAbility, useLesson, addQuestionSet, isRoleplay, stepOrder, nextStep, sameAnswer, pickNextItem, scorePractice, metCriterion, practiceDone, practiceExhausted, addPractice, masteredThisSitting, finishTopic, recordRelearn, recordJol, jolCalibration };

@@ -70,6 +70,7 @@ export function cardFromRow(r: CardRow): Card {
       last_review: ms(r.last_review),
     },
     reviews: r.reviews,
+    suspended: Boolean(r.suspended),
     fronts: Array.isArray(r.fronts) ? r.fronts : [],
     learnedDay: r.learned_day ?? undefined,
     relearnDays: r.relearn_days ?? [],
@@ -100,6 +101,7 @@ function rowFromCard(c: Card, subjectId: string): NewCardRow {
     first_review: c.firstReview ?? null,
     reviews: c.reviews ?? 0,
     fronts: c.fronts ?? [],
+    suspended: Boolean(c.suspended),
   };
 }
 
