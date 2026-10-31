@@ -34,6 +34,8 @@ function learnerLines(subj) {
   if (subj.intake.focus) lines.push(`What they most want to aim at: ${subj.intake.focus}.`);
   const qa = arr(subj.intake.answers).filter((x) => x && str(x.a)).slice(0, 4);
   if (qa.length) lines.push(`What they said when they started: ${qa.map((x) => str(x.q, 120) + ' ' + str(x.a, 200)).join(' | ')}.`);
+  const brief = str(subj.intake.context, BRIEF_MAX);
+  if (brief) lines.push(`Their brief for this subject, in their words (follow it: use its situation and numbers in examples and practice, and teach the way it asks): "${brief}".`);
   if (arr(m.strengths).length) lines.push(`Strengths seen so far: ${m.strengths.join('; ')}.`);
   if (arr(m.misconceptions).length) lines.push(`Misconceptions or confusions to watch for: ${m.misconceptions.join('; ')}.`);
   const an = arr(m.analogies).concat(arr(g.analogies)).slice(0, 6);
@@ -61,6 +63,30 @@ function intakeLines(intake) {
   return '\nBefore the plan was written the learner was asked the questions below, chosen because the answers change the course, and answered in their own words. Their answers matter more than anything inferred above. Shape the plan around them: put the parts they want first, serve the use they named, follow any material they named, and skip what their background shows they already have:\n' + qa.map((x) => `Q: ${str(x.q, 300)}${x.effect ? ' (asked because: ' + str(x.effect, 240) + ')' : ''}\nA: ${str(x.a, 1200)}`).join('\n') + '\n';
 }
 
+// The learner's own brief for the subject, typed freely at intake: the
+// project or situation it is for, the numbers they are working to, and how
+// they want to be taught. It is the most specific thing we know, so every
+// prompt that shapes content carries it and is told to follow it.
+const BRIEF_MAX = 2000;
+function briefLines(intake) {
+  const brief = str(intake && intake.context, BRIEF_MAX);
+  if (!brief) return '';
+  return '\nThe learner\'s own brief for this subject, in their words. Follow it over anything inferred above: pitch the examples, numbers, worked problems and practice at the situation it describes, and teach the way it asks:\n"""\n' + brief + '\n"""\n';
+}
+
+// What the learner's other subjects on the app already cover. A learner who
+// is building several related subjects at once should not be taught the
+// same basics four times: the plan treats those topics as prerequisites held
+// or scheduled elsewhere and gets on with what is specific to this subject.
+const ELSEWHERE_MAX = 3500;
+function elsewhereLines(intake) {
+  const others = arr(intake && intake.elsewhere).filter((s) => s && str(s.title) && arr(s.topics).length).slice(0, 8);
+  if (!others.length) return '';
+  const learned = (s) => new Set(arr(s.learned).map((t) => str(t)));
+  const rows = others.map((s) => `- ${str(s.title, 80)}: ${arr(s.topics).map((t) => str(t, 80)).filter(Boolean).slice(0, 40).map((t) => learned(s).has(t) ? t + ' (learned)' : t).join('; ')}`).join('\n');
+  return '\nThe learner\'s other subjects on this app already cover the topics below (planned there, or learned where marked). Treat them as prerequisites the learner holds or will hold from that subject: do not teach them again here. Where this subject needs one of them, name the other subject in one line and build on it, and spend the time on what is specific to this subject. A short recap of a learned idea is fine where it is needed to apply it; a fresh topic for it is not.\n' + rows.slice(0, ELSEWHERE_MAX) + '\n';
+}
+
 function planPrompt(intake, coverTo) {
   const about = str(intake.about, 1600);
   const startIdx = START_STAGE[intake.current] || 0;
@@ -76,7 +102,7 @@ Learner:
 - What they already know about this subject: ${intake.background || 'not given'}
 - What they know well in other areas: ${about || 'not given'}
 - What they want to be able to do: ${intake.why || 'not given'}${intake.focus ? '\n- What they most want to aim at: ' + intake.focus : ''}${intake.role ? '\n- The role they are preparing for: ' + intake.role : ''}
-${intakeLines(intake)}${syllabus ? '\nReference material supplied by the learner (a syllabus, reading list or course outline). Use it as the backbone of the plan: cover what it covers, keep its order where that makes sense, and add any prerequisite it assumes but does not teach:\n"""\n' + syllabus + '\n"""\n' : ''}
+${intakeLines(intake)}${briefLines(intake)}${elsewhereLines(intake)}${syllabus ? '\nReference material supplied by the learner (a syllabus, reading list or course outline). Use it as the backbone of the plan: cover what it covers, keep its order where that makes sense, and add any prerequisite it assumes but does not teach:\n"""\n' + syllabus + '\n"""\n' : ''}
 ${METHOD}
 
 The ladder. Progress in every subject is tracked against five stages named by what the learner can do; each stage's usual anchors in formal frameworks are given for reference:
@@ -86,7 +112,7 @@ ${FRAMEWORK_GUIDE}
 
 Design backwards from what the learner must be able to do. Work in this order:
 1. "stages": describe all five stages for THIS subject. For each give "means" (what someone at that stage can actually do, in 1 or 2 observable sentences), "basis" (the framework or syllabus it rests on, briefly), "equivalent" (the usual marker people in this field would recognise, or "" if there is none), "outcomes" (3 to 6 can-do statements that the level check at the end of this stage will test; concrete and assessable), "external" (one real-world check the learner could take outside this app to confirm the level, such as a named practice exam, a grading, a rating target or a task a professional would set; or "" if there is none), and "hours": the cumulative study hours from zero that a motivated adult with this learner's background typically needs to reach the stage. Be realistic; higher stages take hundreds to thousands of hours.
-2. "topics": write the topics for stages ${coverNames} only, 12 to 30 in total, each learnable in one 20 to 45 minute session. Derive them from the outcomes: every topic must serve at least one outcome of its stage ("outcome" is that outcome's index, 0-based), and every outcome must be served. Each topic covers one core idea and introduces at most 3 to 5 new terms; split anything denser. Tag each topic with its "stage". Order them from the familiar to the unfamiliar: begin with the ideas closest to what the learner already knows and to their goal, then work outward, always with prerequisites first. For a complete beginner, the first 3 topics must need no prior knowledge of the field. Later stages should revisit the core ideas at greater depth rather than treating them as finished. Do not skip fundamentals because of their background: a placement check lets them skip what they already know.
+2. "topics": write the topics for stages ${coverNames} only, 12 to 30 in total, each learnable in one 20 to 45 minute session. Derive them from the outcomes: every topic must serve at least one outcome of its stage ("outcome" is that outcome's index, 0-based), and every outcome must be served. Each topic covers one core idea and introduces at most 3 to 5 new terms; split anything denser. Tag each topic with its "stage". Order them from the familiar to the unfamiliar: begin with the ideas closest to what the learner already knows and to their goal, then work outward, always with prerequisites first. For a complete beginner, the first 3 topics must need no prior knowledge of the field. Later stages should revisit the core ideas at greater depth rather than treating them as finished. Do not skip fundamentals because of their background: a placement check lets them skip what they already know. The one exception is a fundamental their other subjects on this app already cover (listed above, if any): leave it to that subject.${intake.context ? ' Where the learner\'s brief describes a specific project or situation, every worked example, practice problem and milestone test uses it, with its numbers, rather than a generic case.' : ''}
 3. Mark the threshold concepts: set "threshold": true on the few topics (at most one in five) that transform how the learner sees the field and unlock what follows; they get more relearning and more comparison cases.
 4. Write topic titles and summaries in plain words a newcomer would understand.
 5. "milestones": group the topics into 3 to 6 milestones, in order, each tagged with its "stage". A milestone is a capability the learner can demonstrate, with a concrete test.
@@ -105,13 +131,13 @@ Return ONLY JSON, with no commentary, in exactly this shape:
 function reviewPlanPrompt(plan, intake) {
   return `You are reviewing a draft learning plan written for one adult learner, before it is used. Find and fix its weaknesses.
 
-Learner: wants to learn ${intake.subject}; aims for ${stageName(intake.target)} level; starting level: ${intake.current}; knows about the subject: ${intake.background || 'nothing stated'}; knows well elsewhere: ${str(intake.about, 1600) || 'not given'}; goal: ${intake.why || 'not given'}${intake.focus ? '; wants to aim at: ' + intake.focus : ''}.${intakeLines(intake)}${str(intake.syllabus) ? '\nReference material they supplied (the plan should follow it):\n"""\n' + str(intake.syllabus, 6000) + '\n"""' : ''}
+Learner: wants to learn ${intake.subject}; aims for ${stageName(intake.target)} level; starting level: ${intake.current}; knows about the subject: ${intake.background || 'nothing stated'}; knows well elsewhere: ${str(intake.about, 1600) || 'not given'}; goal: ${intake.why || 'not given'}${intake.focus ? '; wants to aim at: ' + intake.focus : ''}.${intakeLines(intake)}${briefLines(intake)}${elsewhereLines(intake)}${str(intake.syllabus) ? '\nReference material they supplied (the plan should follow it):\n"""\n' + str(intake.syllabus, 6000) + '\n"""' : ''}
 
 Draft plan (JSON):
 ${JSON.stringify(plan)}
 
 Check, in this order, and correct anything wrong:
-1. Prerequisites: does any topic assume an idea or term that no earlier topic teaches? Add the missing topic or reorder.
+1. Prerequisites: does any topic assume an idea or term that no earlier topic teaches? Add the missing topic or reorder. A prerequisite covered by one of the learner's other subjects above does not need a topic here.${intake.context ? '\n0. The brief: is the plan pitched at the project or situation the learner\'s brief describes, with its scale, its numbers and its constraints in the examples, milestones and safety notes, rather than at a generic or hobby case? If not, repitch it.' : ''}${arr(intake.elsewhere).length ? '\n0b. Repetition: does any topic re-teach something listed under the learner\'s other subjects? Remove it and point to that subject in the prerequisite\'s place.' : ''}
 2. Order: is the sequence familiar to unfamiliar, with the first topics needing no prior knowledge for a beginner?
 3. Density: is any topic really two or three ideas, or more than 5 new terms? Split it.
 4. Coverage: does every outcome of each covered stage have at least one topic serving it, and does the set of topics genuinely add up to the stage's "means"? Add what is missing; remove padding that serves no outcome.
@@ -273,10 +299,10 @@ Topics already in the plan (id, stage, title):
 ${existing}
 
 ${learnerLines(subj)}
-
+${elsewhereLines(subj.intake)}
 ${METHOD}
 
-Write the topics for stage ${stageId} ${stageName(stageId)} only: 10 to 20 topics, each one core idea learnable in 20 to 45 minutes with at most 3 to 5 new terms, ordered from the familiar to the unfamiliar with prerequisites first, every outcome served ("outcome" is its index), and the core ideas of earlier stages revisited at greater depth where they matter. Mark at most one in five topics "threshold": true. "prereqs" may name existing topic ids or new ones. Group them into 2 to 4 milestones, each a capability with a concrete test. Number new topic ids from t${plan.topics.length + 1} and milestone ids from m${plan.milestones.length + 1}. Topic kinds: "concept", "procedure", "vocabulary", "motor", "strategy" or "roleplay".
+Write the topics for stage ${stageId} ${stageName(stageId)} only: 10 to 20 topics, each one core idea learnable in 20 to 45 minutes with at most 3 to 5 new terms, ordered from the familiar to the unfamiliar with prerequisites first, every outcome served ("outcome" is its index), and the core ideas of earlier stages revisited at greater depth where they matter. Leave out anything the learner's other subjects above already cover. Mark at most one in five topics "threshold": true. "prereqs" may name existing topic ids or new ones. Group them into 2 to 4 milestones, each a capability with a concrete test. Number new topic ids from t${plan.topics.length + 1} and milestone ids from m${plan.milestones.length + 1}. Topic kinds: "concept", "procedure", "vocabulary", "motor", "strategy" or "roleplay".
 
 Return ONLY JSON: {"milestones":[{"id":"m9","title":"...","test":"...","stage":"${stageId}"}],"topics":[{"id":"t31","title":"...","summary":"at most 20 plain words","kind":"concept","stage":"${stageId}","outcome":0,"threshold":false,"milestone":"m9","prereqs":["t12"],"minutes":35}]}`;
 }
@@ -610,4 +636,4 @@ function lessonDigest(lesson) {
   return pts.filter(Boolean).join('; ').slice(0, 1500);
 }
 
-export { METHOD, checkQuestionsPrompt, checkLessonPrompt, intakePrompt, intakeLines, adaptPrompt, learnerLines, stageLines, FRAMEWORK_GUIDE, planPrompt, reviewPlanPrompt, knowPrompt, startPrompt, rolePrompt, debriefPrompt, formCheckPrompt, extendPrompt, placementPrompt, warmupPrompt, lessonPrompt, practicePrompt, bridgePrompt, mixedPrompt, morePracticePrompt, gradePrompt, checkPrompt, modelPrompt, tutorRules, lessonDigest };
+export { METHOD, checkQuestionsPrompt, checkLessonPrompt, intakePrompt, intakeLines, briefLines, elsewhereLines, adaptPrompt, learnerLines, stageLines, FRAMEWORK_GUIDE, planPrompt, reviewPlanPrompt, knowPrompt, startPrompt, rolePrompt, debriefPrompt, formCheckPrompt, extendPrompt, placementPrompt, warmupPrompt, lessonPrompt, practicePrompt, bridgePrompt, mixedPrompt, morePracticePrompt, gradePrompt, checkPrompt, modelPrompt, tutorRules, lessonDigest };

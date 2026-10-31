@@ -22,6 +22,40 @@ export type ServerSubject = {
   cards: unknown[];
 };
 
+// What the learner's other subjects already cover: each subject's title with
+// its topic titles, and which of those are learned. The planner reads this
+// (engine `elsewhereLines`) so a learner building several related subjects
+// is not taught the same basics in each. `excludeId` leaves out the subject
+// being planned; a new subject has no id yet, so its own draft is never in
+// the list.
+export type Elsewhere = { title: string; topics: string[]; learned: string[] };
+
+export async function loadElsewhere(admin: SupabaseClient, profileId: string, excludeId?: string | null, excludeTitle?: string | null): Promise<Elsewhere[]> {
+  const { data: rows } = await admin.from('subjects').select('id, title, plan').eq('profile_id', profileId).order('created_at', { ascending: true });
+  // A draft saved moments ago under the same title is this subject, not another one
+  // (a client that predates `subjectId` on the review pass sends only the title).
+  const skipTitle = (excludeTitle ?? '').trim().toLowerCase();
+  const sameTitle = (r: { title?: string; plan?: { title?: string } }) =>
+    Boolean(skipTitle) && [r.title, r.plan?.title].some((t) => String(t ?? '').trim().toLowerCase() === skipTitle);
+  const others = (rows ?? []).filter((r) => r.id !== excludeId && !sameTitle(r) && r.plan && Array.isArray(r.plan.topics)).slice(0, 8);
+  if (!others.length) return [];
+  const { data: states } = await admin
+    .from('topic_state')
+    .select('subject_id, topic_id, status')
+    .eq('profile_id', profileId)
+    .in('subject_id', others.map((r) => r.id))
+    .in('status', ['mastered', 'known']);
+  const learnedIds = new Set((states ?? []).map((s) => `${s.subject_id}|${s.topic_id}`));
+  return others.map((r) => {
+    const topics = (r.plan.topics as { id: string; title: string }[]).filter((t) => t && typeof t.title === 'string');
+    return {
+      title: String(r.title || r.plan.title || ''),
+      topics: topics.map((t) => t.title),
+      learned: topics.filter((t) => learnedIds.has(`${r.id}|${t.id}`)).map((t) => t.title),
+    };
+  });
+}
+
 export async function loadSubject(admin: SupabaseClient, profileId: string, subjectId: string): Promise<ServerSubject | null> {
   const { data: row } = await admin.from('subjects').select('*').eq('id', subjectId).eq('profile_id', profileId).maybeSingle();
   if (!row) return null;

@@ -87,9 +87,15 @@ export const EVIDENCE = [
   },
   {
     id: 'generative',
-    principle: 'Self-explanation, a why question, and teaching back',
+    principle: 'Self-explanation, a why question, and teaching back on the first review day (spaced, so it is retrieval)',
     sources: ['Chi et al. 1994', 'Bisra et al. 2018', 'Fiorella & Mayer 2016', 'Kobayashi 2019'],
     prompts: { practicePrompt: ['explain the reason behind the core idea'] },
+  },
+  {
+    id: 'transfer-use',
+    principle: 'One real use of the idea the same day, named concretely so it gets done',
+    sources: ['Barnett & Ceci 2002', 'Gollwitzer & Sheeran 2006'],
+    prompts: { practicePrompt: ['"apply"', 'Transfer happens in use'] },
   },
   {
     id: 'interleaving',
