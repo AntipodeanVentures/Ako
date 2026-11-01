@@ -87,6 +87,16 @@ function elsewhereLines(intake) {
   return '\nThe learner\'s other subjects on this app already cover the topics below (planned there, or learned where marked). Treat them as prerequisites the learner holds or will hold from that subject: do not teach them again here. Where this subject needs one of them, name the other subject in one line and build on it, and spend the time on what is specific to this subject. A short recap of a learned idea is fine where it is needed to apply it; a fresh topic for it is not.\n' + rows.slice(0, ELSEWHERE_MAX) + '\n';
 }
 
+// Every topic is placed in the learner's own map of knowledge under a field and an area, so the
+// map groups what belongs together across subjects (the volts of one subject beside the batteries
+// of another). The names must be reused across subjects, so the ones already in use are listed.
+const SCHEMA_RULE = '"schema" is ["Field", "Area"]: the broad discipline the idea belongs to (Physics, Electrical engineering, Mathematics, Aerodynamics, Chemistry, Portuguese, Philosophy, Jiu-jitsu, Finance) and the area within it (Electricity, Energy storage, Propellers, Verbs, Ethics). Choose by what the idea IS, not by which subject it is taught in: a topic on voltage in an aircraft-wiring subject is ["Physics", "Electricity"]. Use the same names for the same field and area everywhere; 2 to 12 fields across a learner, 2 to 8 areas per field.';
+function schemaLines(intake) {
+  const names = [];
+  for (const s of arr(intake && intake.elsewhere)) for (const f of arr(s.fields)) if (str(f) && !names.includes(str(f, 80))) names.push(str(f, 80));
+  return names.length ? ' Fields and areas already in use on the learner\'s map, to reuse where they fit: ' + names.slice(0, 60).join('; ') + '.' : '';
+}
+
 function planPrompt(intake, coverTo) {
   const about = str(intake.about, 1600);
   const startIdx = START_STAGE[intake.current] || 0;
@@ -114,6 +124,7 @@ Design backwards from what the learner must be able to do. Work in this order:
 1. "stages": describe all five stages for THIS subject. For each give "means" (what someone at that stage can actually do, in 1 or 2 observable sentences), "basis" (the framework or syllabus it rests on, briefly), "equivalent" (the usual marker people in this field would recognise, or "" if there is none), "outcomes" (3 to 6 can-do statements that the level check at the end of this stage will test; concrete and assessable), "external" (one real-world check the learner could take outside this app to confirm the level, such as a named practice exam, a grading, a rating target or a task a professional would set; or "" if there is none), and "hours": the cumulative study hours from zero that a motivated adult with this learner's background typically needs to reach the stage. Be realistic; higher stages take hundreds to thousands of hours.
 2. "topics": write the topics for stages ${coverNames} only, 12 to 30 in total, each learnable in one 20 to 45 minute session. Derive them from the outcomes: every topic must serve at least one outcome of its stage ("outcome" is that outcome's index, 0-based), and every outcome must be served. Each topic covers one core idea and introduces at most 3 to 5 new terms; split anything denser. Tag each topic with its "stage". Order them from the familiar to the unfamiliar: begin with the ideas closest to what the learner already knows and to their goal, then work outward, always with prerequisites first. For a complete beginner, the first 3 topics must need no prior knowledge of the field. Later stages should revisit the core ideas at greater depth rather than treating them as finished. Do not skip fundamentals because of their background: a placement check lets them skip what they already know. The one exception is a fundamental their other subjects on this app already cover (listed above, if any): leave it to that subject.${intake.context ? ' Where the learner\'s brief describes a specific project or situation, every worked example, practice problem and milestone test uses it, with its numbers, rather than a generic case.' : ''}
 3. Mark the threshold concepts: set "threshold": true on the few topics (at most one in five) that transform how the learner sees the field and unlock what follows; they get more relearning and more comparison cases.
+3b. ${SCHEMA_RULE}${schemaLines(intake)}
 4. Write topic titles and summaries in plain words a newcomer would understand.
 5. "milestones": group the topics into 3 to 6 milestones, in order, each tagged with its "stage". A milestone is a capability the learner can demonstrate, with a concrete test.
 6. Topic kinds: "concept", "procedure", "vocabulary", "motor" (a physical movement practised away from the screen), "strategy", or "roleplay" (an interpersonal or spoken skill best practised in a live conversation, such as negotiating, giving feedback, interviewing, coaching, or speaking a language; the app runs these as role-plays with Claude playing the other person).
@@ -123,7 +134,7 @@ Design backwards from what the learner must be able to do. Work in this order:
 10. If the subject is a human language, set "language" to its BCP 47 code (for example "pt-BR"); otherwise null.
 
 Return ONLY JSON, with no commentary, in exactly this shape:
-{"title":"short subject name","subjectType":"knowledge","language":null,"summary":"2 sentences on the approach","stages":[{"id":"s1","means":"...","basis":"...","equivalent":"...","outcomes":["can ..."],"external":"...","hours":40},{"id":"s2","means":"...","basis":"...","equivalent":"...","outcomes":["..."],"external":"...","hours":150},{"id":"s3","means":"...","basis":"...","equivalent":"...","outcomes":["..."],"external":"...","hours":600},{"id":"s4","means":"...","basis":"...","equivalent":"...","outcomes":["..."],"external":"...","hours":1500},{"id":"s5","means":"...","basis":"...","equivalent":"...","outcomes":["..."],"external":"...","hours":5000}],"rules":["..."],"milestones":[{"id":"m1","title":"...","test":"how to check it","stage":"s1"}],"topics":[{"id":"t1","title":"...","summary":"at most 20 plain words","kind":"concept","stage":"s1","outcome":0,"threshold":false,"milestone":"m1","prereqs":[],"minutes":30}],"resources":[{"title":"...","creator":"...","type":"book","why":"at most 15 words","search":"search phrase"}],"safety":[]}
+{"title":"short subject name","subjectType":"knowledge","language":null,"summary":"2 sentences on the approach","stages":[{"id":"s1","means":"...","basis":"...","equivalent":"...","outcomes":["can ..."],"external":"...","hours":40},{"id":"s2","means":"...","basis":"...","equivalent":"...","outcomes":["..."],"external":"...","hours":150},{"id":"s3","means":"...","basis":"...","equivalent":"...","outcomes":["..."],"external":"...","hours":600},{"id":"s4","means":"...","basis":"...","equivalent":"...","outcomes":["..."],"external":"...","hours":1500},{"id":"s5","means":"...","basis":"...","equivalent":"...","outcomes":["..."],"external":"...","hours":5000}],"rules":["..."],"milestones":[{"id":"m1","title":"...","test":"how to check it","stage":"s1"}],"topics":[{"id":"t1","title":"...","summary":"at most 20 plain words","kind":"concept","stage":"s1","outcome":0,"threshold":false,"milestone":"m1","prereqs":[],"minutes":30,"schema":["Field","Area"]}],"resources":[{"title":"...","creator":"...","type":"book","why":"at most 15 words","search":"search phrase"}],"safety":[]}
 "subjectType" is one of "knowledge", "language", "physical", "mixed", "interpersonal". "prereqs" lists earlier topic ids.`;
 }
 
@@ -302,9 +313,9 @@ ${learnerLines(subj)}
 ${elsewhereLines(subj.intake)}
 ${METHOD}
 
-Write the topics for stage ${stageId} ${stageName(stageId)} only: 10 to 20 topics, each one core idea learnable in 20 to 45 minutes with at most 3 to 5 new terms, ordered from the familiar to the unfamiliar with prerequisites first, every outcome served ("outcome" is its index), and the core ideas of earlier stages revisited at greater depth where they matter. Leave out anything the learner's other subjects above already cover. Mark at most one in five topics "threshold": true. "prereqs" may name existing topic ids or new ones. Group them into 2 to 4 milestones, each a capability with a concrete test. Number new topic ids from t${plan.topics.length + 1} and milestone ids from m${plan.milestones.length + 1}. Topic kinds: "concept", "procedure", "vocabulary", "motor", "strategy" or "roleplay".
+Write the topics for stage ${stageId} ${stageName(stageId)} only: 10 to 20 topics, each one core idea learnable in 20 to 45 minutes with at most 3 to 5 new terms, ordered from the familiar to the unfamiliar with prerequisites first, every outcome served ("outcome" is its index), and the core ideas of earlier stages revisited at greater depth where they matter. Leave out anything the learner's other subjects above already cover. Mark at most one in five topics "threshold": true. "prereqs" may name existing topic ids or new ones. Group them into 2 to 4 milestones, each a capability with a concrete test. Number new topic ids from t${plan.topics.length + 1} and milestone ids from m${plan.milestones.length + 1}. Topic kinds: "concept", "procedure", "vocabulary", "motor", "strategy" or "roleplay". ${SCHEMA_RULE}${schemaLines(subj.intake)}
 
-Return ONLY JSON: {"milestones":[{"id":"m9","title":"...","test":"...","stage":"${stageId}"}],"topics":[{"id":"t31","title":"...","summary":"at most 20 plain words","kind":"concept","stage":"${stageId}","outcome":0,"threshold":false,"milestone":"m9","prereqs":["t12"],"minutes":35}]}`;
+Return ONLY JSON: {"milestones":[{"id":"m9","title":"...","test":"...","stage":"${stageId}"}],"topics":[{"id":"t31","title":"...","summary":"at most 20 plain words","kind":"concept","stage":"${stageId}","outcome":0,"threshold":false,"milestone":"m9","prereqs":["t12"],"minutes":35,"schema":["Field","Area"]}]}`;
 }
 
 function placementPrompt(subj) {
@@ -637,4 +648,18 @@ function lessonDigest(lesson) {
   return pts.filter(Boolean).join('; ').slice(0, 1500);
 }
 
-export { METHOD, checkQuestionsPrompt, checkLessonPrompt, intakePrompt, intakeLines, briefLines, elsewhereLines, adaptPrompt, learnerLines, stageLines, FRAMEWORK_GUIDE, planPrompt, reviewPlanPrompt, knowPrompt, startPrompt, rolePrompt, debriefPrompt, formCheckPrompt, extendPrompt, placementPrompt, warmupPrompt, lessonPrompt, practicePrompt, bridgePrompt, mixedPrompt, morePracticePrompt, gradePrompt, checkPrompt, modelPrompt, tutorRules, lessonDigest };
+// Placing every topic of every subject on the map at once, so the grouping is consistent across them.
+function schemaPrompt(subjects) {
+  const rows = arr(subjects).slice(0, 12).map((s) => `Subject ${str(s.id, 60)}: "${str(s.title, 120)}"\n` + arr(s.topics).slice(0, 80).map((t) => `  ${str(t.id, 16)}: ${str(t.title, 120)}${str(t.summary) ? ' (' + str(t.summary, 160) + ')' : ''}`).join('\n')).join('\n\n');
+  return `An adult is learning the subjects below on one app. Place every topic in their map of knowledge.
+
+${SCHEMA_RULE}
+
+Group logically: a field is a discipline, an area is a coherent part of it, and topics that belong together across different subjects get the same field and area. Keep names short (1 to 3 words), in sentence case, consistent, and in plain English.
+
+${rows}
+
+Return ONLY JSON: {"subjects":[{"id":"<subject id>","topics":[{"id":"t1","schema":["Field","Area"]}]}]}, with every topic listed above present exactly once.`;
+}
+
+export { METHOD, schemaPrompt, SCHEMA_RULE, checkQuestionsPrompt, checkLessonPrompt, intakePrompt, intakeLines, briefLines, elsewhereLines, adaptPrompt, learnerLines, stageLines, FRAMEWORK_GUIDE, planPrompt, reviewPlanPrompt, knowPrompt, startPrompt, rolePrompt, debriefPrompt, formCheckPrompt, extendPrompt, placementPrompt, warmupPrompt, lessonPrompt, practicePrompt, bridgePrompt, mixedPrompt, morePracticePrompt, gradePrompt, checkPrompt, modelPrompt, tutorRules, lessonDigest };

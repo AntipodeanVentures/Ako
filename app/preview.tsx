@@ -246,6 +246,12 @@ export default function PreviewScreen() {
     });
     state[third.plan.topics[4].id] = { status: 'learning', attempts: 1 };
     (subj.topicState as Record<string, { bridge?: unknown }>).p1 = { ...(subj.topicState.p1 as object), bridge: { field: 'Brazilian jiu-jitsu' } };
+    // Fields and areas, as the planner would set them: the two language subjects share a field.
+    const langAreas = ['Sounds', 'Greetings', 'Verbs', 'Verbs', 'Verbs', 'Vocabulary'];
+    subj.plan.topics.forEach((t, i) => { t.schema = ['Portuguese', langAreas[i] ?? 'Vocabulary']; });
+    second.plan.topics.forEach((t, i) => { t.schema = ['Spanish', langAreas[i] ?? 'Vocabulary']; });
+    const physAreas = [['Physics', 'Forces'], ['Physics', 'Forces'], ['Aerodynamics', 'Propellers'], ['Aerodynamics', 'Propellers'], ['Physics', 'Electricity'], ['Engineering', 'Sizing']];
+    third.plan.topics.forEach((t, i) => { t.schema = physAreas[i] ?? ['Physics', 'Forces']; });
     const know = [
       { id: 'k1', kind: 'job', title: 'Airline captain', detail: '12 years' },
       { id: 'k2', kind: 'qualification', title: 'Commercial pilot licence', detail: '' },
@@ -262,6 +268,16 @@ export default function PreviewScreen() {
           for (let j = 0; j < 18; j++) topics.push({ id: 't' + j, title: 'Topic ' + j + ' of subject ' + i, summary: '', kind: 'concept', stage: 's1', outcome: 0, threshold: j % 7 === 0, milestone: 'm1', prereqs: j ? ['t' + (j - 1)] : [], minutes: 30 });
           for (let j = 18; j < 30; j++) topics.push({ id: 't' + j, title: 'Topic ' + j, summary: '', kind: 'concept', stage: 's2', outcome: 0, threshold: false, milestone: 'm2', prereqs: ['t' + (j - 1)], minutes: 30 });
           s.plan = { ...s.plan, title: ['Lithium battery engineering', 'DC electrical systems', 'Multirotor flight physics', 'Electric propulsion', 'How solar panels work', 'Roman Stoicism'][i], topics };
+          // Fields and areas shared across the subjects, as the planner would place them.
+          const fieldsFor = [
+            [['Chemistry', 'Electrochemistry'], ['Physics', 'Electricity'], ['Engineering', 'Energy storage'], ['Engineering', 'Thermal']],
+            [['Physics', 'Electricity'], ['Engineering', 'Wiring'], ['Physics', 'Electricity'], ['Engineering', 'Protection']],
+            [['Physics', 'Forces'], ['Aerodynamics', 'Rotors'], ['Physics', 'Forces'], ['Engineering', 'Sizing']],
+            [['Physics', 'Electricity'], ['Aerodynamics', 'Propellers'], ['Engineering', 'Motors'], ['Engineering', 'Motors']],
+            [['Physics', 'Light'], ['Physics', 'Electricity'], ['Engineering', 'Grid'], ['Chemistry', 'Semiconductors']],
+            [['Philosophy', 'Ethics'], ['Philosophy', 'Logic'], ['History', 'Rome'], ['Philosophy', 'Ethics']],
+          ][i];
+          topics.forEach((t, j) => { t.schema = fieldsFor[j % fieldsFor.length]; });
           s.topicState = {};
           s.cards = [];
           const learned = [12, 8, 5, 3, 1, 0][i];

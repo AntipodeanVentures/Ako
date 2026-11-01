@@ -1,45 +1,59 @@
 import { useRouter } from 'expo-router';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, View, useWindowDimensions, type LayoutChangeEvent } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Svg, { Circle, G, Line, Rect, Text as SvgText } from 'react-native-svg';
 
-import { Button, Text } from '@/src/components/ui';
-import { knowledgeGraph, layoutGraph, nodeLine, nodeRadius, R_HUB } from '@/src/engine/map';
+import { Button, Segmented, Text } from '@/src/components/ui';
+import { fieldGraph, knowledgeGraph, layoutGraph, nodeLine, nodeRadius, R_HUB } from '@/src/engine/map';
 import type { LiveSubject } from '@/src/features/subjects';
-import { useTheme } from '@/src/theme';
+import { useReducedMotion, useTheme } from '@/src/theme';
+
+import { forceLayout } from './forceLayout';
 
 type KnowItem = { id: string; kind: string; title: string; detail?: string };
 // The engine is plain JavaScript; these are the fields the drawing reads.
 type Node = {
-  id: string; kind: 'you' | 'know' | 'subject' | 'topic'; label: string;
+  id: string; kind: 'you' | 'know' | 'subject' | 'field' | 'area' | 'topic'; label: string;
   subjectId?: string; topicId?: string; status?: string; recall?: number | null; threshold?: boolean; stageIdx?: number;
-  total?: number; learned?: number; secure?: number;
+  total?: number; learned?: number; secure?: number; topics?: number; field?: string; area?: string; subject?: string;
 };
 type Edge = { from: string; to: string; kind: string };
-type Graph = { nodes: Node[]; edges: Edge[] };
+type Graph = { nodes: Node[]; edges: Edge[]; placed?: boolean };
 type Layout = { positions: Record<string, { x: number; y: number }>; extent: number };
+type Mode = 'field' | 'subject';
 
 type Props = {
   subjects: LiveSubject[];
   know: KnowItem[];
   retention?: number;
+  // Places topics the planner has not yet put under a field and an area; run once when the map
+  // finds any. Absent in the dev preview.
+  onPlace?: () => Promise<void>;
   // The dev preview renders without navigation.
   onOpen?: (node: Node) => void;
 };
 
 const MIN_K = 0.5;
 const MAX_K = 6;
+const MODES: { value: Mode; label: string }[] = [
+  { value: 'field', label: 'By field' },
+  { value: 'subject', label: 'By subject' },
+];
 
-// The map of what the learner knows: the learner at the centre, the fields they brought with
-// them around that, each subject a hub with its topics fanning out by level. A topic's fill is
-// its status and its brightness is how likely it is to be recalled right now, so the map fades
-// where memory is fading. Pan with a drag, zoom with a pinch or the buttons, tap a node for its
-// line and a way to open it.
-export function KnowledgeMap({ subjects, know, retention = 0.9, onOpen }: Props) {
+// The map of what the learner knows. By field: the learner at the centre, the fields they
+// brought with them around that, then every idea grouped by what it is (Physics › Electricity),
+// whichever subject teaches it, settling into place with a force layout. By subject: each
+// subject a hub with its topics fanning out by level. A topic's fill is its status and its
+// brightness is how likely it is to be recalled right now, so the map fades where memory is
+// fading. Pan with a drag, zoom with a pinch or the buttons, tap a node for its line and a way
+// to open it.
+export function KnowledgeMap({ subjects, know, retention = 0.9, onPlace, onOpen }: Props) {
   const { colors, spacing, radius: rad, typography } = useTheme();
+  const reduced = useReducedMotion();
   const router = useRouter();
   const { width: windowWidth } = useWindowDimensions();
+  const [mode, setMode] = useState<Mode>('field');
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [view, setView] = useState({ x: 0, y: 0, k: 1 });
   // Where the view was when a drag or pinch began; a ref, so the gesture reads the value it started from.
@@ -48,12 +62,44 @@ export function KnowledgeMap({ subjects, know, retention = 0.9, onOpen }: Props)
   const startRef = useRef(view);
   const [selected, setSelected] = useState<string | null>(null);
 
-  const graph = useMemo(() => knowledgeGraph({ subjects, know, retention }) as Graph, [subjects, know, retention]);
-  const layout = useMemo(() => layoutGraph(graph) as Layout, [graph]);
+  const graph = useMemo<Graph>(
+    () => (mode === 'field' ? (fieldGraph({ subjects, know, retention }) as Graph) : (knowledgeGraph({ subjects, know, retention }) as Graph)),
+    [mode, subjects, know, retention],
+  );
   const byId = useMemo(() => new Map(graph.nodes.map((n) => [n.id, n])), [graph]);
-  const hubs = useMemo(() => graph.nodes.filter((n) => n.kind === 'subject').map((n) => n.id), [graph]);
+  const hubs = useMemo(() => graph.nodes.filter((n) => n.kind === 'subject' || n.kind === 'field').map((n) => n.id), [graph]);
   // The straight-line distance between neighbouring hubs, in map units: the room a hub label has.
-  const chord = hubs.length > 1 ? 2 * R_HUB * Math.sin(Math.PI / hubs.length) : 4 * R_HUB;
+  const chord = hubs.length > 1 ? 2 * (mode === 'field' ? 150 : R_HUB) * Math.sin(Math.PI / hubs.length) : 4 * R_HUB;
+
+  // By subject the layout is fixed; by field it settles over a second or two, drawn as it goes.
+  const [layout, setLayout] = useState<Layout>(() => layoutGraph(graph) as Layout);
+  const [settling, setSettling] = useState(false);
+  useEffect(() => {
+    if (mode === 'subject') { setLayout(layoutGraph(graph) as Layout); setSettling(false); return; }
+    const sim = forceLayout(graph);
+    let frame = 0;
+    let extent = 0;
+    let stopped = false;
+    const step = () => {
+      if (stopped) return;
+      const snap = sim.tick(reduced ? 400 : 4);
+      extent = Math.max(extent, snap.extent);
+      setLayout({ positions: snap.positions, extent: snap.settled ? snap.extent : extent });
+      if (snap.settled) { setSettling(false); return; }
+      frame = requestAnimationFrame(step);
+    };
+    setSettling(!reduced);
+    step();
+    return () => { stopped = true; cancelAnimationFrame(frame); sim.stop(); };
+  }, [graph, mode, reduced]);
+
+  // Topics the planner has not placed yet are placed once, all subjects together.
+  const [placing, setPlacing] = useState<'idle' | 'running' | 'done' | 'failed'>('idle');
+  useEffect(() => {
+    if (!onPlace || graph.placed !== false || placing !== 'idle' || !subjects.length) return;
+    setPlacing('running');
+    onPlace().then(() => setPlacing('done')).catch(() => setPlacing('failed'));
+  }, [onPlace, graph.placed, placing, subjects.length]);
 
   // The map's own units fit the box at zoom 1; everything else is relative to that.
   const height = Math.min(size.w, windowWidth > 700 ? 520 : 420) || 360;
@@ -70,13 +116,13 @@ export function KnowledgeMap({ subjects, know, retention = 0.9, onOpen }: Props)
 
   const clampK = (k: number) => Math.min(MAX_K, Math.max(MIN_K, k));
   // A tap picks the nearest node within reach; a drag that moves more than a few points is a pan instead.
-  const geomRef = useRef({ cx, cy, unit, k: view.k, x: view.x, y: view.y });
-  geomRef.current = { cx, cy, unit, k: view.k, x: view.x, y: view.y };
+  const geomRef = useRef({ cx, cy, unit, k: view.k, x: view.x, y: view.y, layout, graph });
+  geomRef.current = { cx, cy, unit, k: view.k, x: view.x, y: view.y, layout, graph };
   const hitTest = (sx: number, sy: number) => {
     const g = geomRef.current;
     let best: { id: string; d: number } | null = null;
-    for (const n of graph.nodes) {
-      const pos = layout.positions[n.id];
+    for (const n of g.graph.nodes) {
+      const pos = g.layout.positions[n.id];
       if (!pos) continue;
       const px = g.cx + g.x + pos.x * g.unit * g.k;
       const py = g.cy + g.y + pos.y * g.unit * g.k;
@@ -104,6 +150,7 @@ export function KnowledgeMap({ subjects, know, retention = 0.9, onOpen }: Props)
   const zoom = (f: number) => setView((v) => ({ ...v, k: clampK(v.k * f) }));
   const reset = () => setView({ x: 0, y: 0, k: 1 });
   const moved = view.k !== 1 || view.x !== 0 || view.y !== 0;
+  const switchMode = (m: Mode) => { setMode(m); setSelected(null); reset(); };
 
   const sel = selected ? byId.get(selected) : null;
   const open = (n: Node) => {
@@ -115,19 +162,31 @@ export function KnowledgeMap({ subjects, know, retention = 0.9, onOpen }: Props)
     }
   };
 
-  // Lines first, so every node sits on top of them. The selected node's lines are drawn in ink.
+  // Lines first, so every node sits on top of them. The selected node's lines are drawn in ink;
+  // selecting a field or an area lights everything under it.
+  const under = useMemo(() => {
+    if (!sel || (sel.kind !== 'field' && sel.kind !== 'area')) return null;
+    const ids = new Set<string>([sel.id]);
+    for (const n of graph.nodes) if ((sel.kind === 'field' && (n.field === sel.id || n.id === sel.id)) || (sel.kind === 'area' && n.area === sel.id)) ids.add(n.id);
+    return ids;
+  }, [sel, graph]);
+  const isLit = (e: Edge) => (under ? under.has(e.from) && (under.has(e.to) || e.to === sel?.id) : selected != null && (e.from === selected || e.to === selected));
   const edgeStroke = (kind: string, lit: boolean) => {
     if (lit) return colors.text;
     if (kind === 'covers') return colors.accent;
     if (kind === 'bridge') return colors.textMuted;
     return colors.border;
   };
-  const edgeWidth = (kind: string) => (kind === 'spoke' || kind === 'root' ? 0.75 : kind === 'covers' ? 1.25 : 1);
+  const edgeWidth = (kind: string) => (kind === 'spoke' || kind === 'root' ? 0.75 : kind === 'covers' ? 1.25 : kind === 'in' ? 0.9 : 1);
 
   const labelFont = typography.caption.fontFamily;
+  const Halo = ({ x, y, w, h = 15 }: { x: number; y: number; w: number; h?: number }) => (
+    <Rect x={x - w / 2} y={y - h + 4} width={w} height={h} rx={3} fill={colors.background} fillOpacity={0.85} />
+  );
 
   return (
     <View style={{ gap: spacing.sm }}>
+      <Segmented options={MODES} value={mode} onChange={switchMode} />
       <View
         onLayout={onLayout}
         style={{ height, borderWidth: 1, borderColor: colors.border, borderRadius: rad.md, overflow: 'hidden', backgroundColor: colors.background }}
@@ -143,7 +202,7 @@ export function KnowledgeMap({ subjects, know, retention = 0.9, onOpen }: Props)
                     if (!a || !b) return null;
                     const p = toScreen(a);
                     const q = toScreen(b);
-                    const lit = selected != null && (e.from === selected || e.to === selected);
+                    const lit = isLit(e);
                     return (
                       <Line
                         key={i}
@@ -154,7 +213,7 @@ export function KnowledgeMap({ subjects, know, retention = 0.9, onOpen }: Props)
                         stroke={edgeStroke(e.kind, lit)}
                         strokeWidth={edgeWidth(e.kind) * (lit ? 1.5 : 1)}
                         strokeDasharray={e.kind === 'bridge' && !lit ? '3 3' : undefined}
-                        opacity={lit ? 1 : e.kind === 'spoke' ? 0.6 : e.kind === 'covers' ? 0.7 : 0.9}
+                        opacity={lit ? 1 : e.kind === 'spoke' ? 0.6 : e.kind === 'covers' ? 0.7 : e.kind === 'prereq' && mode === 'field' ? 0.45 : 0.9}
                       />
                     );
                   })}
@@ -183,11 +242,11 @@ export function KnowledgeMap({ subjects, know, retention = 0.9, onOpen }: Props)
                         </G>
                       );
                     }
-                    if (n.kind === 'subject') {
+                    if (n.kind === 'subject' || n.kind === 'field') {
                       const recall = typeof n.recall === 'number' ? n.recall : null;
                       const fillOpacity = recall == null ? 1 : 0.35 + 0.65 * recall;
                       const started = (n.learned ?? 0) > 0;
-                      // The label sits on a pale halo, so the topic dots it crosses do not break it up. Neighbouring
+                      // The label sits on a pale halo, so the dots it crosses do not break it up. Neighbouring
                       // hubs alternate above and below, and a label is cut to the room between hubs at this zoom.
                       const hubIdx = hubs.indexOf(n.id);
                       const room = Math.max(40, chord * scale - 6);
@@ -201,8 +260,29 @@ export function KnowledgeMap({ subjects, know, retention = 0.9, onOpen }: Props)
                           {isSel ? <Circle cx={p.x} cy={p.y} r={r + 4} fill="none" stroke={colors.text} strokeWidth={1} /> : null}
                           {view.k >= 0.9 || isSel ? (
                             <>
-                              <Rect x={lab.x - lab.w / 2} y={lab.y - 11} width={lab.w} height={15} rx={3} fill={colors.background} fillOpacity={0.85} />
+                              <Halo x={lab.x} y={lab.y} w={lab.w} />
                               <SvgText x={lab.x} y={lab.y} fontSize={11} fontFamily={labelFont} fill={colors.text} textAnchor="middle">
+                                {text}
+                              </SvgText>
+                            </>
+                          ) : null}
+                        </G>
+                      );
+                    }
+                    if (n.kind === 'area') {
+                      const recall = typeof n.recall === 'number' ? n.recall : null;
+                      const started = (n.learned ?? 0) > 0;
+                      const text = n.label.length > 22 && view.k < 1.6 ? n.label.slice(0, 20).trimEnd() + '…' : n.label;
+                      // Area labels need room: on a phone at the default zoom they wait for a pinch.
+                      const show = isSel || view.k >= 1.3 || ((n.topics ?? 0) >= 3 && scale >= 0.65);
+                      return (
+                        <G key={n.id}>
+                          <Circle cx={p.x} cy={p.y} r={r} fill={started ? colors.text : colors.background} fillOpacity={started ? (recall == null ? 1 : 0.35 + 0.65 * recall) : 1} stroke={colors.text} strokeWidth={1} />
+                          {isSel ? <Circle cx={p.x} cy={p.y} r={r + 4} fill="none" stroke={colors.text} strokeWidth={1} /> : null}
+                          {show ? (
+                            <>
+                              <Halo x={p.x} y={p.y + r + 12} w={text.length * 5.6 + 8} h={14} />
+                              <SvgText x={p.x} y={p.y + r + 12} fontSize={10} fontFamily={labelFont} fill={colors.textMuted} textAnchor="middle">
                                 {text}
                               </SvgText>
                             </>
@@ -219,8 +299,9 @@ export function KnowledgeMap({ subjects, know, retention = 0.9, onOpen }: Props)
                     const learned = status === 'learned' || status === 'secure';
                     const labelled = isSel || (view.k >= 2.2 && (learned || inProgress || status === 'available'));
                     const tlabel = n.label.length > 30 ? n.label.slice(0, 28).trimEnd() + '…' : n.label;
+                    const dim = under ? !under.has(n.id) : false;
                     return (
-                      <G key={n.id}>
+                      <G key={n.id} opacity={dim ? 0.35 : 1}>
                         {status === 'later' ? (
                           <Circle cx={p.x} cy={p.y} r={Math.max(1.5, r * 0.55)} fill={colors.border} />
                         ) : learned ? (
@@ -233,7 +314,7 @@ export function KnowledgeMap({ subjects, know, retention = 0.9, onOpen }: Props)
                         {isSel ? <Circle cx={p.x} cy={p.y} r={r + 5} fill="none" stroke={colors.text} strokeWidth={1} /> : null}
                         {labelled ? (
                           <>
-                            <Rect x={p.x - (tlabel.length * 5.6 + 8) / 2} y={p.y + r + 1} width={tlabel.length * 5.6 + 8} height={14} rx={3} fill={colors.background} fillOpacity={0.85} />
+                            <Halo x={p.x} y={p.y + r + 11} w={tlabel.length * 5.6 + 8} h={14} />
                             <SvgText x={p.x} y={p.y + r + 11} fontSize={10} fontFamily={labelFont} fill={colors.textMuted} textAnchor="middle">
                               {tlabel}
                             </SvgText>
@@ -269,7 +350,15 @@ export function KnowledgeMap({ subjects, know, retention = 0.9, onOpen }: Props)
         </View>
       ) : (
         <Text variant="caption" color="textMuted">
-          Filled: learned. Green ring: secure. Dimmer: fading from memory. Dashed: a link a lesson drew to something you knew. Tap anything.
+          {placing === 'running'
+            ? 'Placing your topics under their fields. A few seconds.'
+            : placing === 'failed'
+              ? 'Could not place your topics by field just now; they are grouped by subject until then. Filled: learned. Green ring: secure. Dimmer: fading from memory.'
+              : settling
+                ? 'Settling into place.'
+                : mode === 'field'
+                  ? 'Grouped by what each idea is, whichever subject teaches it. Filled: learned. Green ring: secure. Dimmer: fading from memory. Tap a field to see what is under it.'
+                  : 'Filled: learned. Green ring: secure. Dimmer: fading from memory. Dashed: a link a lesson drew to something you knew. Tap anything.'}
         </Text>
       )}
     </View>

@@ -26,6 +26,11 @@ function normaliseStages(raw, fallback) {
   for (let i = 1; i < out.length; i++) if (out[i].hours <= out[i - 1].hours) out[i].hours = Math.round(out[i - 1].hours * 2.5);
   return out;
 }
+// A topic's place on the learner's map: ["Field", "Area"], each a short name; [] when the planner gave none.
+function normSchema(x) {
+  return arr(x).map((s) => str(s, 40).replace(/\s+/g, ' ')).filter(Boolean).slice(0, 2);
+}
+
 function normaliseTopics(rawTopics, msIds, existingIds, defaultStage, startIndex) {
   const idMap = new Map(existingIds.map((id) => [id, id]));
   rawTopics.forEach((t, i) => { const k = str(t.id, 40); if (k && !idMap.has(k)) idMap.set(k, 't' + (startIndex + i + 1)); });
@@ -41,7 +46,8 @@ function normaliseTopics(rawTopics, msIds, existingIds, defaultStage, startIndex
       kind: kinds.includes(t.kind) ? t.kind : 'concept', stage,
       milestone: msIds.get(str(t.milestone, 40)) || null,
       outcome: Number.isInteger(t.outcome) && t.outcome >= 0 && t.outcome < 8 ? t.outcome : null, threshold: t.threshold === true,
-      prereqs: Array.from(new Set(prereqs)), minutes: Math.round(clampNum(num(t.minutes, 30), 10, 90))
+      prereqs: Array.from(new Set(prereqs)), minutes: Math.round(clampNum(num(t.minutes, 30), 10, 90)),
+      schema: normSchema(t.schema)
     };
   });
 }
@@ -298,6 +304,7 @@ function normaliseAdaptation(raw, plan, subj) {
         outcome: Number.isInteger(t.outcome) && t.outcome >= 0 && t.outcome < 8 ? t.outcome : null,
         threshold: t.threshold === true,
         prereqs: arr(t.prereqs).map((x) => str(x, 20)).filter((x) => idx(x) >= 0),
+        schema: normSchema(t.schema),
         minutes: Math.round(clampNum(num(t.minutes, 30), 10, 90)),
       };
       topics.splice(at, 0, nt);
@@ -340,4 +347,23 @@ function normaliseModel(raw) {
   return { strengths: list(M.strengths), misconceptions: list(M.misconceptions), analogies: list(M.analogies), note: str(M.note, 500), updatedAt: nowMs() };
 }
 
-export { DEFAULT_HOURS, cleanOutcome, normaliseStages, normaliseTopics, normalisePlan, normaliseExtension, upgradePlan, normQ, normaliseLesson, normalisePractice, normaliseBridge, normaliseMixed, normaliseWarm, normaliseRole, normaliseKnow, normaliseStart, INTAKE_SLOTS, INTAKE_FALLBACK, normaliseIntake, normaliseAdaptation, normaliseDebrief, normaliseModel };
+// The backfill's answer: subject id -> topic id -> ["Field", "Area"]. Unknown ids are dropped.
+function normaliseSchema(raw) {
+  const r = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const out = {};
+  for (const s of arr(r.subjects).filter((x) => x && typeof x === 'object')) {
+    const sid = str(s.id, 60);
+    if (!sid) continue;
+    const topics = {};
+    for (const t of arr(s.topics).filter((x) => x && typeof x === 'object')) {
+      const tid = str(t.id, 16);
+      const schema = normSchema(t.schema);
+      if (tid && schema.length) topics[tid] = schema;
+    }
+    if (Object.keys(topics).length) out[sid] = topics;
+  }
+  if (!Object.keys(out).length) throw { code: 'invalid_json' };
+  return out;
+}
+
+export { DEFAULT_HOURS, cleanOutcome, normSchema, normaliseSchema, normaliseStages, normaliseTopics, normalisePlan, normaliseExtension, upgradePlan, normQ, normaliseLesson, normalisePractice, normaliseBridge, normaliseMixed, normaliseWarm, normaliseRole, normaliseKnow, normaliseStart, INTAKE_SLOTS, INTAKE_FALLBACK, normaliseIntake, normaliseAdaptation, normaliseDebrief, normaliseModel };
