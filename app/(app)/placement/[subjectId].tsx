@@ -96,7 +96,7 @@ function PlacementScreen({ subj }: { subj: LiveSubject }) {
 
   const mark = async (all: { picked: number | null; text: string }[]) => {
     if (!questions) return;
-    setBusy('Marking');
+    setBusy('Checking');
     setError(null);
     try {
       const shortIdx = questions.map((qq, i) => (qq.type === 'short' ? i : -1)).filter((i) => i >= 0);
@@ -239,7 +239,7 @@ function PlacementScreen({ subj }: { subj: LiveSubject }) {
               <Button
                 label={idx + 1 < (questions?.length ?? 0) ? 'Next' : 'Finish and mark'}
                 onPress={next}
-                loading={busy === 'Marking'}
+                loading={busy === 'Checking'}
               />
               <Text variant="caption" color="textMuted" center>
                 Not sure? Leave it and move on. Only a fully right answer skips a topic.

@@ -342,7 +342,7 @@ export default function PlaceScreen() {
         )}
         {!building && step === 'levels' ? (
           <Text variant="caption" color="textMuted" center>
-            A couple of quick questions next, then your path. You can change any of this later.
+            A couple of quick questions next, then your path. Everything here can be changed later from the subject&apos;s settings.
           </Text>
         ) : !building ? (
           <Pressable onPress={() => setStep('levels')} style={{ alignSelf: 'center', padding: spacing.sm }}>
@@ -360,7 +360,7 @@ export default function PlaceScreen() {
           <Text variant="caption" color="textMuted" center>
             {canStart && current !== 'Complete beginner'
               ? 'Ten questions, basic to advanced; topics you already know are skipped.'
-              : 'About a minute. You can change any of this later.'}
+              : 'About a minute. Everything here can be changed later from the subject\'s settings.'}
           </Text>
         )}
       </View>

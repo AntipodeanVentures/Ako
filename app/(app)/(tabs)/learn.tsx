@@ -6,13 +6,15 @@ import { useProfile } from '@/src/features/profile';
 import { useProbeStatus } from '@/src/features/probe';
 import { useOpenSitting } from '@/src/features/session/useOpenSitting';
 import { saveSubject, useInvalidateSubject, useLiveSubjects } from '@/src/features/subjects';
-import type { nextStep } from '@/src/features/subjects/summary';
+import { liveSubjects, type nextStep } from '@/src/features/subjects/summary';
 import { LearnView, type ApplyPrompt } from '@/src/screens/LearnView';
 
 export default function LearnScreen() {
   const router = useRouter();
   const { profile } = useProfile();
-  const { subjects, loading } = useLiveSubjects(profile);
+  const all = useLiveSubjects(profile);
+  const subjects = liveSubjects(all.subjects);
+  const loading = all.loading;
   const probe = useProbeStatus(profile?.id ?? null, subjects);
   const resume = useOpenSitting(subjects);
   const invalidate = useInvalidateSubject();
@@ -47,7 +49,7 @@ export default function LearnScreen() {
       apply={apply}
       onApply={answerApply}
       onStart={start}
-      onOpenSubject={(subjectId) => router.push({ pathname: '/path', params: { subjectId } })}
+      onOpenSubject={(subjectId) => router.push({ pathname: '/subject/[subjectId]', params: { subjectId } })}
       onAddSubject={() => router.push('/goal')}
     />
   );

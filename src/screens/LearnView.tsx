@@ -3,7 +3,18 @@ import { Pressable, View } from 'react-native';
 import { Button, Ladder, Logo, ProgressBar, Screen, Skeleton, Text } from '@/src/components/ui';
 import type { Topic } from '@/src/engine/types';
 import type { LiveSubject } from '@/src/features/subjects';
-import { aboutMinutes, minutesFor, minutesToday, nextStep, subjectLine, todayLine, type NextStepExtras } from '@/src/features/subjects/summary';
+import {
+  aboutMinutes,
+  dailySlot,
+  effort,
+  effortLine,
+  minutesFor,
+  minutesToday,
+  nextStep,
+  subjectLine,
+  todayLine,
+  type NextStepExtras,
+} from '@/src/features/subjects/summary';
 import { useTheme } from '@/src/theme';
 
 export type ApplyPrompt = { subject: LiveSubject; topic: Topic; text: string };
@@ -30,7 +41,7 @@ function startLabel(step: ReturnType<typeof nextStep>): string {
         : step.kind === 'probe'
           ? 'Start the check'
           : step.kind === 'check'
-            ? 'Take the level check'
+            ? 'Start the level check'
             : step.kind === 'mixed'
               ? 'Start mixed practice'
               : step.kind === 'topic'
@@ -40,13 +51,18 @@ function startLabel(step: ReturnType<typeof nextStep>): string {
   return m == null ? base : `${base} · ${aboutMinutes(m)}${step.kind === 'resume' ? ' left' : ''}`;
 }
 
-// The line under the heading: the day's shape, without repeating the heading.
-function subline(step: ReturnType<typeof nextStep>, line: string): string {
-  if (step.kind === 'review') {
-    const rest = line.replace(/^\d+ reviews?( across your subjects)?(, then |\.$)/, (_m, _a, sep) => (sep === '.' ? '' : 'Then '));
-    return rest || 'Nothing else is due today.';
+// Which subject the next step belongs to, for the line above the heading
+// and the "up next" mark on its row.
+function stepSubject(step: ReturnType<typeof nextStep>): { id: string; title: string } | null {
+  switch (step.kind) {
+    case 'resume':
+    case 'topic':
+    case 'check':
+    case 'mixed':
+      return { id: step.subject.id, title: step.subject.plan.title };
+    default:
+      return null;
   }
-  return line;
 }
 
 // What is next, as a heading: the thing itself, not the verb.
@@ -62,15 +78,40 @@ function nextTitle(step: ReturnType<typeof nextStep>): string {
   }
 }
 
+// The line under the heading: what the step gives you, never the heading again.
+function subline(step: ReturnType<typeof nextStep>, line: string): string {
+  switch (step.kind) {
+    case 'topic':
+      return step.topic.summary || line;
+    case 'resume':
+      return 'Pick it up where you left off.';
+    case 'review': {
+      const rest = line.replace(/^\d+ reviews?( across your subjects)?(, then |\.$)/, (_m, _a, sep) => (sep === '.' ? '' : 'Then '));
+      return rest || 'Nothing else is due today.';
+    }
+    case 'probe':
+      return 'A few questions you have not seen, on ideas from weeks ago. This is the evidence that they stuck.';
+    case 'check':
+      return 'Eight to ten questions from memory across the level.';
+    case 'mixed':
+      return `${step.topics.length} earlier topics set against each other, so you learn to tell them apart.`;
+    default:
+      return line;
+  }
+}
+
 // The daily screen: what is next and how long it takes, one button, how
-// today is going, and where each subject stands on the ladder. Pure
-// presentation; app/(app)/(tabs)/learn.tsx feeds it, and the dev preview
-// renders it with fixtures.
+// today is going, and where each subject stands. Pure presentation;
+// app/(app)/(tabs)/learn.tsx feeds it, and the dev preview renders it with
+// fixtures.
 export function LearnView({ subjects, loading, extras = {}, apply, onApply, onStart, onOpenSubject, onAddSubject }: Props) {
-  const { colors, spacing } = useTheme();
+  const { colors, spacing, radius } = useTheme();
   const minutes = Math.round(minutesToday(subjects));
   const step = nextStep(subjects, extras);
-  const slot = Number(subjects[0]?.intake.minutes || 15);
+  const slot = dailySlot(subjects);
+  const eff = effort(subjects);
+  const effLine = effortLine(eff);
+  const who = stepSubject(step);
 
   return (
     <Screen scroll>
@@ -83,7 +124,7 @@ export function LearnView({ subjects, loading, extras = {}, apply, onApply, onSt
 
       <View style={{ gap: spacing.sm, marginTop: spacing.xxl }}>
         <Text variant="eyebrow" color="textMuted">
-          {step.kind === 'resume' ? 'Pick up where you left off' : 'Next'}
+          {step.kind === 'resume' ? 'Pick up where you left off' : who ? `Next · ${who.title}` : 'Next'}
         </Text>
         {loading ? <Skeleton height={30} width="60%" /> : <Text variant="title">{nextTitle(step)}</Text>}
         {loading ? <Skeleton height={23} width="80%" /> : <Text variant="body">{subline(step, todayLine(subjects, extras))}</Text>}
@@ -93,7 +134,7 @@ export function LearnView({ subjects, loading, extras = {}, apply, onApply, onSt
       </View>
 
       {apply && onApply ? (
-        <View style={{ marginTop: spacing.xl, padding: spacing.lg, borderWidth: 1, borderColor: colors.border, borderRadius: 12, gap: spacing.sm }}>
+        <View style={{ marginTop: spacing.xl, padding: spacing.lg, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, gap: spacing.sm }}>
           <Text variant="eyebrow" color="textMuted">
             Yesterday&apos;s task
           </Text>
@@ -121,6 +162,11 @@ export function LearnView({ subjects, loading, extras = {}, apply, onApply, onSt
           </Text>
         </View>
         <ProgressBar value={slot ? minutes / slot : 0} tone={minutes >= slot ? 'accent' : 'primary'} />
+        {effLine ? (
+          <Text variant="caption" color="textMuted">
+            {effLine}
+          </Text>
+        ) : null}
       </View>
 
       <View style={{ marginTop: spacing.xxxl, gap: spacing.md }}>
@@ -136,6 +182,9 @@ export function LearnView({ subjects, loading, extras = {}, apply, onApply, onSt
         <View>
           {subjects.map((s) => {
             const line = subjectLine(s);
+            // The ladder appears once there is something on it; before that, a row is a name and a line.
+            const started = line.reached >= 0 || line.progress > 0;
+            const current = who?.id === s.id;
             return (
               <Pressable
                 key={s.id}
@@ -149,13 +198,23 @@ export function LearnView({ subjects, loading, extras = {}, apply, onApply, onSt
                   opacity: pressed ? 0.7 : 1,
                 })}
               >
-                <Text variant="heading">{line.title}</Text>
-                <Ladder reached={line.reached} current={line.current} progress={line.progress} />
-                <View style={{ gap: 2 }}>
-                  <Text variant="caption" color="accent">
-                    {line.position}
+                <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm }}>
+                  <Text variant="heading" style={{ flex: 1 }}>
+                    {line.title}
                   </Text>
-                  {line.estimate ? (
+                  {current ? (
+                    <Text variant="caption" color="accent">
+                      up next
+                    </Text>
+                  ) : null}
+                </View>
+                {started ? <Ladder reached={line.reached} current={line.current} progress={line.progress} /> : null}
+                <View style={{ gap: 2 }}>
+                  <Text variant="caption" color={started ? 'accent' : 'textMuted'}>
+                    {line.position}
+                    {line.estimate && started ? `  ·  ${line.estimate}` : ''}
+                  </Text>
+                  {!started && line.estimate ? (
                     <Text variant="caption" color="textMuted">
                       {line.estimate}
                     </Text>

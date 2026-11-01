@@ -6,8 +6,10 @@ import {
   fetchStageState,
   fetchSubjects,
   fetchTopicState,
+  updateSubject,
   type NewSubject,
 } from './api';
+import type { SubjectRow } from '@/src/types/database';
 
 export function useSubjects() {
   return useQuery({ queryKey: ['subjects'], queryFn: fetchSubjects });
@@ -41,6 +43,18 @@ export function useDeleteSubject() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deleteSubject(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['subjects'] }),
+  });
+}
+
+// The subject's own settings: its name, what it is for, the aim and the daily
+// slot (all in intake), and whether it is archived (in stats, where the
+// planner also reads it so an archived subject no longer counts as "covered
+// elsewhere").
+export function useUpdateSubject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...update }: { id: string } & Partial<Pick<SubjectRow, 'title' | 'intake' | 'plan' | 'stats'>>) => updateSubject(id, update),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['subjects'] }),
   });
 }

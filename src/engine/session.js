@@ -54,11 +54,11 @@ const isRoleplay = (L, t) => t.kind === 'roleplay' && !!(L.data && L.data.scenar
 // The deck's steps for this topic, in order. The screens show one step per card.
 function stepOrder(L, t) {
   const steps = [['attempt', 'Warm-up'], ['learn', 'Learn']];
-  if (t.kind === 'motor' || (L.data && L.data.drill)) steps.push(['drill', 'Practise away']);
+  if (t.kind === 'motor' || (L.data && L.data.drill)) steps.push(['drill', 'Drill']);
   // Teaching the idea back happens on the day the first card comes due, at the end of that review run, where it is
   // real spaced retrieval rather than a second telling minutes after the first; so it is not a step of the sitting.
   if (isRoleplay(L, t)) steps.push(['recall', 'Recall'], ['roleplay', 'Role-play'], ['done', 'Done']);
-  else steps.push(['recall', 'Recall'], ['practice', 'Practise'], ['done', 'Done']);
+  else steps.push(['recall', 'Recall'], ['practice', 'Questions'], ['done', 'Done']);
   return steps.map(([key, label]) => ({ key, label }));
 }
 function nextStep(L, t) {
