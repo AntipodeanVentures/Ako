@@ -30,9 +30,9 @@ import { ndjsonStream } from '../_shared/stream.ts';
 import { loadElsewhere } from '../_shared/subject.ts';
 
 // What the other subjects cover is context, never a reason to fail a build.
-async function elsewhereOrNone(admin: Parameters<typeof loadElsewhere>[0], profileId: string, excludeId?: string | null, excludeTitle?: string | null) {
+async function elsewhereOrNone(admin: Parameters<typeof loadElsewhere>[0], profileId: string, excludeId?: string | null, excludeTitles: (string | null | undefined)[] = []) {
   try {
-    return await loadElsewhere(admin, profileId, excludeId, excludeTitle);
+    return await loadElsewhere(admin, profileId, excludeId, excludeTitles);
   } catch {
     return [];
   }
@@ -76,7 +76,7 @@ Deno.serve(async (req) => {
     // subject: the client saves its own intake, and both are re-read fresh on every pass.
     const [{ data: prof }, elsewhere] = await Promise.all([
       caller.admin.from('profiles').select('about').eq('id', caller.profileId).maybeSingle(),
-      elsewhereOrNone(caller.admin, caller.profileId, typeof body.subjectId === 'string' ? body.subjectId : null, [body.plan?.title, intake.subject].find((t) => typeof t === 'string' && t.trim()) ?? null),
+      elsewhereOrNone(caller.admin, caller.profileId, typeof body.subjectId === 'string' ? body.subjectId : null, [body.plan?.title, intake.subject]),
     ]);
     const fullIntake = { ...intake, context: str(intake.context, 2000), about: prof?.about ?? '', elsewhere };
 
