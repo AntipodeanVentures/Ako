@@ -17,6 +17,7 @@ import {
   type IntakeQuestion,
 } from '@/src/features/subjects/intakeQuestions';
 import {
+  BRIEF_MAX_CHARS,
   currentPlan,
   resetBuild,
   startBuild,
@@ -65,6 +66,9 @@ export default function PlaceScreen() {
   const saveKnow = useSaveKnowItems(profile?.id);
   const askKnow = know.isSuccess && !(know.data ?? []).length;
   const [knowLine, setKnowLine] = useState('');
+  // The learner's own brief: the project it is for, the numbers, how they want to be
+  // taught. The tapped answers above cannot carry that, and the plan is pitched to it.
+  const [brief, setBrief] = useState('');
   const [questions, setQuestions] = useState<IntakeQuestion[] | null>(null);
   const [answers, setAnswers] = useState<Record<number, IntakeAnswer>>({});
   const answerAt = (i: number): IntakeAnswer => answers[i] ?? { picked: [], other: '' };
@@ -111,6 +115,7 @@ export default function PlaceScreen() {
       minutes,
       ...intake,
       background: [line, intake.background].filter(Boolean).join('; '),
+      context: brief.trim().slice(0, BRIEF_MAX_CHARS),
     });
     // What they typed becomes "what you already know", read into items in the background; the You tab can prune it.
     if (line && profile) {
@@ -176,6 +181,23 @@ export default function PlaceScreen() {
               );
             })
           )}
+          {questions ? (
+            <View style={{ gap: spacing.sm }}>
+              <Text variant="bodyStrong">Anything else the plan should know? Optional</Text>
+              <TextField
+                label=""
+                value={brief}
+                onChangeText={setBrief}
+                maxLength={BRIEF_MAX_CHARS}
+                placeholder="The project or situation it is for, the numbers you are working to, and how you want to be taught. A few lines is plenty."
+                multiline
+                style={{ minHeight: 96, textAlignVertical: 'top' }}
+              />
+              <Text variant="caption" color="textMuted">
+                Every lesson, example and practice problem is pitched to this.
+              </Text>
+            </View>
+          ) : null}
         </View>
       ) : !building ? (
         <View style={{ gap: spacing.xl, marginTop: spacing.xxl }}>

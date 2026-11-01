@@ -27,9 +27,16 @@ export type Intake = {
   focus?: string;
   // The intake questions and their answers, verbatim, for the plan prompt.
   answers?: { slot: string; q: string; a: string }[];
+  // The learner's own brief, typed freely: the project or situation the
+  // subject is for, the numbers they work to, how they want to be taught.
+  // Read by the plan, its review, every lesson and later extensions.
+  context?: string;
   syllabus?: string;
   role?: string;
 };
+
+// The most a brief can carry into the prompts; the box stops at the same point.
+export const BRIEF_MAX_CHARS = 2000;
 
 export type BuildStatus = 'idle' | 'building' | 'draft' | 'saving' | 'ready' | 'error';
 
@@ -139,7 +146,8 @@ export async function startBuild(profileId: string, intake: Intake) {
 
     // The critic pass: a second call that reads the draft against the
     // learner and the level definitions and returns a corrected plan.
-    const reviewed = await callJson<{ plan: Plan }>('plan', { kind: 'review', intake, coverTo, plan: draft });
+    // The subject id lets the server leave this subject out of "what their other subjects cover".
+    const reviewed = await callJson<{ plan: Plan }>('plan', { kind: 'review', intake, coverTo, plan: draft, subjectId });
     if (my !== run) return;
     set({ status: 'saving', plan: reviewed.plan });
     await persist(profileId, intake, reviewed.plan, subjectId);

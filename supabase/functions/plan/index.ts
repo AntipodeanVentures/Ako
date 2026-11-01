@@ -1,13 +1,18 @@
 // plan: writes a learning plan for a subject and returns the normalised draft.
 // Streams the text as it arrives so the app can show the outline growing.
 //
-// Request: { intake: { subject, target, current, hours, background, why, syllabus, role? }, coverTo: 's2' }
+// Request: { intake: { subject, target, current, hours, background, why, context?, syllabus, role? }, coverTo: 's2' }
 // Response: ndjson events: text deltas, then { type: 'done', data: { plan } }
 //
 // The critic pass is a separate request, so neither call runs near the
 // platform's wall-clock limit (150 s on the free plan; each pass alone can
-// take over a minute): { kind: 'review', intake, coverTo, plan }
+// take over a minute): { kind: 'review', intake, coverTo, plan, subjectId? }
 // Response: JSON { plan } (the corrected plan, with "changes").
+//
+// Both passes, and 'extend', are told what the learner's other subjects on
+// the app already cover (loadElsewhere), so related subjects do not each
+// re-teach the same basics. The draft's own saved row is left out by
+// `subjectId` on the review pass.
 //
 // Extending to the next level: { kind: 'extend', subject, stageId: 's3' }
 // Response: JSON { extension: { milestones, topics } }, to append to the plan.
@@ -22,6 +27,16 @@ import { modelFor } from '../_shared/limits.ts';
 import { checkLimit, recordUsage } from '../_shared/metering.ts';
 import { parseJson, sample } from '../_shared/anthropic.ts';
 import { ndjsonStream } from '../_shared/stream.ts';
+import { loadElsewhere } from '../_shared/subject.ts';
+
+// What the other subjects cover is context, never a reason to fail a build.
+async function elsewhereOrNone(admin: Parameters<typeof loadElsewhere>[0], profileId: string, excludeId?: string | null, excludeTitles: (string | null | undefined)[] = []) {
+  try {
+    return await loadElsewhere(admin, profileId, excludeId, excludeTitles);
+  } catch {
+    return [];
+  }
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
@@ -32,8 +47,12 @@ Deno.serve(async (req) => {
     if (body.kind === 'extend') {
       const subject = body.subject;
       if (!subject || !body.stageId) throw new HttpError(400, 'bad_request', 'Subject and stage are required.');
-      const { data: prof } = await caller.admin.from('profiles').select('about, model').eq('id', caller.profileId).maybeSingle();
+      const [{ data: prof }, elsewhere] = await Promise.all([
+        caller.admin.from('profiles').select('about, model').eq('id', caller.profileId).maybeSingle(),
+        elsewhereOrNone(caller.admin, caller.profileId, subject.id),
+      ]);
       subject.learner = { about: prof?.about ?? '', model: prof?.model ?? null };
+      subject.intake = { ...(subject.intake ?? {}), elsewhere };
       const r = await sample({ model: modelFor('extend'), system: METHOD, prompt: extendPrompt(subject, body.stageId), maxTokens: 12000 });
       await recordUsage(caller, 'plan', r.inputTokens, r.outputTokens);
       const extension = normaliseExtension(parseJson(r.text, r.stopReason), subject.plan, body.stageId);
@@ -52,9 +71,14 @@ Deno.serve(async (req) => {
     }
     const { intake, coverTo } = body;
     if (!intake?.subject) throw new HttpError(400, 'bad_request', 'Tell us what you want to learn.');
-    // The learner's confirmed background travels with the request; the engine reads intake.about.
-    const { data: prof } = await caller.admin.from('profiles').select('about').eq('id', caller.profileId).maybeSingle();
-    const fullIntake = { ...intake, about: prof?.about ?? '' };
+    // The learner's confirmed background travels with the request (the engine reads intake.about),
+    // as does what their other subjects already cover (intake.elsewhere). Neither is stored on the
+    // subject: the client saves its own intake, and both are re-read fresh on every pass.
+    const [{ data: prof }, elsewhere] = await Promise.all([
+      caller.admin.from('profiles').select('about').eq('id', caller.profileId).maybeSingle(),
+      elsewhereOrNone(caller.admin, caller.profileId, typeof body.subjectId === 'string' ? body.subjectId : null, [body.plan?.title, intake.subject]),
+    ]);
+    const fullIntake = { ...intake, context: str(intake.context, 2000), about: prof?.about ?? '', elsewhere };
 
     if (body.kind === 'review') {
       // The critic reads the draft against the learner and the level definitions and returns a corrected plan.

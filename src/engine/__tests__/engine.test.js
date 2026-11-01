@@ -4,7 +4,7 @@ import {
   DAY, setNow, nowMs, dayKey,
   STAGES, stageIdx, stageName, START_LEVELS, CRITERION, LEVEL_DELAY,
   normalisePlan, normaliseLesson, normaliseWarm, normaliseRole, normaliseKnow, upgradePlan,
-  planPrompt, lessonPrompt, checkPrompt, rolePrompt, startPrompt, learnerLines,
+  planPrompt, reviewPlanPrompt, extendPrompt, briefLines, elsewhereLines, lessonPrompt, checkPrompt, rolePrompt, startPrompt, learnerLines,
   topicStatus, nextTopic, stageProgress, stagePosition, positionText, levelCheckReady, markStageReached,
   recordMinutes, logReview, retentionRate, estimateStage, estimateText, paceStats, paceBasis, activityDays,
   makeCards, reviewCard, recallChance, dueCards,
@@ -197,6 +197,31 @@ describe('prompts', () => {
     expect(p).toContain('FHEQ');
     expect(p).toContain('commercial pilot');
     expect(p).toContain('"outcomes"');
+  });
+  it('the learner brief and the other subjects reach the plan, its review, extensions and lessons', () => {
+    const brief = 'A seated coaxial octocopter, about 230 kg all-up, eight motors, 14S battery. End every lesson with a sum using my numbers.';
+    const elsewhere = [{ title: 'DC electrical systems', topics: ['Volts, amps and watts', 'Series and parallel circuits'], learned: ['Volts, amps and watts'] }];
+    const full = { ...intake, context: brief, elsewhere };
+    const p = planPrompt(full, 's2');
+    expect(p).toContain('230 kg');
+    expect(p).toContain('DC electrical systems: Volts, amps and watts (learned); Series and parallel circuits');
+    expect(p).toContain('do not teach them again');
+    expect(p).toContain('with its numbers');
+    const r = reviewPlanPrompt(planPortuguese, full);
+    expect(r).toContain('230 kg');
+    expect(r).toContain('Series and parallel circuits');
+    expect(r).toContain('0. The brief');
+    const plan = normalisePlan(planPortuguese, full, 's2');
+    const subj = subjectFrom(plan, { intake: full });
+    expect(learnerLines(subj)).toContain('Their brief for this subject');
+    expect(learnerLines(subj)).toContain('230 kg');
+    expect(learnerLines(subj)).not.toContain('Series and parallel');
+    expect(extendPrompt(subj, 's3')).toContain('Series and parallel circuits');
+    // Nothing is added when neither is given, and an oversize brief is cut.
+    expect(planPrompt(intake, 's2')).not.toContain('own brief');
+    expect(planPrompt(intake, 's2')).not.toContain('do not teach them again');
+    expect(briefLines({ context: 'x'.repeat(5000) }).length).toBeLessThan(2400);
+    expect(elsewhereLines({ elsewhere: [{ title: 'A', topics: [] }] })).toBe('');
   });
   it('lesson and check prompts carry the learner context from the subject', () => {
     const plan = normalisePlan(planPortuguese, intake, 's2');
