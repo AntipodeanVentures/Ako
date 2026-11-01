@@ -365,13 +365,13 @@ function lessonPrompt(subj, topic, ctx) {
   const procedural = topic.kind === 'procedure' || topic.kind === 'strategy' || motor;
   const st = arr(plan.stages).find((x) => x.id === topic.stage) || {};
   const outcome = topic.outcome != null && arr(st.outcomes)[topic.outcome] ? st.outcomes[topic.outcome] : '';
-  const earlier = plan.topics.filter((t) => isLearned(subj, t) && t.id !== topic.id).map((t) => t.title).slice(-8);
+  const earlier = plan.topics.filter((t) => isLearned(subj, t) && t.id !== topic.id).slice(-8).map((t) => t.id + ' ' + t.title);
   return `Teach one topic to an adult learner, using the method below.
 
 Subject: ${plan.title}. Stage of the ladder this topic belongs to: ${topic.stage} ${stageName(topic.stage)}.${outcome ? ' It serves this level outcome: "' + outcome + '".' : ''}${topic.threshold ? ' This is a THRESHOLD concept: it changes how the learner sees the field, so give it two comparison cases, extra concrete examples and a why question that gets at the mechanism.' : ''}
 ${learnerLines(subj)}
 This topic: "${topic.title}" (kind: ${topic.kind}). ${topic.summary}
-Builds on: ${prereqs}.
+Builds on: ${prereqs}.${earlier.length ? '\nEarlier topics they have learned here, by id: ' + earlier.join('; ') + '.' : ''}
 Rules for this subject: ${plan.rules.join(' ')}
 ${plan.language ? 'This is a language course (' + plan.language + '). Give target-language examples with English translations.' : ''}
 ${warm ? '\nJust before this lesson they answered a warm-up in their own words:\n\n' + warm + '\n' : ''}${c.simpler ? '\nThey found an earlier version of this lesson too hard. Its sections were: ' + c.simpler.join('; ') + '. Write a simpler version, with smaller steps, fewer new terms and more everyday comparisons.\n' : ''}${c.relearn ? '\nThey learned this topic before, but their reviews show it did not stick' + (typeof c.relearn === 'string' && c.relearn !== 'true' ? ' (' + str(c.relearn, 300) + ')' : '') + '. Teach it again from a different angle: a new comparison, a new worked example, and practice that targets exactly what was forgotten, rather than repeating the first lesson.\n' : ''}
@@ -389,6 +389,7 @@ How to teach this learner:
 Produce:
 - "concepts": the 2 to 4 ideas this lesson teaches, as short names (under 8 words each). Every practice question and card below points at one of them by index ("concept").
 - "bridge": 1 or 2 sentences connecting this topic to something they already know (their warm-up answer, an earlier topic or one of their own fields). It is shown first, under the heading "Building on what you know".
+- "bridgeTo": what the bridge builds on, so the learner's map of their knowledge can draw the link: {"topic":"<id of one of the earlier topics listed above>"} when it is an earlier topic here, {"field":"<2 to 5 words naming the field of theirs it draws on, in their own words from the lines above>"} when it is one of their own fields, or null when it is everyday life.
 - "compare": ${topic.kind === 'vocabulary' ? 'null.' : 'two short contrasting cases (3 to 5 sentences each) that both involve the core idea but differ in a way that reveals it, as {"a":"...","b":"...","question":"What do these two have in common, and what makes the difference?","answer":"the principle in 2 or 3 plain sentences"}. The learner compares them before reading the sections.'}
 - "sections": 2 to 4 short teaching sections, ${P.words} words in total. Each has "heading", "paragraphs" (array of strings) and optional "points" (array of short strings).
 - "workedExample": ${procedural || topic.kind === 'concept' ? 'a worked example as {"problem":"...","steps":["..."],"gaps":[indices of steps the learner should complete themselves, per the support level, or []],"answer":"..."}. Each step states what is done and why.' : 'null.'}
@@ -398,7 +399,7 @@ Produce:
 - "resources": 0 to 2 specific resources for this topic that suit their level, as {"title":"...","creator":"...","search":"search phrase"}. Never write URLs.
 
 Return ONLY JSON in this shape:
-{"concepts":["...","..."],"bridge":"...","compare":null,"sections":[{"heading":"...","paragraphs":["..."],"points":["..."]}],"workedExample":null,"mistakes":["..."],"drill":null,"scenario":null,"resources":[]}`;
+{"concepts":["...","..."],"bridge":"...","bridgeTo":null,"compare":null,"sections":[{"heading":"...","paragraphs":["..."],"points":["..."]}],"workedExample":null,"mistakes":["..."],"drill":null,"scenario":null,"resources":[]}`;
 }
 
 // The retrieval and practice set is written after the lesson text, from the lesson text, so

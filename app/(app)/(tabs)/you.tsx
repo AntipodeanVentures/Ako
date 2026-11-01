@@ -15,8 +15,9 @@ import {
 } from '@/src/features/profile';
 import { KIND_LABELS, proposeItems, recomputeAbout, toRows, type ProposedItem } from '@/src/features/profile/know';
 import { VERSION, sendReport } from '@/src/features/reporting';
-import { useSubjects, useUpdateSubject } from '@/src/features/subjects';
-import { isArchived } from '@/src/features/subjects/summary';
+import { useLiveSubjects, useSubjects, useUpdateSubject } from '@/src/features/subjects';
+import { isArchived, liveSubjects } from '@/src/features/subjects/summary';
+import { KnowledgeMap } from '@/src/components/KnowledgeMap';
 import { openLegal } from '@/src/lib/legal';
 import { useTheme, type ThemePreference } from '@/src/theme';
 import type { KnowItemRow } from '@/src/types/database';
@@ -47,6 +48,8 @@ export default function YouScreen() {
   const subjects = useSubjects();
   const updateSubject = useUpdateSubject();
   const archived = (subjects.data ?? []).filter(isArchived);
+  const live = useLiveSubjects(profile);
+  const mapped = liveSubjects(live.subjects);
 
   const [material, setMaterial] = useState('');
   const [proposed, setProposed] = useState<{ summary: string; items: ProposedItem[] } | null>(null);
@@ -164,6 +167,20 @@ export default function YouScreen() {
   return (
     <Screen scroll>
       <Text variant="title">You</Text>
+
+      {mapped.length ? (
+        <View style={{ marginTop: spacing.xxl, gap: spacing.sm }}>
+          <Text variant="eyebrow" color="textMuted">
+            What you know
+          </Text>
+          <Text variant="body" color="textMuted">
+            Every subject and topic, hanging off what you brought with you. It fades where memory is fading and brightens after a review.
+          </Text>
+          <View style={{ marginTop: spacing.xs }}>
+            <KnowledgeMap subjects={mapped} know={items.data ?? []} retention={Number(profile?.retention ?? 0.9)} />
+          </View>
+        </View>
+      ) : null}
 
       <View style={{ marginTop: spacing.xxl, gap: spacing.sm }}>
         <Text variant="eyebrow" color="textMuted">

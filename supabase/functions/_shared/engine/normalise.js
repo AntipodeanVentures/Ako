@@ -126,6 +126,14 @@ function normQ(q) {
   if (!answer) return null;
   return Object.assign(base, { answer });
 }
+// What a lesson's bridge builds on: an earlier topic here, or one of the learner's own fields named in a few words.
+function normBridgeTo(b) {
+  if (!b || typeof b !== 'object') return null;
+  if (str(b.topic)) return { topic: str(b.topic, 16) };
+  if (str(b.field)) return { field: str(b.field, 60) };
+  return null;
+}
+
 function normaliseLesson(raw, topic) {
   const L = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
   const sections = arr(L.sections).filter((x) => x && typeof x === 'object').slice(0, 6).map((x) => ({
@@ -156,7 +164,7 @@ function normaliseLesson(raw, topic) {
   } : null;
   return {
     v: 4, stage: 'full', createdAt: nowMs(), concepts, scenario,
-    bridge: str(L.bridge, 700), compare,
+    bridge: str(L.bridge, 700), bridgeTo: normBridgeTo(L.bridgeTo), compare,
     sections, workedExample: worked,
     mistakes: arr(L.mistakes).map((m) => str(m, 400)).filter(Boolean).slice(0, 4),
     recall: str(L.recall, 600) || 'Explain ' + topic.title + ' in your own words, and link it to something you already know.',
