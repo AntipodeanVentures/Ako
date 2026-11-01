@@ -303,7 +303,7 @@ export function ReviewRun({ items, total, retention, title }: { items: ReviewIte
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
                 <ActivityIndicator size="small" />
                 <Text variant="caption" color="textMuted">
-                  Marking
+                  Checking
                 </Text>
               </View>
             ) : mark ? (
@@ -326,7 +326,7 @@ export function ReviewRun({ items, total, retention, title }: { items: ReviewIte
         markFailed ? (
           <View style={{ gap: spacing.sm }}>
             <Text variant="caption" color="textMuted">
-              The marker is not reachable; say how it went.
+              Your answer could not be checked just now. Say how it went.
             </Text>
             <View style={{ flexDirection: 'row', gap: spacing.sm }}>
               {GRADES.map((g) => (

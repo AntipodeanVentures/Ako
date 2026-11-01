@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 
 import { Button, Logo, Screen, Text, TextField } from '@/src/components/ui';
-import { useAuth } from '@/src/features/auth';
+import { authErrorCopy, useAuth } from '@/src/features/auth';
 import { getSupabase } from '@/src/lib/supabase';
 import { useTheme } from '@/src/theme';
 
@@ -45,7 +45,7 @@ export default function ResetPasswordScreen() {
       if (e) throw e;
       setDone(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not save the new password.');
+      setError(authErrorCopy(e, 'Could not save the new password.'));
     } finally {
       setSubmitting(false);
     }

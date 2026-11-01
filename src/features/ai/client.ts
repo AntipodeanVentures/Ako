@@ -83,7 +83,7 @@ export async function callStream<T>(fn: FunctionName, body: unknown, h: StreamHa
 export function aiErrorCopy(e: unknown): string {
   const err = e as { code?: string; message?: string };
   switch (err?.code) {
-    case 'free_limit': return 'You have used this week\'s free lessons. Reviews stay free; Pro removes the limit.';
+    case 'free_limit': return 'You have used this week\'s lessons. Reviews stay open; new lessons come back next week.';
     case 'daily_limit': return 'You have hit today\'s ceiling. It resets at midnight; reviews are unaffected.';
     case 'rate_limited': return 'The tutor is busy. Give it a moment and try again.';
     case 'invalid_json': return 'The answer came back garbled. Try again.';

@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { View } from 'react-native';
 
 import { Button, Logo, Screen, Text, TextField } from '@/src/components/ui';
-import { useAuth } from '@/src/features/auth';
+import { authErrorCopy, useAuth } from '@/src/features/auth';
 import { useTheme } from '@/src/theme';
 
 export default function SignInScreen() {
@@ -25,7 +25,7 @@ export default function SignInScreen() {
       await signIn({ email: email.trim(), password });
       // The route guard redirects once the session is established.
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not sign in.');
+      setError(authErrorCopy(e, 'Could not sign in.'));
       setSubmitting(false);
     }
   };

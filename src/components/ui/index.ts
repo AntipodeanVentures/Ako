@@ -11,6 +11,8 @@ export { EmptyState } from './EmptyState';
 export { Ladder } from './Ladder';
 export { ListGroup, ListRow } from './ListRow';
 export { Logo } from './Logo';
+export { Missing } from './Missing';
+export { OfflineBanner } from './OfflineBanner';
 export { OptionGroup } from './OptionGroup';
 export type { Option } from './OptionGroup';
 export { ProgressBar } from './ProgressBar';

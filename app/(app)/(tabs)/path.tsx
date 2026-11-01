@@ -1,10 +1,11 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
-import { Button, EmptyState, Screen, Text } from '@/src/components/ui';
+import { Button, EmptyState, Screen, Skeleton, Text } from '@/src/components/ui';
 import { useProfile } from '@/src/features/profile';
 import { useLiveSubjects } from '@/src/features/subjects';
+import { liveSubjects } from '@/src/features/subjects/summary';
 import { SubjectPath } from '@/src/screens/PathView';
 import { useTheme } from '@/src/theme';
 
@@ -15,9 +16,15 @@ export default function PathScreen() {
   const router = useRouter();
   const { subjectId } = useLocalSearchParams<{ subjectId?: string }>();
   const { profile } = useProfile();
-  const { subjects, loading } = useLiveSubjects(profile);
+  const all = useLiveSubjects(profile);
+  const subjects = liveSubjects(all.subjects);
+  const loading = all.loading;
   const [picked, setPicked] = useState<string | null>(null);
-  const subj = subjects.find((s) => s.id === (picked || subjectId)) || subjects[0];
+  // A subject opened from elsewhere wins over the chip last tapped here.
+  useEffect(() => {
+    if (subjectId) setPicked(subjectId);
+  }, [subjectId]);
+  const subj = subjects.find((s) => s.id === picked) || subjects[0];
 
   if (!loading && !subj) {
     return (
@@ -34,8 +41,13 @@ export default function PathScreen() {
   }
   if (!subj) {
     return (
-      <Screen>
-        <View />
+      <Screen scroll>
+        <View style={{ gap: spacing.md }}>
+          <Skeleton height={30} width="60%" />
+          <Skeleton height={8} />
+          <Skeleton height={22} width="40%" />
+          <Skeleton height={60} />
+        </View>
       </Screen>
     );
   }

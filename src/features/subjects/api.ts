@@ -40,7 +40,7 @@ export async function createSubject(profileId: string, subject: NewSubject): Pro
 
 export async function updateSubject(
   id: string,
-  update: Partial<Pick<SubjectRow, 'plan' | 'plan_version' | 'pitch' | 'support' | 'stats' | 'model' | 'role_area_id'>>,
+  update: Partial<Pick<SubjectRow, 'title' | 'intake' | 'plan' | 'plan_version' | 'pitch' | 'support' | 'stats' | 'model' | 'role_area_id'>>,
 ): Promise<void> {
   const { error } = await getSupabase()
     .from('subjects')

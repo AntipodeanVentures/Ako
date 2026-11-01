@@ -21,6 +21,7 @@ import { useSubjects } from '@/src/features/subjects';
 import { queryClient } from '@/src/lib/queryClient';
 import { ThemeProvider, useTheme } from '@/src/theme';
 import { DesktopModeNotice } from '@/src/components/DesktopModeNotice';
+import { OfflineBanner } from '@/src/components/ui';
 import { ErrorBoundary } from '@/src/components/ErrorBoundary';
 import { installReporting, noteRoute } from '@/src/features/reporting';
 
@@ -51,11 +52,13 @@ function useRouteGuard() {
     if (!configured || authLoading || profileLoading) return;
     if (session && subjects.isLoading) return;
 
-    const group = segments[0];
+    // Typed routes give segments a tuple type per route; read it as plain strings.
+    const path = segments as string[];
+    const group = path[0];
     // Development only: fixture-rendered screens for layout checks (app/preview.tsx).
     if (__DEV__ && group === 'preview') return;
     // The reset link signs the learner in and must stay on its own screen.
-    if (group === '(auth)' && segments[1] === 'reset-password') return;
+    if (group === '(auth)' && path[1] === 'reset-password') return;
     if (!session) {
       if (group !== '(auth)') router.replace('/sign-in');
     } else if (!profile || !(subjects.data && subjects.data.length)) {
@@ -88,6 +91,7 @@ function RootNavigator() {
   return (
     <>
       <DesktopModeNotice />
+      <OfflineBanner />
       <Stack
         screenOptions={{
           headerShown: false,
