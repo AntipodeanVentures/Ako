@@ -28,7 +28,7 @@ export type ServerSubject = {
 // is not taught the same basics in each. `excludeId` leaves out the subject
 // being planned; a new subject has no id yet, so its own draft is never in
 // the list.
-export type Elsewhere = { title: string; topics: string[]; learned: string[] };
+export type Elsewhere = { title: string; topics: string[]; learned: string[]; fields: string[] };
 
 export async function loadElsewhere(admin: SupabaseClient, profileId: string, excludeId?: string | null, excludeTitles: (string | null | undefined)[] = []): Promise<Elsewhere[]> {
   const { data: rows } = await admin.from('subjects').select('id, title, plan, stats').eq('profile_id', profileId).order('created_at', { ascending: true });
@@ -50,11 +50,14 @@ export async function loadElsewhere(admin: SupabaseClient, profileId: string, ex
     .in('status', ['mastered', 'known']);
   const learnedIds = new Set((states ?? []).map((s) => `${s.subject_id}|${s.topic_id}`));
   return others.map((r) => {
-    const topics = (r.plan.topics as { id: string; title: string }[]).filter((t) => t && typeof t.title === 'string');
+    const topics = (r.plan.topics as { id: string; title: string; schema?: string[] }[]).filter((t) => t && typeof t.title === 'string');
+    // The field and area names this subject's topics already use ("Physics › Electricity"), so the next plan reuses them.
+    const fields = Array.from(new Set(topics.map((t) => (Array.isArray(t.schema) ? t.schema.filter((x) => typeof x === 'string' && x.trim()).join(' › ') : '')).filter(Boolean)));
     return {
       title: String(r.title || r.plan.title || ''),
       topics: topics.map((t) => t.title),
       learned: topics.filter((t) => learnedIds.has(`${r.id}|${t.id}`)).map((t) => t.title),
+      fields,
     };
   });
 }

@@ -113,6 +113,55 @@ function knowledgeGraph({ subjects, know = [], now = nowMs(), retention = 0.9 })
   return { nodes, edges };
 }
 
+// ---------- the graph by field ----------
+
+// The same knowledge grouped by what each idea is rather than where it is taught: the learner
+// at the centre, a node per field (Physics, Portuguese), a node per area within it (Electricity,
+// Verbs), and every topic under its area, whichever subject teaches it. A topic the planner has
+// not placed yet sits under its subject's title until the backfill places it. Edges: topic to
+// area, area to field, field to the learner, plus the prerequisite and bridge links as before.
+// Positions come from a force layout in the app (src/components/forceLayout.ts); this is the data.
+/**
+ * @param {{ subjects: any[]; know?: any[]; now?: number; retention?: number }} args
+ * @returns {{ nodes: any[]; edges: { from: string; to: string; kind: string }[]; placed: boolean }}
+ */
+function fieldGraph({ subjects, know = [], now = nowMs(), retention = 0.9 }) {
+  const base = knowledgeGraph({ subjects, know, now, retention });
+  const nodes = base.nodes.filter((n) => n.kind !== 'subject');
+  const edges = base.edges.filter((e) => e.kind !== 'root' && e.kind !== 'covers' && !(e.kind === 'spoke' && e.from.startsWith('s:')));
+  const subjectTitle = new Map(arr(subjects).map((s) => [s.id, str(s.plan && s.plan.title, 80)]));
+  const fields = new Map();
+  const areas = new Map();
+  const slug = (x) => str(x, 40).toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  for (const n of nodes) {
+    if (n.kind !== 'topic') continue;
+    const topic = arr(subjects).find((s) => s.id === n.subjectId);
+    const t = topic ? arr(topic.plan.topics).find((x) => x.id === n.topicId) : null;
+    const schema = t && arr(t.schema).length ? arr(t.schema) : [subjectTitle.get(n.subjectId) || 'Unsorted'];
+    const field = str(schema[0], 40);
+    const area = str(schema[1], 40) || field;
+    const fid = 'f:' + slug(field);
+    const aid = 'a:' + slug(field) + '/' + slug(area);
+    if (!fields.has(fid)) fields.set(fid, { id: fid, kind: 'field', label: field, topics: 0, learned: 0, recall: [], placed: !!(t && arr(t.schema).length) });
+    if (!areas.has(aid)) areas.set(aid, { id: aid, kind: 'area', label: area, field: fid, topics: 0, learned: 0, recall: [] });
+    const f = fields.get(fid); const a = areas.get(aid);
+    f.topics++; a.topics++;
+    if (n.status === 'learned' || n.status === 'secure') { f.learned++; a.learned++; if (typeof n.recall === 'number') { f.recall.push(n.recall); a.recall.push(n.recall); } }
+    n.area = aid; n.field = fid; n.subject = subjectTitle.get(n.subjectId) || '';
+    edges.push({ from: n.id, to: aid, kind: 'in' });
+  }
+  for (const a of areas.values()) { a.recall = meanOr(a.recall, null); edges.push({ from: a.id, to: a.field, kind: 'in' }); }
+  for (const f of fields.values()) { f.recall = meanOr(f.recall, null); edges.push({ from: f.id, to: 'you', kind: 'spoke' }); }
+  // An area that is the whole of its field (no second level given) collapses into the field.
+  const only = new Map();
+  for (const a of areas.values()) only.set(a.field, (only.get(a.field) || 0) + 1);
+  const collapse = new Set([...areas.values()].filter((a) => only.get(a.field) === 1 && a.label === fields.get(a.field).label).map((a) => a.id));
+  const kept = [...areas.values()].filter((a) => !collapse.has(a.id));
+  const outEdges = edges.filter((e) => !collapse.has(e.from)).map((e) => (collapse.has(e.to) ? { ...e, to: areas.get(e.to).field } : e));
+  for (const n of nodes) if (n.kind === 'topic' && collapse.has(n.area)) n.area = n.field;
+  return { nodes: [...nodes, ...fields.values(), ...kept], edges: outEdges, placed: [...fields.values()].every((f) => f.placed) };
+}
+
 // ---------- the layout ----------
 
 const R_KNOW = 72;       // the learner's own fields
@@ -120,7 +169,7 @@ const R_HUB = 190;       // subject hubs
 const R_FIRST = 56;      // first ring of topics beyond its hub
 const R_STEP = 44;       // each further level
 const MIN_GAP = 12;      // least distance between neighbouring topics on a ring, in map units
-const RADIUS = { you: 9, know: 4.5, subject: 11, topic: 4.5 };
+const RADIUS = { you: 9, know: 4.5, subject: 11, field: 10, area: 6.5, topic: 4.5 };
 
 const polar = (r, a) => ({ x: Math.round(r * Math.cos(a) * 10) / 10, y: Math.round(r * Math.sin(a) * 10) / 10 });
 
@@ -194,6 +243,11 @@ function nodeRadius(n) {
 function nodeLine(n) {
   if (n.kind === 'you') return 'Everything on the map hangs off what you already knew.';
   if (n.kind === 'know') return 'Something you brought with you. Lessons draw comparisons from it.';
+  if (n.kind === 'field' || n.kind === 'area') {
+    const parts = [`${n.learned} of ${n.topics} topics learned`];
+    if (typeof n.recall === 'number') parts.push(`${Math.round(n.recall * 100)}% likely recalled now`);
+    return parts.join(' · ');
+  }
   if (n.kind === 'subject') {
     const parts = [`${n.learned} of ${n.total} topics learned`];
     if (n.secure) parts.push(`${n.secure} secure`);
@@ -203,9 +257,10 @@ function nodeLine(n) {
   const level = STAGES[n.stageIdx] ? STAGES[n.stageIdx].name : '';
   const status = n.status === 'secure' ? 'Secure' : n.status === 'learned' ? 'Learned' : n.status === 'learning' ? 'In progress' : n.status === 'practising' ? 'Practising' : n.status === 'available' ? 'Ready to start' : 'Later on the path';
   const parts = [status, level].filter(Boolean);
+  if (n.subject) parts.push(n.subject);
   if (typeof n.recall === 'number') parts.push(`${Math.round(n.recall * 100)}% likely recalled now`);
   if (n.threshold) parts.push('key idea');
   return parts.join(' · ');
 }
 
-export { knowledgeGraph, layoutGraph, nodeRadius, nodeLine, matchField, topicRecall, R_HUB, R_KNOW };
+export { knowledgeGraph, fieldGraph, layoutGraph, nodeRadius, nodeLine, matchField, topicRecall, R_HUB, R_KNOW };

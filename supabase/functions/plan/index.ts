@@ -17,11 +17,15 @@
 // Extending to the next level: { kind: 'extend', subject, stageId: 's3' }
 // Response: JSON { extension: { milestones, topics } }, to append to the plan.
 //
+// Placing every topic under a field and an area for the map of what the learner knows,
+// across all their subjects at once so the names agree: { kind: 'schema', subjects: [{ id, title, topics: [{ id, title, summary }] }] }
+// Response: JSON { schema: { [subjectId]: { [topicId]: ["Field", "Area"] } } }
+//
 // Revising the path from evidence: { kind: 'adapt', subject, reason, note?, evidence? }
 // Response: JSON { adaptation: { topics, milestones, notes } }, the new topic list to
 // replace the plan's, with one note per change (empty when nothing changed).
 
-import { planPrompt, reviewPlanPrompt, normalisePlan, extendPrompt, normaliseExtension, adaptPrompt, normaliseAdaptation, METHOD, str } from '../_shared/engine/index.js';
+import { planPrompt, reviewPlanPrompt, normalisePlan, extendPrompt, normaliseExtension, adaptPrompt, normaliseAdaptation, schemaPrompt, normaliseSchema, METHOD, str } from '../_shared/engine/index.js';
 import { CORS, HttpError, errorResponse, json, requireCaller } from '../_shared/auth.ts';
 import { modelFor } from '../_shared/limits.ts';
 import { checkLimit, recordUsage } from '../_shared/metering.ts';
@@ -57,6 +61,13 @@ Deno.serve(async (req) => {
       await recordUsage(caller, 'plan', r.inputTokens, r.outputTokens);
       const extension = normaliseExtension(parseJson(r.text, r.stopReason), subject.plan, body.stageId);
       return json({ extension });
+    }
+    if (body.kind === 'schema') {
+      const subjects = Array.isArray(body.subjects) ? body.subjects.slice(0, 12) : [];
+      if (!subjects.length) throw new HttpError(400, 'bad_request', 'Subjects are required.');
+      const r = await sample({ model: modelFor('schema'), prompt: schemaPrompt(subjects), maxTokens: 12000 });
+      await recordUsage(caller, 'plan', r.inputTokens, r.outputTokens);
+      return json({ schema: normaliseSchema(parseJson(r.text, r.stopReason)) });
     }
     if (body.kind === 'adapt') {
       const subject = body.subject;

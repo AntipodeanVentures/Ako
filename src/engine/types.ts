@@ -27,6 +27,8 @@ export type Topic = {
   milestone: string;
   prereqs: string[];
   minutes: number;
+  // Where the idea sits on the learner's map: ["Field", "Area"]; empty until the planner (or the backfill) places it.
+  schema?: string[];
 };
 
 export type Milestone = { id: string; title: string; test: string; stage: StageId };

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { DAY, knowledgeGraph, layoutGraph, makeCards, matchField, nodeLine, normalisePlan, R_HUB, R_KNOW } from '../index.js';
+import { DAY, fieldGraph, knowledgeGraph, layoutGraph, makeCards, matchField, nodeLine, normalisePlan, R_HUB, R_KNOW } from '../index.js';
 import { planPortuguese } from '../fixtures.js';
 
 const intake = { subject: 'Brazilian Portuguese', current: 'Know a little', target: 's3', hours: 2, minutes: 15, why: 'travel' };
@@ -132,5 +132,30 @@ describe('knowledge map at the size of a real learner', () => {
     }
     expect(closest).toBeGreaterThan(7);
     expect(extent).toBeLessThan(420);
+  });
+});
+
+describe('knowledge map by field', () => {
+  it('groups topics by field and area across subjects, and falls back to the subject title', () => {
+    const a = subject('s1', 'Brazilian Portuguese');
+    const b = subject('s2', 'Spanish');
+    a.plan.topics[0].schema = ['Physics', 'Electricity'];
+    a.plan.topics[1].schema = ['Physics', 'Electricity'];
+    b.plan.topics[0].schema = ['Physics', 'Energy storage'];
+    b.plan.topics[1].schema = ['Portuguese'];
+    const g = fieldGraph({ subjects: [a, b], know, now: T0 });
+    const fields = g.nodes.filter((n) => n.kind === 'field').map((n) => n.label).sort();
+    expect(fields).toEqual(['Brazilian Portuguese', 'Physics', 'Portuguese', 'Spanish']);
+    const areas = g.nodes.filter((n) => n.kind === 'area').map((n) => n.label).sort();
+    // Electricity holds a topic from each of two subjects; a field with one unnamed area has no area node.
+    expect(areas).toEqual(['Electricity', 'Energy storage']);
+    const elec = g.nodes.find((n) => n.kind === 'area' && n.label === 'Electricity');
+    expect(g.edges.filter((e) => e.kind === 'in' && e.to === elec.id)).toHaveLength(2);
+    expect(g.nodes.some((n) => n.kind === 'subject')).toBe(false);
+    expect(g.placed).toBe(false);
+    const ids = new Set(g.nodes.map((n) => n.id));
+    for (const e of g.edges) { expect(ids.has(e.from)).toBe(true); expect(ids.has(e.to)).toBe(true); }
+    const t = g.nodes.find((n) => n.kind === 'topic' && n.topicId === a.plan.topics[0].id);
+    expect(nodeLine(t)).toContain('Brazilian Portuguese');
   });
 });

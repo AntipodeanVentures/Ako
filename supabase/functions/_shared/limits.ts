@@ -32,7 +32,8 @@ export type Task =
   | 'lesson' | 'warm' | 'practice' | 'bridge' | 'mixed' | 'more' | 'tutor' | 'debrief' | 'photo' // teaching, on the critical path
   | 'grade' | 'model' | 'intake' | 'know' // marking and the learner record
   | 'verify' // the second-model check of a new question set and lesson: errors here become cards rehearsed for months
-  | 'start'; // bounded extraction
+  | 'start' // bounded extraction
+  | 'schema'; // placing topics under fields and areas for the map
 const TASK_TIER: Record<Task, keyof typeof MODELS> = {
   plan: 'frontier', // the course design: weeks of study depend on it
   review: 'frontier', // the critic pass on the course
@@ -57,6 +58,7 @@ const TASK_TIER: Record<Task, keyof typeof MODELS> = {
   know: 'mid', // reading a CV into what the learner knows
   verify: 'mid', // the strict-expert check of a question set before the learner sees it, and of the lesson behind it
   start: 'small', // suggesting a starting level from the profile
+  schema: 'mid', // placing every topic under a field and an area for the map of what the learner knows
 };
 export function modelFor(task: Task): string {
   return Deno.env.get('MODEL_' + task.replace(/([A-Z])/g, '_$1').toUpperCase()) ?? MODELS[TASK_TIER[task]];

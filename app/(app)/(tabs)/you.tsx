@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { Button, Screen, Segmented, SwitchRow, Text, TextField } from '@/src/components/ui';
@@ -15,7 +15,8 @@ import {
 } from '@/src/features/profile';
 import { KIND_LABELS, proposeItems, recomputeAbout, toRows, type ProposedItem } from '@/src/features/profile/know';
 import { VERSION, sendReport } from '@/src/features/reporting';
-import { useLiveSubjects, useSubjects, useUpdateSubject } from '@/src/features/subjects';
+import { useInvalidateSubject, useLiveSubjects, useSubjects, useUpdateSubject } from '@/src/features/subjects';
+import { assignSchemas } from '@/src/features/subjects/schema';
 import { isArchived, liveSubjects } from '@/src/features/subjects/summary';
 import { KnowledgeMap } from '@/src/components/KnowledgeMap';
 import { openLegal } from '@/src/lib/legal';
@@ -49,7 +50,12 @@ export default function YouScreen() {
   const updateSubject = useUpdateSubject();
   const archived = (subjects.data ?? []).filter(isArchived);
   const live = useLiveSubjects(profile);
-  const mapped = liveSubjects(live.subjects);
+  // Memoised: the map re-settles its layout whenever this array changes.
+  const mapped = useMemo(() => liveSubjects(live.subjects), [live.subjects]);
+  const invalidate = useInvalidateSubject();
+  const knowItems = useMemo(() => items.data ?? [], [items.data]);
+  // Topics written before the map existed are placed under their fields once, then the plans reload.
+  const place = useCallback(async () => { await assignSchemas(mapped); invalidate(); }, [mapped, invalidate]);
 
   const [material, setMaterial] = useState('');
   const [proposed, setProposed] = useState<{ summary: string; items: ProposedItem[] } | null>(null);
@@ -177,7 +183,7 @@ export default function YouScreen() {
             Every subject and topic, hanging off what you brought with you. It fades where memory is fading and brightens after a review.
           </Text>
           <View style={{ marginTop: spacing.xs }}>
-            <KnowledgeMap subjects={mapped} know={items.data ?? []} retention={Number(profile?.retention ?? 0.9)} />
+            <KnowledgeMap subjects={mapped} know={knowItems} retention={Number(profile?.retention ?? 0.9)} onPlace={place} />
           </View>
         </View>
       ) : null}
