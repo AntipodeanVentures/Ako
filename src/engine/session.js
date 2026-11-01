@@ -172,6 +172,8 @@ function finishTopic(subj, L, opts = {}) {
   if (L.data) {
     st.concepts = arr(L.data.concepts).map((c) => str(c, 80)).filter(Boolean).slice(0, 6);
     if (L.data.drill) st.drill = L.data.drill;
+    // The link the lesson drew to what they already knew, for the map of their knowledge.
+    if (L.data.bridgeTo && typeof L.data.bridgeTo === 'object') st.bridge = L.data.bridgeTo;
     if (str(L.data.apply) && mastered) st.apply = { text: str(L.data.apply, 220), at: nowMs(), done: null };
   }
   if (L.rp && L.rp.debrief) st.roleplay = { mean: L.rp.debrief.mean, runs: L.rp.runs, at: nowMs() };

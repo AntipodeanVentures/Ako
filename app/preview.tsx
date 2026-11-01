@@ -3,6 +3,7 @@ import { Redirect, useLocalSearchParams } from 'expo-router';
 import { useMemo } from 'react';
 import { ScrollView, View } from 'react-native';
 
+import { KnowledgeMap } from '@/src/components/KnowledgeMap';
 import { TabBar } from '@/src/components/TabBar';
 import { Screen, Text } from '@/src/components/ui';
 import { makeCards } from '@/src/engine/scheduling';
@@ -200,7 +201,7 @@ function SessionPreview({ step }: { step: string }) {
 }
 
 export default function PreviewScreen() {
-  const { screen, built, subject, step } = useLocalSearchParams<{ screen?: string; built?: string; subject?: string; step?: string }>();
+  const { screen, built, subject, step, dense } = useLocalSearchParams<{ screen?: string; built?: string; subject?: string; step?: string; dense?: string }>();
   const { spacing } = useTheme();
   const subj = useMemo(fixtureSubject, []);
   if (!__DEV__) return <Redirect href="/" />;
@@ -223,6 +224,67 @@ export default function PreviewScreen() {
     );
   }
   if (screen === 'subject') return <SubjectScreen subj={subj} />;
+  if (screen === 'map') {
+    // Three subjects at different stages, two planned on each other, and a few fields the learner brought.
+    const second = fixtureSubject();
+    second.id = 'fixture-2';
+    second.plan = { ...second.plan, title: 'Spanish for travel' };
+    second.intake = { ...second.intake, elsewhere: [{ title: subj.plan.title, topics: ['x'], learned: [] }] };
+    second.topicState = {};
+    second.cards = [];
+    const third = fixtureSubject();
+    third.id = 'fixture-3';
+    third.plan = { ...third.plan, title: 'Multirotor flight physics' };
+    // Further along: four topics learned at different times, so their recall differs, and lessons that
+    // drew on the learner's own fields.
+    const state = third.topicState as Record<string, { status?: string; masteredAt?: number; bridge?: unknown; attempts?: number }>;
+    const day = 86400000;
+    third.plan.topics.slice(0, 4).forEach((t, i) => {
+      const ago = [40, 12, 4, 1][i] * day;
+      state[t.id] = { ...(state[t.id] ?? {}), status: 'mastered', masteredAt: Date.now() - ago, bridge: i === 0 ? { field: 'airline flying' } : i === 2 ? { field: 'structured finance' } : { topic: third.plan.topics[0].id } };
+      (third.cards ??= []).push(...makeCards(t, [{ front: 'q', back: 'a', concept: 0 }, { front: 'q2', back: 'a2', concept: 0 }], 3, 0.9, Date.now() - ago));
+    });
+    state[third.plan.topics[4].id] = { status: 'learning', attempts: 1 };
+    (subj.topicState as Record<string, { bridge?: unknown }>).p1 = { ...(subj.topicState.p1 as object), bridge: { field: 'Brazilian jiu-jitsu' } };
+    const know = [
+      { id: 'k1', kind: 'job', title: 'Airline captain', detail: '12 years' },
+      { id: 'k2', kind: 'qualification', title: 'Commercial pilot licence', detail: '' },
+      { id: 'k3', kind: 'field', title: 'Structured finance', detail: '' },
+      { id: 'k4', kind: 'sport', title: 'Brazilian jiu-jitsu', detail: 'brown belt' },
+      { id: 'k5', kind: 'language', title: 'English', detail: 'native' },
+    ];
+    // ?dense=1: six subjects of the size a real plan produces, to check the layout holds.
+    const many = dense
+      ? Array.from({ length: 6 }, (_, i) => {
+          const s = fixtureSubject();
+          s.id = 'dense-' + i;
+          const topics = [] as Plan['topics'];
+          for (let j = 0; j < 18; j++) topics.push({ id: 't' + j, title: 'Topic ' + j + ' of subject ' + i, summary: '', kind: 'concept', stage: 's1', outcome: 0, threshold: j % 7 === 0, milestone: 'm1', prereqs: j ? ['t' + (j - 1)] : [], minutes: 30 });
+          for (let j = 18; j < 30; j++) topics.push({ id: 't' + j, title: 'Topic ' + j, summary: '', kind: 'concept', stage: 's2', outcome: 0, threshold: false, milestone: 'm2', prereqs: ['t' + (j - 1)], minutes: 30 });
+          s.plan = { ...s.plan, title: ['Lithium battery engineering', 'DC electrical systems', 'Multirotor flight physics', 'Electric propulsion', 'How solar panels work', 'Roman Stoicism'][i], topics };
+          s.topicState = {};
+          s.cards = [];
+          const learned = [12, 8, 5, 3, 1, 0][i];
+          topics.slice(0, learned).forEach((t, j) => {
+            (s.topicState as Record<string, unknown>)[t.id] = { status: 'mastered', masteredAt: Date.now() - (learned - j) * 3 * 86400000 };
+            (s.cards ??= []).push(...makeCards(t, [{ front: 'q', back: 'a', concept: 0 }], 3, 0.9, Date.now() - (learned - j) * 3 * 86400000));
+          });
+          if (learned < topics.length) (s.topicState as Record<string, unknown>)[topics[learned].id] = { status: 'learning', attempts: 1 };
+          return s;
+        })
+      : [subj, second, third];
+    return (
+      <Screen scroll>
+        <Text variant="title">You</Text>
+        <View style={{ marginTop: spacing.xxl, gap: spacing.sm }}>
+          <Text variant="eyebrow" color="textMuted">
+            What you know
+          </Text>
+          <KnowledgeMap subjects={many} know={know} onOpen={() => {}} />
+        </View>
+      </Screen>
+    );
+  }
   if (screen === 'tabs') {
     // The tab bar on its own, under the Learn screen, to check its width on a laptop.
     const routes = [{ key: 'learn', name: 'learn' }, { key: 'path', name: 'path' }, { key: 'you', name: 'you' }];
@@ -249,7 +311,7 @@ export default function PreviewScreen() {
     <ScrollView contentContainerStyle={{ padding: spacing.xl, gap: spacing.md }}>
       <Text variant="title">Preview</Text>
       <View style={{ gap: spacing.xs }}>
-        {['learn', 'empty', 'path', 'subject', 'tabs', 'goal', 'place', 'review', 'session&step=warm', 'session&step=learn', 'session&step=recall', 'session&step=practice', 'session&step=practice-marked', 'session&step=done'].map((s) => (
+        {['learn', 'empty', 'path', 'subject', 'tabs', 'map', 'goal', 'place', 'review', 'session&step=warm', 'session&step=learn', 'session&step=recall', 'session&step=practice', 'session&step=practice-marked', 'session&step=done'].map((s) => (
           <Text key={s} variant="body">
             /preview?screen={s}
           </Text>

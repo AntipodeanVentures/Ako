@@ -74,6 +74,8 @@ export type Lesson = {
   createdAt?: number;
   concepts: string[];
   bridge: string;
+  // What the bridge builds on: an earlier topic here, or one of the learner's own fields.
+  bridgeTo?: { topic?: string; field?: string } | null;
   compare: { a: string; b: string; question: string; answer: string } | null;
   sections: { heading: string; paragraphs: string[]; points: string[] }[];
   workedExample: { problem: string; steps: string[]; gaps: number[]; answer: string } | null;
