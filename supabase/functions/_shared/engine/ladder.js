@@ -5,11 +5,11 @@
 import { DAY, clampNum, num } from './core.js';
 
 const STAGES = [
-  { id: 's1', name: 'Beginner', short: 'Begin.', fheq: 'usual anchors: FHEQ level 4, CEFR A1 to A2, a first belt or grade', blurb: 'I can follow: you know the basic parts and can do simple things with a model to copy.' },
-  { id: 's2', name: 'Capable', short: 'Capable', fheq: 'usual anchors: FHEQ level 5, CEFR B1, an intermediate belt or grade', blurb: 'I can do it: you handle routine tasks on your own in familiar situations.' },
-  { id: 's3', name: 'Proficient', short: 'Profic.', fheq: "usual anchors: FHEQ level 6 (Bachelor's), CEFR B2, an advanced belt or grade", blurb: 'I can adapt: you handle unfamiliar situations and know why things work.' },
-  { id: 's4', name: 'Advanced', short: 'Adv.', fheq: "usual anchors: FHEQ level 7 (Master's), CEFR C1, instructor or senior grade", blurb: 'I can teach it: fluent and fast, with sound judgement under pressure, able to coach others.' },
-  { id: 's5', name: 'Expert', short: 'Expert', fheq: 'usual anchors: FHEQ level 8 (Doctorate), CEFR C2, examiner, titled or professional standing', blurb: 'I can extend it: you set standards and create work others learn from.' }
+  { id: 's1', name: 'Beginner', short: 'Begin.', fheq: 'usual anchors: FHEQ level 4, CEFR A1 to A2, a first belt or grade', blurb: 'I can follow. I know the basic parts and can do simple things with a model to copy.' },
+  { id: 's2', name: 'Capable', short: 'Capable', fheq: 'usual anchors: FHEQ level 5, CEFR B1, an intermediate belt or grade', blurb: 'I can do it. I handle routine tasks on my own in familiar situations.' },
+  { id: 's3', name: 'Proficient', short: 'Profic.', fheq: "usual anchors: FHEQ level 6 (Bachelor's), CEFR B2, an advanced belt or grade", blurb: 'I can adapt. I handle unfamiliar situations and know why things work.' },
+  { id: 's4', name: 'Advanced', short: 'Adv.', fheq: "usual anchors: FHEQ level 7 (Master's), CEFR C1, instructor or senior grade", blurb: 'I can teach it. Fluent and fast, with sound judgement under pressure, and able to coach others.' },
+  { id: 's5', name: 'Expert', short: 'Expert', fheq: 'usual anchors: FHEQ level 8 (Doctorate), CEFR C2, examiner, titled or professional standing', blurb: 'I can extend it. I set standards and create work others learn from.' }
 ];
 const stageIdx = (id) => Math.max(0, STAGES.findIndex((s) => s.id === id));
 const stageName = (id) => (STAGES[stageIdx(id)] || STAGES[0]).name;

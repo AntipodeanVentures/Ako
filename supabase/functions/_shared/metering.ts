@@ -21,7 +21,7 @@ export async function checkLimit(caller: Caller, kind: Kind): Promise<void> {
   if (over) {
     throw new HttpError(429, tier === 'free' ? 'free_limit' : 'daily_limit',
       tier === 'free'
-        ? 'You have used this week\'s free lessons. Reviews stay free; Pro removes the limit.'
+        ? 'You have used this week\'s lessons. Reviews stay open; new lessons come back next week.'
         : 'You have hit today\'s ceiling. It resets at midnight; reviews are unaffected.');
   }
 }

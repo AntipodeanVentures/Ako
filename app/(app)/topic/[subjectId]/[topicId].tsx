@@ -1,9 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
-import { Button, Say, Screen, Text, TextField } from '@/src/components/ui';
+import { Button, Missing, Say, Screen, Text, TextField } from '@/src/components/ui';
 import { fmtDate } from '@/src/engine/core';
 import { logPractice, recordApply, recordMinutes, suspendCard, topicById, topicStatus } from '@/src/engine/progress';
 import { cardFront } from '@/src/engine/scheduling';
@@ -38,13 +38,7 @@ export default function TopicRoute() {
   const subj = subjects.find((s) => s.id === subjectId);
   const topic = subj ? (topicById(subj, topicId) as Topic | null) : null;
   if (!subj || !topic) {
-    return (
-      <Screen>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          {loading ? <ActivityIndicator /> : <Text color="textMuted">Topic not found.</Text>}
-        </View>
-      </Screen>
-    );
+    return <Missing loading={loading} title="This topic is no longer on the path" body="The path may have been revised, or the subject put away on another device." />;
   }
   return <TopicScreen subj={subj} topic={topic} />;
 }

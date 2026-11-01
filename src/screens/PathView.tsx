@@ -6,13 +6,13 @@ import { Pressable, View } from 'react-native';
 import { Button, Ladder, Text, TextField } from '@/src/components/ui';
 import { STAGES, stageName , stageName as nameOf } from '@/src/engine/ladder';
 import { cleanOutcome } from '@/src/engine/normalise';
-import { currentMilestone, learnedCount, levelCheckReady, mixedDue, sittingMinutes, stagePosition, stageProgress, stageRetention, topicStatus } from '@/src/engine/progress';
+import { currentMilestone, dueCards, learnedCount, levelCheckReady, mixedDue, nextTopic, sittingMinutes, stagePosition, stageProgress, stageRetention, topicStatus } from '@/src/engine/progress';
 import type { Topic } from '@/src/engine/types';
 import { aiErrorCopy } from '@/src/features/ai/client';
 import { useInvalidateSubject, type LiveSubject } from '@/src/features/subjects';
 import { adaptPlan } from '@/src/features/subjects/adapt';
 import { extendPlanTo, nextStageToPlan } from '@/src/features/subjects/extend';
-import { aimLine, subjectLine } from '@/src/features/subjects/summary';
+import { aimLine, revisionLabel, subjectLine } from '@/src/features/subjects/summary';
 import { useTheme } from '@/src/theme';
 
 // One subject's ladder: where you stand, what the next level means here,
@@ -26,6 +26,8 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
   const show = (topicId: string) =>
     onOpenTopic ? onOpenTopic(topicId) : router.push({ pathname: '/topic/[subjectId]/[topicId]', params: { subjectId: subj.id, topicId } });
   const nextMilestone = currentMilestone(subj) as { id: string } | null;
+  const upNext = nextTopic(subj) as Topic | null;
+  const due = dueCards(subj.cards ?? []).length;
   const line = subjectLine(subj);
   const pos = stagePosition(subj);
   const cur = STAGES[pos.currentIdx];
@@ -54,7 +56,7 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
     setRethinkResult(null);
     try {
       const a = await adaptPlan(subj, 'The learner asked for the path to be rethought.', { note: rethinkNote.trim() });
-      setRethinkResult(a.notes?.length ? `${a.notes.length} change${a.notes.length === 1 ? '' : 's'} made; see below.` : 'Looked at it against what you said and what you have done so far: no change needed.');
+      setRethinkResult(a.notes?.length ? `${a.notes.length} change${a.notes.length === 1 ? '' : 's'} made; see below.` : 'No change needed: the topics ahead already fit what you asked for.');
       setRethinkNote('');
       setRethinkOpen(false);
       invalidate();
@@ -81,13 +83,28 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
 
   return (
     <View>
-      <Text variant="title">{line.title}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md }}>
+        <Text variant="title" style={{ flex: 1 }}>
+          {line.title}
+        </Text>
+        <Pressable
+          onPress={() => router.push({ pathname: '/subject/[subjectId]', params: { subjectId: subj.id } })}
+          accessibilityRole="button"
+          accessibilityLabel="Subject settings"
+          hitSlop={8}
+          style={{ paddingTop: 6 }}
+        >
+          <Text variant="caption" color="textMuted">
+            Settings
+          </Text>
+        </Pressable>
+      </View>
       <View style={{ marginTop: spacing.xl }}>
         <Ladder reached={line.reached} current={line.current} progress={line.progress} labels height={8} />
       </View>
 
       <View style={{ marginTop: spacing.xl, gap: spacing.xs }}>
-        <Text variant="heading" color="accent">
+        <Text variant="heading" color={line.reached >= 0 || line.progress > 0 ? 'accent' : 'text'}>
           {line.position}
         </Text>
         {def?.means ? <Text variant="body">{def.means}</Text> : null}
@@ -98,11 +115,17 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
         ) : null}
         {retention.n ? (
           <Text variant="caption" color="textMuted">
-            {Math.round((retention.rate ?? 0) * 100)}% retained weeks later ({retention.ok} of {retention.n} checks)
-            {calibration?.retention ? `. Reviews here are scheduled for ${Math.round(calibration.retention * 100)}% recall${calibration.relearn ? ', and a topic needs one more spaced recall to count as secure' : ''}.` : ''}
+            {Math.round((retention.rate ?? 0) * 100)}% still known weeks later ({retention.ok} of {retention.n} checks)
+            {calibration?.retention ? `. Reviews are timed so you keep about ${Math.round(calibration.retention * 100)}% of it.` : ''}
           </Text>
         ) : null}
       </View>
+
+      {due > 0 ? (
+        <View style={{ marginTop: spacing.lg }}>
+          <Button label={`Review ${due} ${due === 1 ? 'card' : 'cards'} due`} variant="secondary" onPress={() => router.push('/review')} />
+        </View>
+      ) : null}
 
       {checkStage ? (
         <View style={{ marginTop: spacing.lg, gap: spacing.sm }}>
@@ -110,7 +133,7 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
             Every {checkStage.name} topic is learned. Eight to ten questions, from memory.
           </Text>
           <Button
-            label={`Take the ${checkStage.name} level check`}
+            label={`Start the ${checkStage.name} level check`}
             onPress={() => router.push({ pathname: '/check/[subjectId]', params: { subjectId: subj.id, stageId: checkStage.id } })}
           />
         </View>
@@ -131,7 +154,10 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
 
       {toPlan ? (
         <View style={{ marginTop: spacing.lg, gap: spacing.sm }}>
-          <Button label={`Write the ${stageName(toPlan)} topics`} onPress={extend} loading={extending} variant="secondary" />
+          <Text variant="caption" color="textMuted">
+            You have reached {cur.name}. The {stageName(toPlan)} level is planned from what you have learned so far.
+          </Text>
+          <Button label={`Plan the ${stageName(toPlan)} level`} onPress={extend} loading={extending} variant="secondary" />
           {extendError ? (
             <Text variant="caption" color="danger">
               {extendError}
@@ -201,10 +227,17 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
             {subj.plan.milestones.map((m) => {
               const reached = (subj.milestones as Record<string, { at: number }>)[m.id];
               const current = !reached && nextMilestone?.id === m.id;
-              const icon = reached ? 'checkmark-circle' : current ? 'ellipse-outline' : 'lock-closed-outline';
               return (
                 <View key={m.id} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md, paddingVertical: spacing.md, borderTopWidth: 1, borderTopColor: colors.border }}>
-                  <Ionicons name={icon} size={18} color={reached ? colors.accent : current ? colors.text : colors.border} style={{ marginTop: 3 }} />
+                  <View style={{ width: 18, alignItems: 'center', marginTop: 3 }}>
+                    {reached ? (
+                      <Ionicons name="checkmark-circle" size={18} color={colors.accent} />
+                    ) : current ? (
+                      <Ionicons name="ellipse-outline" size={18} color={colors.text} />
+                    ) : (
+                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.border, marginTop: 6 }} />
+                    )}
+                  </View>
                   <View style={{ flex: 1, gap: 2 }}>
                     <Text variant="body" color={reached || current ? 'text' : 'textMuted'}>
                       {m.title}
@@ -232,7 +265,7 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
           />
           <Text variant="caption" color="textMuted">
             {mixedReady
-              ? 'Eight questions across earlier topics, each needing two of them told apart. About ten minutes; it comes round after every three new topics.'
+              ? 'Eight questions that set earlier topics against each other, so you learn to tell them apart. About ten minutes; it comes round after every three new topics.'
               : 'Done for now. It comes round again after three more topics, or in two weeks.'}
           </Text>
         </View>
@@ -253,18 +286,51 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
               {topics.map((t) => {
                 const st = subj.topicState[t.id] as { attempts?: number; reopenedAt?: number; retained?: { n: number; last: number } } | undefined;
                 const status = topicStatus(subj, t);
+                // A word on the row only where it tells the learner something: why a topic is back, that it was
+                // skipped as known, or that a later check showed it had slipped.
                 const note = status === 'learning'
-                  ? (st?.reopenedAt ? 'again' : Number(st?.attempts) ? 'again, simpler' : null)
-                  : status === 'known' ? 'known'
-                    : st?.retained?.n ? (st.retained.last ? 'retained' : 'faded') : null;
+                  ? (st?.reopenedAt ? 'back after a check' : Number(st?.attempts) ? 'another go, simpler' : null)
+                  : status === 'known' ? 'already knew it'
+                    : st?.retained?.n ? (st.retained.last ? 'still known' : 'slipped') : null;
                 const learnedOrPractising = status === 'mastered' || status === 'known' || status === 'practising';
-                return <TopicRow key={t.id} topic={t} status={status} note={note} minutes={sittingMinutes(subj, t) as number} onPress={() => (learnedOrPractising ? show(t.id) : open(t.id))} />;
+                return <TopicRow key={t.id} topic={t} status={status} note={note} upNext={upNext?.id === t.id} minutes={sittingMinutes(subj, t) as number} onPress={() => (learnedOrPractising ? show(t.id) : open(t.id))} />;
               })}
               <View style={{ borderTopWidth: 1, borderTopColor: colors.border }} />
             </View>
           </View>
         );
       })}
+
+      {subj.plan.resources?.length ? (
+        <View style={{ marginTop: spacing.xxl, paddingTop: spacing.xl, borderTopWidth: 1, borderTopColor: colors.border, gap: spacing.sm }}>
+          <Text variant="eyebrow" color="textMuted">
+            Worth having alongside
+          </Text>
+          <Text variant="caption" color="textMuted">
+            Books, courses and references the plan was written with in mind. Search by name; links go stale.
+          </Text>
+          <View style={{ marginTop: spacing.xs }}>
+            {subj.plan.resources.map((r, i) => (
+              <View key={i} style={{ paddingVertical: spacing.md, borderTopWidth: 1, borderTopColor: colors.border, gap: 2 }}>
+                <Text variant="body">
+                  {r.title}
+                  {r.creator ? (
+                    <Text variant="body" color="textMuted">
+                      {' · ' + r.creator}
+                    </Text>
+                  ) : null}
+                </Text>
+                {r.why ? (
+                  <Text variant="caption" color="textMuted">
+                    {r.why}
+                  </Text>
+                ) : null}
+              </View>
+            ))}
+            <View style={{ borderTopWidth: 1, borderTopColor: colors.border }} />
+          </View>
+        </View>
+      ) : null}
 
       <View style={{ marginTop: spacing.xxl, paddingTop: spacing.xl, borderTopWidth: 1, borderTopColor: colors.border, gap: spacing.md }}>
         <View style={{ gap: spacing.xs }}>
@@ -285,7 +351,7 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
               multiline
               style={{ minHeight: 72, textAlignVertical: 'top' }}
             />
-            <Button label="Rethink my path" onPress={rethink} loading={rethinking} />
+            <Button label="Update my path" onPress={rethink} loading={rethinking} />
             <Pressable onPress={() => setRethinkOpen(false)} style={{ alignSelf: 'center', padding: spacing.sm }}>
               <Text variant="caption" color="textMuted">
                 Cancel
@@ -293,7 +359,7 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
             </Pressable>
           </View>
         ) : (
-          <Button label="Rethink my path" variant="secondary" onPress={() => setRethinkOpen(true)} loading={rethinking} />
+          <Button label="Ask for a change" variant="secondary" onPress={() => setRethinkOpen(true)} loading={rethinking} />
         )}
         {rethinkResult ? (
           <Text variant="caption" color="textMuted">
@@ -305,7 +371,7 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
             {history.map((h, i) => (
               <View key={i} style={{ paddingVertical: spacing.md, borderTopWidth: 1, borderTopColor: colors.border, gap: spacing.xs }}>
                 <Text variant="caption" color="textMuted">
-                  {new Date(h.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} · {h.reason.split('.')[0]}
+                  {new Date(h.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} · {revisionLabel(h.reason)}
                 </Text>
                 {h.notes.map((n, j) => (
                   <Text key={j} variant="body">
@@ -322,17 +388,19 @@ export function SubjectPath({ subj, onOpenTopic }: { subj: LiveSubject; onOpenTo
   );
 }
 
-function TopicRow({ topic, status, note, minutes, onPress }: { topic: Topic; status: string; note?: string | null; minutes: number; onPress: () => void }) {
+// One topic in the list. Learned rows get a tick, the open ones a ring, and
+// the ones further ahead a small dot in muted text: they are not locked, just
+// later, and a padlock made the path read as a gate.
+function TopicRow({ topic, status, note, upNext, minutes, onPress }: { topic: Topic; status: string; note?: string | null; upNext?: boolean; minutes: number; onPress: () => void }) {
   const { colors, spacing } = useTheme();
   const learned = status === 'mastered' || status === 'known';
   const open = status === 'available' || status === 'learning' || status === 'practising';
-  const icon = learned ? 'checkmark-circle' : open ? 'ellipse-outline' : 'lock-closed-outline';
-  const iconColor = learned ? colors.accent : open ? colors.text : colors.border;
   return (
     <Pressable
       onPress={open || learned ? onPress : undefined}
       disabled={!open && !learned}
       accessibilityRole="button"
+      accessibilityLabel={`${topic.title}${upNext ? ', up next' : ''}`}
       style={({ pressed }) => ({
         flexDirection: 'row',
         alignItems: 'flex-start',
@@ -343,16 +411,31 @@ function TopicRow({ topic, status, note, minutes, onPress }: { topic: Topic; sta
         opacity: pressed ? 0.7 : 1,
       })}
     >
-      <Ionicons name={icon} size={18} color={iconColor} style={{ marginTop: 3 }} />
+      <View style={{ width: 18, alignItems: 'center', marginTop: 3 }}>
+        {learned ? (
+          <Ionicons name="checkmark-circle" size={18} color={colors.accent} />
+        ) : open ? (
+          <Ionicons name="ellipse-outline" size={18} color={upNext ? colors.accent : colors.text} />
+        ) : (
+          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.border, marginTop: 6 }} />
+        )}
+      </View>
       <View style={{ flex: 1, gap: 2 }}>
-        <Text variant="body" color={open || learned ? 'text' : 'textMuted'}>
-          {topic.title}
-          {note ? (
-            <Text variant="body" color={note === 'faded' ? 'warning' : 'accent'}>
-              {'  ·  ' + note}
+        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm }}>
+          <Text variant={upNext ? 'bodyStrong' : 'body'} color={open || learned ? 'text' : 'textMuted'} style={{ flex: 1 }}>
+            {topic.title}
+            {note ? (
+              <Text variant="body" color={note === 'slipped' ? 'warning' : 'textMuted'}>
+                {'  ·  ' + note}
+              </Text>
+            ) : null}
+          </Text>
+          {upNext ? (
+            <Text variant="caption" color="accent">
+              up next
             </Text>
           ) : null}
-        </Text>
+        </View>
         <Text variant="caption" color="textMuted" numberOfLines={2}>
           {topic.summary}
         </Text>

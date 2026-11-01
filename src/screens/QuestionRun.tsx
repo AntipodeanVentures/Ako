@@ -65,7 +65,7 @@ export function QuestionRun({ title, subtitle, intro, gradeTitle, questions, loa
 
   const mark = async (all: { picked: number | null; text: string }[]) => {
     if (!questions) return;
-    setBusy('Marking');
+    setBusy('Checking your answers');
     setMarkError(null);
     try {
       const shortIdx = questions.map((x, i) => (x.item.type === 'short' ? i : -1)).filter((i) => i >= 0);
@@ -153,7 +153,7 @@ export function QuestionRun({ title, subtitle, intro, gradeTitle, questions, loa
             <Text variant="body" color="danger">
               {error || markError}
             </Text>
-            {markError && answers.length ? <Button label="Mark again" onPress={() => mark(answers)} loading={Boolean(busy)} /> : null}
+            {markError && answers.length ? <Button label="Check again" onPress={() => mark(answers)} loading={Boolean(busy)} /> : null}
             <Button label="Back" variant="secondary" onPress={onClose} />
           </View>
         ) : !q || busy ? (

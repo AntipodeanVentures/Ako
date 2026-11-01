@@ -1,7 +1,9 @@
+import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Redirect, useLocalSearchParams } from 'expo-router';
 import { useMemo } from 'react';
 import { ScrollView, View } from 'react-native';
 
+import { TabBar } from '@/src/components/TabBar';
 import { Screen, Text } from '@/src/components/ui';
 import { makeCards } from '@/src/engine/scheduling';
 import type { Plan } from '@/src/engine/types';
@@ -14,6 +16,7 @@ import { ReviewRun } from '@/src/screens/ReviewRun';
 import { DoneStep, LearnStep, PracticeStep, RecallStep, StepStrip, WarmStep, type SessionApi } from '@/src/screens/SessionSteps';
 import { useTheme } from '@/src/theme';
 
+import { SubjectScreen } from './(app)/subject/[subjectId]';
 import PlaceScreen from './(onboarding)/place';
 import GoalScreen from './(onboarding)/goal';
 
@@ -219,6 +222,23 @@ export default function PreviewScreen() {
       </Screen>
     );
   }
+  if (screen === 'subject') return <SubjectScreen subj={subj} />;
+  if (screen === 'tabs') {
+    // The tab bar on its own, under the Learn screen, to check its width on a laptop.
+    const routes = [{ key: 'learn', name: 'learn' }, { key: 'path', name: 'path' }, { key: 'you', name: 'you' }];
+    const props = {
+      state: { index: 0, routes },
+      descriptors: Object.fromEntries(routes.map((r) => [r.key, { options: { title: r.name[0].toUpperCase() + r.name.slice(1) } }])),
+      navigation: { emit: () => ({ defaultPrevented: false }), navigate: () => {} },
+      insets: { top: 0, bottom: 0, left: 0, right: 0 },
+    } as unknown as BottomTabBarProps;
+    return (
+      <View style={{ flex: 1 }}>
+        <LearnView subjects={[subj]} loading={false} onStart={() => {}} onOpenSubject={() => {}} onAddSubject={() => {}} />
+        <TabBar {...props} />
+      </View>
+    );
+  }
   if (screen === 'empty') {
     return <LearnView subjects={[]} loading={false} onStart={() => {}} onOpenSubject={() => {}} onAddSubject={() => {}} />;
   }
@@ -229,7 +249,7 @@ export default function PreviewScreen() {
     <ScrollView contentContainerStyle={{ padding: spacing.xl, gap: spacing.md }}>
       <Text variant="title">Preview</Text>
       <View style={{ gap: spacing.xs }}>
-        {['learn', 'empty', 'path', 'goal', 'place', 'review', 'session&step=warm', 'session&step=learn', 'session&step=recall', 'session&step=practice', 'session&step=practice-marked', 'session&step=done'].map((s) => (
+        {['learn', 'empty', 'path', 'subject', 'tabs', 'goal', 'place', 'review', 'session&step=warm', 'session&step=learn', 'session&step=recall', 'session&step=practice', 'session&step=practice-marked', 'session&step=done'].map((s) => (
           <Text key={s} variant="body">
             /preview?screen={s}
           </Text>

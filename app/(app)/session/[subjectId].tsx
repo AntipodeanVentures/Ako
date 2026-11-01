@@ -1,9 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
-import { Screen, Text } from '@/src/components/ui';
+import { Button, Missing, Screen, Text } from '@/src/components/ui';
 import { useProfile } from '@/src/features/profile';
 import { useSession } from '@/src/features/session/useSession';
 import { useInvalidateSubject, useLiveSubjects, type LiveSubject } from '@/src/features/subjects';
@@ -22,27 +22,28 @@ export default function SessionRoute() {
   const live = frozen.subj;
 
   if (!live) {
-    return (
-      <Screen>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          {loading ? <ActivityIndicator /> : <Text color="textMuted">Subject not found.</Text>}
-        </View>
-      </Screen>
-    );
+    return <Missing loading={loading} title="This subject is no longer here" body="It may have been put away or deleted on another device." />;
   }
   const tid = topicId || live.plan.topics[0]?.id;
-  if (!tid) return null;
+  if (!tid) {
+    return <Missing title="No topics to study yet" body="This subject's path has no topics written. Open it from the Path tab to plan the first level." />;
+  }
   return <SessionScreen subj={live} topicId={tid} retention={Number(profile?.retention ?? 0.9)} />;
 }
 
 function SessionScreen({ subj, topicId, retention }: { subj: LiveSubject; topicId: string; retention: number }) {
-  const { colors, spacing } = useTheme();
+  const { colors, spacing, radius } = useTheme();
   const router = useRouter();
   const invalidate = useInvalidateSubject();
   const S = useSession(subj, topicId, retention, invalidate);
   const { s, topic, currentItem } = S;
 
-  const close = () => (router.canGoBack() ? router.back() : router.replace('/learn'));
+  const leave = () => (router.canGoBack() ? router.back() : router.replace('/learn'));
+  // Closing part-way through is allowed (the place is kept and offered again
+  // from Today), but a stray tap on the cross should not end a lesson, so it
+  // asks once. On the Done step there is nothing to lose.
+  const [leaving, setLeaving] = useState(false);
+  const close = () => (s.step === 'done' || (s.step === 'warm' && !s.warm) ? leave() : setLeaving(true));
 
   return (
     <Screen scroll width="reading">
@@ -58,6 +59,23 @@ function SessionScreen({ subj, topicId, retention }: { subj: LiveSubject; topicI
         </Pressable>
       </View>
       <StepStrip S={S} />
+
+      {leaving ? (
+        <View style={{ marginTop: spacing.lg, gap: spacing.sm, padding: spacing.lg, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md }}>
+          <Text variant="bodyStrong">Leave this lesson?</Text>
+          <Text variant="body" color="textMuted">
+            Your place is kept. It is offered again from Today, where you left off.
+          </Text>
+          <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs }}>
+            <View style={{ flex: 1 }}>
+              <Button label="Keep going" onPress={() => setLeaving(false)} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Button label="Leave" variant="secondary" onPress={leave} />
+            </View>
+          </View>
+        </View>
+      ) : null}
 
       <View style={{ marginTop: spacing.xl, flex: 1 }}>
         {s.error ? (

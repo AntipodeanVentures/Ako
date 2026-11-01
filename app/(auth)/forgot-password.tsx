@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { View } from 'react-native';
 
 import { Button, Logo, Screen, Text, TextField } from '@/src/components/ui';
+import { authErrorCopy } from '@/src/features/auth';
 import { resetRedirect } from '@/src/features/auth/redirects';
 import { getSupabase } from '@/src/lib/supabase';
 import { useTheme } from '@/src/theme';
@@ -26,7 +27,7 @@ export default function ForgotPasswordScreen() {
       if (e) throw e;
       setSent(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not send the email.');
+      setError(authErrorCopy(e, 'Could not send the email.'));
     } finally {
       setSubmitting(false);
     }

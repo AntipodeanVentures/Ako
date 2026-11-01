@@ -1,6 +1,7 @@
 import { dayKey, nowMs } from '@/src/engine/core';
 import { STAGES, stageIdx } from '@/src/engine/ladder';
 import {
+  activityDays,
   dueCards,
   estimateStage,
   mixedDue,
@@ -12,14 +13,100 @@ import {
   nextStageEstimate,
   nextTopic,
   paceStats,
+  retentionRate,
+  secureCount,
   sittingMinutes,
   sittingMinutesLeft,
   stagePosition,
   stageProgress,
 } from '@/src/engine/progress';
+import { jolCalibration } from '@/src/engine/session';
 import type { Topic } from '@/src/engine/types';
 
 import type { LiveSubject } from './context';
+
+// Subjects the learner has put away. They stay in the database (and can be
+// brought back), but no screen lists them among the live ones and the
+// planner no longer treats their topics as already covered.
+export const isArchived = (subj: { stats: Record<string, unknown> }) => subj.stats?.archived === true;
+export const liveSubjects = <T extends { stats: Record<string, unknown> }>(subjects: T[]) => subjects.filter((s) => !isArchived(s));
+
+// The daily target: the longest slot any subject was set up with. A learner
+// with two subjects at 15 and 30 minutes is aiming at 30 on a full day.
+export function dailySlot(subjects: LiveSubject[]): number {
+  return subjects.reduce((m, s) => Math.max(m, Number(s.intake.minutes) || 0), 0) || 15;
+}
+
+// The record of effort: a run of study days, minutes this week, the last day
+// studied. Read from each subject's minutes log, so it needs no extra fetch.
+export type Effort = { streak: number; weekMinutes: number; lastStudied: string | null; studiedToday: boolean };
+
+export function effort(subjects: LiveSubject[]): Effort {
+  const days = activityDays(subjects, 60) as { day: string; on: boolean }[];
+  const today = days[days.length - 1];
+  // A streak counts back from today, or from yesterday if today is not yet done.
+  let streak = 0;
+  for (let i = days.length - (today?.on ? 1 : 2); i >= 0; i--) {
+    if (days[i]?.on) streak++;
+    else break;
+  }
+  const week = days.slice(-7).map((d) => d.day);
+  const weekMinutes = subjects.reduce((n, s) => {
+    const log = (s.stats.log as Record<string, number>) || {};
+    return n + week.reduce((m, d) => m + (log[d] || 0), 0);
+  }, 0);
+  const last = [...days].reverse().find((d) => d.on);
+  return { streak, weekMinutes: Math.round(weekMinutes), lastStudied: last ? last.day : null, studiedToday: Boolean(today?.on) };
+}
+
+// "3 days running", "studied 4 of the last 7 days": one short line for the home screen.
+export function effortLine(e: Effort): string {
+  if (!e.lastStudied) return '';
+  const parts: string[] = [];
+  if (e.streak >= 2) parts.push(`${e.streak} days running`);
+  if (e.weekMinutes > 0) parts.push(`${e.weekMinutes} min this week`);
+  return parts.join(' · ');
+}
+
+// The evidence behind a subject's position, for its page: what has been
+// learned, what has held up over days, how reviews are going, and how well
+// the learner's own predictions match. Every number is "none yet" until it
+// is earned; nothing here is estimated.
+export type Evidence = {
+  learned: number;
+  total: number;
+  secure: number;
+  // Share of reviews recalled over the last four weeks, once there are ten.
+  recall: number | null;
+  // How far the learner's own predictions ran from the outcome (positive = over-confident), once there are three.
+  calibration: number | null;
+  calibrationN: number;
+};
+
+export function subjectEvidence(subj: LiveSubject): Evidence {
+  const cal = jolCalibration(subj) as { n: number; bias: number | null };
+  return {
+    learned: learnedCount(subj),
+    total: subj.plan.topics.length,
+    secure: secureCount(subj),
+    recall: retentionRate(subj) as number | null,
+    calibration: cal.n >= 3 ? cal.bias : null,
+    calibrationN: cal.n,
+  };
+}
+
+// The reasons a revision was made are written for the model; the learner
+// sees a plain label instead.
+export function revisionLabel(reason: string): string {
+  const r = reason.toLowerCase();
+  if (r.includes('asked')) return 'You asked for a change';
+  if (r.includes('milestone')) return 'After a milestone';
+  if (r.includes('missed the mark') || r.includes('not reached the mark')) return 'After a topic missed the mark';
+  if (r.includes('level check')) return 'After a level check';
+  if (r.includes('forgot')) return 'After forgotten reviews';
+  if (r.includes('routine')) return 'A routine look at the path';
+  return 'The path was revised';
+}
 
 // Plain numbers and sentences for the Learn screen, computed from the
 // engine so the app and the artifact agree.
@@ -126,7 +213,7 @@ export function todayLine(subjects: LiveSubject[], extras: NextStepExtras = {}):
     const again = st.status === 'learning' && (Number(st.attempts) > 0 || Boolean(st.reopenedAt));
     parts.push(`${due ? 'then ' : ''}${again ? (st.reopenedAt ? 'back to' : 'another go, simpler, at') : 'one new idea:'} ${nt.title.toLowerCase()}`);
   }
-  if (!parts.length) return 'Nothing due. Add a subject to keep going.';
+  if (!parts.length) return subjects.length ? 'Nothing due right now. Reviews come back as they fall due; open a subject to go further today.' : 'Add a subject to begin.';
   const line = parts.join(', ');
   // A topic title may end in its own question mark; do not add a full stop after it.
   return line.charAt(0).toUpperCase() + line.slice(1) + (/[.!?]$/.test(line) ? '' : '.');
@@ -153,13 +240,14 @@ export function subjectLine(subj: LiveSubject): SubjectLine {
   const prog = stageProgress(subj, cur.id);
   const def = subj.plan.stages.find((s) => s.id === cur.id);
   const pct = Math.round(prog.pct * 100);
+  // Plain words for where they stand. The share is of the level's topics learned.
   const position = pos.done
     ? 'Expert reached'
     : pos.explicit >= 0
-      ? `${STAGES[pos.explicit].name} reached, ${cur.name} ${pct}%`
+      ? `${STAGES[pos.explicit].name} reached · ${cur.name} ${pct}% learned`
       : prog.inPlan
-        ? `${cur.name}, ${pct}% evidenced`
-        : `${cur.name} not planned yet`;
+        ? pct > 0 ? `${cur.name} · ${pct}% learned` : `${cur.name} · not started`
+        : `${cur.name} · topics not written yet`;
   const est = nextStageEstimate(subj);
   const estimate = est ? `${est.name} ${est.text.startsWith('level') ? est.text : 'expected in ' + est.text.replace(/ \(.*\)$/, '')}` : '';
   return {

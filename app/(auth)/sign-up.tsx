@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { View } from 'react-native';
 
 import { Button, Logo, Screen, Text, TextField } from '@/src/components/ui';
-import { useAuth } from '@/src/features/auth';
+import { authErrorCopy, useAuth } from '@/src/features/auth';
 import { openLegal } from '@/src/lib/legal';
 import { useTheme } from '@/src/theme';
 
@@ -46,7 +46,7 @@ export default function SignUpScreen() {
       }
       // Otherwise the route guard redirects once the session is set.
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not create your account.');
+      setError(authErrorCopy(e, 'Could not create your account.'));
       setSubmitting(false);
     }
   };

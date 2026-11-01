@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
-import { Button, Screen, SwitchRow, Text, TextField } from '@/src/components/ui';
+import { Button, Screen, Segmented, SwitchRow, Text, TextField } from '@/src/components/ui';
 import { aiErrorCopy } from '@/src/features/ai/client';
 import { useAuth } from '@/src/features/auth';
 import {
@@ -13,21 +13,40 @@ import {
   useProfile,
   useSaveKnowItems,
 } from '@/src/features/profile';
-import { BUILD, VERSION, sendReport } from '@/src/features/reporting';
-import { openLegal } from '@/src/lib/legal';
 import { KIND_LABELS, proposeItems, recomputeAbout, toRows, type ProposedItem } from '@/src/features/profile/know';
-import { useTheme } from '@/src/theme';
+import { VERSION, sendReport } from '@/src/features/reporting';
+import { useSubjects, useUpdateSubject } from '@/src/features/subjects';
+import { isArchived } from '@/src/features/subjects/summary';
+import { openLegal } from '@/src/lib/legal';
+import { useTheme, type ThemePreference } from '@/src/theme';
 import type { KnowItemRow } from '@/src/types/database';
 
-// You: what you already know (which every lesson builds on), your account,
-// and sign out. Reminders and read-aloud arrive with the phone builds.
+// How much of what you learn the reviews are timed to keep. Higher means
+// more reviews, closer together.
+const TARGETS: { value: string; label: string; hint: string }[] = [
+  { value: '0.85', label: '85%', hint: 'Fewer reviews. Some slips, caught at the next one.' },
+  { value: '0.9', label: '90%', hint: 'The usual setting: a review when a card is about to slip.' },
+  { value: '0.95', label: '95%', hint: 'More reviews, closer together. For something you need cold.' },
+];
+
+const THEMES: { value: ThemePreference; label: string }[] = [
+  { value: 'system', label: 'System' },
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+];
+
+// You: what you already know (which every lesson builds on), your account
+// and its settings, subjects put away, and sign out.
 export default function YouScreen() {
-  const { spacing, colors } = useTheme();
+  const { spacing, colors, radius, preference, setPreference } = useTheme();
   const { signOut, session } = useAuth();
   const { profile, refresh } = useProfile();
   const items = useKnowItems();
   const save = useSaveKnowItems(profile?.id);
   const remove = useDeleteKnowItem();
+  const subjects = useSubjects();
+  const updateSubject = useUpdateSubject();
+  const archived = (subjects.data ?? []).filter(isArchived);
 
   const [material, setMaterial] = useState('');
   const [proposed, setProposed] = useState<{ summary: string; items: ProposedItem[] } | null>(null);
@@ -37,6 +56,14 @@ export default function YouScreen() {
   const [deleting, setDeleting] = useState(false);
   const [problem, setProblem] = useState('');
   const [problemState, setProblemState] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle');
+  const [name, setName] = useState(profile?.display_name ?? '');
+  const [editingName, setEditingName] = useState(false);
+  const [savingName, setSavingName] = useState(false);
+  const [savingTarget, setSavingTarget] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!editingName) setName(profile?.display_name ?? '');
+  }, [profile?.display_name, editingName]);
 
   const sendProblem = async () => {
     if (!problem.trim()) return;
@@ -47,6 +74,35 @@ export default function YouScreen() {
       setProblemState('sent');
     } catch {
       setProblemState('failed');
+    }
+  };
+
+  const saveName = async () => {
+    if (!profile) return;
+    setSavingName(true);
+    setSettingsError(null);
+    try {
+      await updateProfile(profile.id, { display_name: name.trim() });
+      await refresh();
+      setEditingName(false);
+    } catch {
+      setSettingsError('Could not save your name. Check your connection and try again.');
+    } finally {
+      setSavingName(false);
+    }
+  };
+
+  const setTarget = async (v: string) => {
+    if (!profile) return;
+    setSavingTarget(true);
+    setSettingsError(null);
+    try {
+      await updateProfile(profile.id, { retention: Number(v) });
+      await refresh();
+    } catch {
+      setSettingsError('Could not save the review target. Check your connection and try again.');
+    } finally {
+      setSavingTarget(false);
     }
   };
 
@@ -77,7 +133,9 @@ export default function YouScreen() {
     if (!proposed || !profile) return;
     setError(null);
     try {
-      const rows = toRows(proposed.items, material.length > 600 ? 'cv' : 'typed');
+      // Pasting the same CV twice should not list every job twice.
+      const have = new Set((items.data ?? []).map((r) => r.title.trim().toLowerCase()));
+      const rows = toRows(proposed.items, material.length > 600 ? 'cv' : 'typed').filter((r) => !have.has(r.title.trim().toLowerCase()));
       await save.mutateAsync(rows);
       const after = [...(items.data ?? []), ...rows.map((r, i) => ({ ...r, id: `new-${i}`, profile_id: profile.id, confirmed_at: '', created_at: '' }))] as KnowItemRow[];
       await recomputeAbout(profile, after, proposed.summary);
@@ -99,6 +157,9 @@ export default function YouScreen() {
   const grouped = Object.keys(KIND_LABELS)
     .map((kind) => ({ kind, label: KIND_LABELS[kind], rows: (items.data ?? []).filter((r) => r.kind === kind) }))
     .filter((g) => g.rows.length);
+
+  const target = String(Number(profile?.retention ?? 0.9));
+  const targetValue = TARGETS.some((t) => t.value === target) ? target : '0.9';
 
   return (
     <Screen scroll>
@@ -204,6 +265,91 @@ export default function YouScreen() {
         </View>
       )}
 
+      <View style={{ marginTop: spacing.xxxl, gap: spacing.lg }}>
+        <Text variant="eyebrow" color="textMuted">
+          Settings
+        </Text>
+
+        <View style={{ gap: spacing.sm }}>
+          {editingName ? (
+            <View style={{ gap: spacing.sm }}>
+              <TextField label="Name" value={name} onChangeText={setName} autoFocus maxLength={60} />
+              <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                <View style={{ flex: 1 }}>
+                  <Button label="Save" onPress={saveName} loading={savingName} disabled={!name.trim()} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Button label="Cancel" variant="ghost" onPress={() => setEditingName(false)} />
+                </View>
+              </View>
+            </View>
+          ) : (
+            <Row label="Name" value={profile?.display_name || 'Add your name'} onPress={() => setEditingName(true)} />
+          )}
+          <Row label="Email" value={session?.user.email || ''} last />
+        </View>
+
+        <View style={{ gap: spacing.sm }}>
+          <Text variant="bodyStrong">Review target</Text>
+          <Text variant="caption" color="textMuted">
+            How much of what you learn the reviews are timed to keep. A review is due when a card is about to drop below it.
+          </Text>
+          <Segmented options={TARGETS} value={savingTarget ? null : targetValue} onChange={(v) => void setTarget(v)} />
+        </View>
+
+        <View style={{ gap: spacing.sm }}>
+          <Text variant="bodyStrong">Appearance</Text>
+          <Segmented options={THEMES} value={preference} onChange={setPreference} />
+        </View>
+
+        <SwitchRow
+          label="Daily reminder email"
+          description="At 7 in the morning, UK time, on days you have not yet studied: how many reviews are due and the next idea. Nothing on days you have already been in."
+          value={Boolean(profile?.reminder_time)}
+          onChange={async (on) => {
+            if (!profile) return;
+            await updateProfile(profile.id, { reminder_time: on ? '07:00' : null });
+            await refresh();
+          }}
+        />
+        {settingsError ? (
+          <Text variant="caption" color="danger">
+            {settingsError}
+          </Text>
+        ) : null}
+      </View>
+
+      {archived.length ? (
+        <View style={{ marginTop: spacing.xxxl, gap: spacing.sm }}>
+          <Text variant="eyebrow" color="textMuted">
+            Put away
+          </Text>
+          <Text variant="caption" color="textMuted">
+            Subjects you have set aside. Their progress is kept; bring one back and it picks up where it was.
+          </Text>
+          <View style={{ marginTop: spacing.xs }}>
+            {archived.map((s) => (
+              <View key={s.id} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md, borderTopWidth: 1, borderTopColor: colors.border }}>
+                <Text variant="body" style={{ flex: 1 }} numberOfLines={2}>
+                  {s.plan?.title || s.title}
+                </Text>
+                <Pressable
+                  onPress={() => updateSubject.mutate({ id: s.id, stats: { ...(s.stats ?? {}), archived: false } })}
+                  disabled={updateSubject.isPending}
+                  accessibilityRole="button"
+                  hitSlop={8}
+                >
+                  <Text variant="bodyStrong" color="primary">
+                    Bring back
+                  </Text>
+                </Pressable>
+              </View>
+            ))}
+            <View style={{ borderTopWidth: 1, borderTopColor: colors.border }} />
+          </View>
+        </View>
+      ) : null}
+
       <View style={{ marginTop: spacing.xxxl, gap: spacing.md }}>
         <View style={{ gap: spacing.xs }}>
           <Text variant="eyebrow" color="textMuted">
@@ -217,7 +363,7 @@ export default function YouScreen() {
           label="What happened"
           value={problem}
           onChangeText={(v) => { setProblem(v); if (problemState !== 'idle') setProblemState('idle'); }}
-          placeholder="The lesson on X ended before the practice; the Start button did nothing; ..."
+          placeholder="The lesson ended before the questions. The Start button did nothing."
           multiline
           style={{ minHeight: 80, textAlignVertical: 'top' }}
         />
@@ -233,29 +379,7 @@ export default function YouScreen() {
         ) : null}
       </View>
 
-      <View style={{ marginTop: spacing.xxxl }}>
-        <Text variant="eyebrow" color="textMuted" style={{ marginBottom: spacing.sm }}>
-          Account
-        </Text>
-        <Row label="Name" value={profile?.display_name || ''} />
-        <Row label="Email" value={session?.user.email || ''} />
-        <Row label="Review target" value={`${Math.round(Number(profile?.retention ?? 0.9) * 100)}% recall`} />
-        <Row label="Version" value={`${VERSION} (${BUILD})`} last />
-        <View style={{ marginTop: spacing.lg }}>
-          <SwitchRow
-            label="Daily reminder email"
-            description="At 7 in the morning, UK time, on days you have not yet studied: how many reviews are due and the next idea. Nothing on days you have already been in."
-            value={Boolean(profile?.reminder_time)}
-            onChange={async (on) => {
-              if (!profile) return;
-              await updateProfile(profile.id, { reminder_time: on ? '07:00' : null });
-              await refresh();
-            }}
-          />
-        </View>
-      </View>
-
-      <View style={{ marginTop: spacing.xl, gap: spacing.md }}>
+      <View style={{ marginTop: spacing.xxxl, gap: spacing.md }}>
         <Button label="Sign out" variant="secondary" onPress={signOut} />
         {!confirmDelete ? (
           <Pressable onPress={() => setConfirmDelete(true)} style={{ alignSelf: 'center', padding: spacing.sm }}>
@@ -264,7 +388,7 @@ export default function YouScreen() {
             </Text>
           </Pressable>
         ) : (
-          <View style={{ gap: spacing.sm, padding: spacing.lg, borderWidth: 1, borderColor: colors.border, borderRadius: 12 }}>
+          <View style={{ gap: spacing.sm, padding: spacing.lg, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md }}>
             <Text variant="bodyStrong">Delete everything?</Text>
             <Text variant="body" color="textMuted">
               Your subjects, progress, cards and profile go at once. There is no undo.
@@ -277,7 +401,7 @@ export default function YouScreen() {
             </Pressable>
           </View>
         )}
-        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: spacing.lg, marginTop: spacing.md }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: spacing.lg, marginTop: spacing.md }}>
           <Pressable onPress={() => openLegal('privacy')}>
             <Text variant="caption" color="textMuted">
               Privacy
@@ -288,32 +412,43 @@ export default function YouScreen() {
               Terms
             </Text>
           </Pressable>
+          <Text variant="caption" color="textMuted">
+            Version {VERSION}
+          </Text>
         </View>
       </View>
     </Screen>
   );
 }
 
-function Row({ label, value, last }: { label: string; value: string; last?: boolean }) {
+function Row({ label, value, last, onPress }: { label: string; value: string; last?: boolean; onPress?: () => void }) {
   const { spacing, colors } = useTheme();
   return (
-    <View
-      style={{
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      accessibilityRole={onPress ? 'button' : undefined}
+      style={({ pressed }) => ({
         flexDirection: 'row',
         justifyContent: 'space-between',
+        alignItems: 'center',
         gap: spacing.md,
         paddingVertical: spacing.md,
         borderTopWidth: 1,
         borderBottomWidth: last ? 1 : 0,
         borderColor: colors.border,
-      }}
+        opacity: pressed ? 0.7 : 1,
+      })}
     >
       <Text variant="body" color="textMuted">
         {label}
       </Text>
-      <Text variant="bodyStrong" numberOfLines={1} style={{ flexShrink: 1 }}>
-        {value}
-      </Text>
-    </View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flexShrink: 1 }}>
+        <Text variant="bodyStrong" numberOfLines={1} style={{ flexShrink: 1 }}>
+          {value}
+        </Text>
+        {onPress ? <Ionicons name="chevron-forward" size={16} color={colors.textMuted} /> : null}
+      </View>
+    </Pressable>
   );
 }
