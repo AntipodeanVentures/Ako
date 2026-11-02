@@ -163,8 +163,9 @@ Return ONLY JSON: the complete corrected plan in exactly the same shape as the d
 }
 
 // Turning a CV, a profile page or short answers into structured items the learner then confirms.
-function knowPrompt(material, fromPhoto) {
+function knowPrompt(material, fromPhoto, fieldsInUse) {
   const body = fromPhoto ? ' The material is in the attached photo (a CV, a profile page or notes); read it carefully.' : '\n\nMaterial:\n"""\n' + material + '\n"""';
+  const inUse = arr(fieldsInUse).map((f) => str(f, 80)).filter(Boolean).slice(0, 60);
   return `Read what follows about one adult learner and extract what they already know well, so a learning app can build on it.${body}
 
 Extract "items", each with:
@@ -174,7 +175,29 @@ Extract "items", each with:
 Rules: at most 30 items, most useful first; merge duplicates; never include contact details, addresses, dates of birth, references, salary, or anything about health. Do not invent: only what the material states or clearly implies.
 Also write "summary": 2 sentences on their strongest areas of knowledge and skill, in plain words.
 
-Return ONLY JSON: {"summary":"...","items":[{"kind":"job","text":"...","level":"..."}]}`;
+Then place what they know on their map of knowledge as "fields": for each distinct body of knowledge the material shows, {"field": the broad discipline (Aviation, Finance, Physics, Jiu-jitsu, Portuguese), "area": the part of it they know (Navigation, Structured lending, Guard; or "" when it is the whole field), "level": where they stand on the five-rung ladder as one of ${STAGES.map((s) => '"' + s.id + '" ' + s.name).join(', ')} (s1 can follow with a model to copy; s2 handles routine tasks alone; s3 handles unfamiliar situations and knows why things work; s4 fluent, fast, able to teach it; s5 sets standards others learn from), "basis": the evidence in the material, under 12 words (a licence, years in a role, a belt, a degree)}. Judge the level from the evidence, not the wording: a professional licence or several years in the role is s3 or s4; a degree alone is s2 or s3; a hobby mentioned in passing is s1 or s2. Prefer several specific areas to one vague field. At most 20 fields.${inUse.length ? ' Fields and areas already on their map, to reuse where they fit: ' + inUse.join('; ') + '.' : ''}
+
+Return ONLY JSON: {"summary":"...","items":[{"kind":"job","text":"...","level":"..."}],"fields":[{"field":"...","area":"...","level":"s3","basis":"..."}]}`;
+}
+
+// A short check from memory of a field the learner says they know, to set the level the map
+// and the planner can rely on. Two questions per rung from the first up to one above the claim.
+function verifyPrompt(field, about) {
+  const claim = stageIdx(field.level);
+  const top = Math.min(STAGES.length - 1, claim + 1);
+  const rungs = STAGES.slice(0, top + 1);
+  const name = str(field.field, 80) + (str(field.area) ? ' › ' + str(field.area, 80) : '');
+  return `An adult says they know "${name}" at the ${stageName(field.level)} level${str(field.basis) ? ' (' + str(field.basis, 120) + ')' : ''}. Write a short check from memory that finds the rung of the ladder they are really at, so a learning app can rely on it when it plans other subjects and draws comparisons.
+
+What else they know: ${str(about, 1200) || 'not given'}.
+
+The ladder for this field, by rung:
+${rungs.map((s) => `- ${s.id} ${s.name}: ${s.blurb}`).join('\n')}
+
+Write exactly two questions for each rung from s1 to ${rungs[rungs.length - 1].id}, in that order (${rungs.length * 2} in all), each tagged with its "level". A question at a rung should be one that someone at that rung answers easily and someone a rung below does not. Prefer understanding and judgement over trivia; for a physical skill, ask about key details, decisions and safety points that someone who had practised it would know. Use "mcq" (4 options, exactly one correct) for about half and "short" (answered in a sentence or a few words) for the rest. Plain words; no trick questions.
+
+Return ONLY JSON: {"questions":[{"level":"s1","type":"mcq","prompt":"...","options":["...","...","...","..."],"answer":1,"explanation":"..."},{"level":"s1","type":"short","prompt":"...","answer":"model answer","explanation":"..."}]}
+For "mcq", "answer" is the 0-based index of the correct option.`;
 }
 // Suggesting a starting point for a new subject from the confirmed profile.
 function startPrompt(subject, about) {
@@ -649,17 +672,18 @@ function lessonDigest(lesson) {
 }
 
 // Placing every topic of every subject on the map at once, so the grouping is consistent across them.
-function schemaPrompt(subjects) {
+function schemaPrompt(subjects, fields) {
   const rows = arr(subjects).slice(0, 12).map((s) => `Subject ${str(s.id, 60)}: "${str(s.title, 120)}"\n` + arr(s.topics).slice(0, 80).map((t) => `  ${str(t.id, 16)}: ${str(t.title, 120)}${str(t.summary) ? ' (' + str(t.summary, 160) + ')' : ''}`).join('\n')).join('\n\n');
+  const inUse = arr(fields).map((f) => str(f, 80)).filter(Boolean).slice(0, 60);
   return `An adult is learning the subjects below on one app. Place every topic in their map of knowledge.
 
-${SCHEMA_RULE}
+${SCHEMA_RULE}${inUse.length ? ' Fields and areas already on their map, to reuse where they fit: ' + inUse.join('; ') + '.' : ''}
 
 Group logically: a field is a discipline, an area is a coherent part of it, and topics that belong together across different subjects get the same field and area. Keep names short (1 to 3 words), in sentence case, consistent, and in plain English.
 
 ${rows}
 
-Return ONLY JSON: {"subjects":[{"id":"<subject id>","topics":[{"id":"t1","schema":["Field","Area"]}]}]}, with every topic listed above present exactly once.`;
+Return ONLY JSON: {"subjects":[{"id":"<subject id, copied exactly as given above>","topics":[{"id":"t1","schema":["Field","Area"]}]}]}. Every subject above appears once with its id copied exactly, and every topic listed above appears exactly once under it. Nothing else.`;
 }
 
-export { METHOD, schemaPrompt, SCHEMA_RULE, checkQuestionsPrompt, checkLessonPrompt, intakePrompt, intakeLines, briefLines, elsewhereLines, adaptPrompt, learnerLines, stageLines, FRAMEWORK_GUIDE, planPrompt, reviewPlanPrompt, knowPrompt, startPrompt, rolePrompt, debriefPrompt, formCheckPrompt, extendPrompt, placementPrompt, warmupPrompt, lessonPrompt, practicePrompt, bridgePrompt, mixedPrompt, morePracticePrompt, gradePrompt, checkPrompt, modelPrompt, tutorRules, lessonDigest };
+export { METHOD, schemaPrompt, SCHEMA_RULE, verifyPrompt, checkQuestionsPrompt, checkLessonPrompt, intakePrompt, intakeLines, briefLines, elsewhereLines, adaptPrompt, learnerLines, stageLines, FRAMEWORK_GUIDE, planPrompt, reviewPlanPrompt, knowPrompt, startPrompt, rolePrompt, debriefPrompt, formCheckPrompt, extendPrompt, placementPrompt, warmupPrompt, lessonPrompt, practicePrompt, bridgePrompt, mixedPrompt, morePracticePrompt, gradePrompt, checkPrompt, modelPrompt, tutorRules, lessonDigest };

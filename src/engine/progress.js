@@ -518,4 +518,30 @@ function roleReadiness(role, subjects) {
 }
 const roleForSubject = (roles, sid) => arr(roles).find((r) => arr(r.map && r.map.areas).some((a) => a.subjectId === sid)) || null;
 
-export { teachDue, recordTeach, sittingMinutes, sittingMinutesLeft, suspendCard, logPractice, applyDue, recordApply, reopenTopics, placeKnown, topicById, learnerAbout, learnerModel, subjectCards, topicStatus, isLearned, learnedCount, studiedCount, nextTopic, practisingTopics, currentMilestone, relearnCount, isSecure, secureCount, dueCards, stageTopics, stageProgress, firstPlannedIdx, stagePosition, isSkippedStage, daysUntil, positionText, levelCheckReady, coveredStage, dayAgo, minutesSince, checkEligible, checkMilestones, markStageReached, recordMinutes, logReview, retentionRate, paceStats, paceBasis, stageHours, remainingMinutes, estimateStage, fmtMonth, fmtWeeks, fmtWhen, fmtHours, estimateText, nextStageEstimate, activityDays, conceptKey, noteConcept, weakConcepts, lessonConceptName, areaCredit, roleReadiness, roleForSubject, probeDue, probeDueAt, probeCandidates, pickProbe, recordProbe, stageRetention, calibrateFromProbes, criterionFor, retentionFor, mixedDue, recordMixed, PROBE_MIN_ITEMS, PROBE_FIRST_DAYS, PROBE_FIRST_TARGET, PROBE_SECOND_GAP, MIXED_MIN_LEARNED, MIXED_EVERY_LEARNED };
+// ---------- verifying a field the learner brought with them ----------
+
+// The rung a verify check showed: the highest rung passed with every rung below it passed too.
+// A rung passes when its questions average three quarters right (two of two, or one and a half).
+// Below the first rung the result is null: the field stays on the map, marked as not shown.
+const VERIFY_PASS = 0.75;
+function verifiedLevel(questions, grades) {
+  const byLevel = {};
+  arr(questions).forEach((q, i) => {
+    const lvl = str(q && q.level, 4) || 's1';
+    const g = arr(grades)[i];
+    const score = clampNum(num(g && g.score, 0), 0, 1);
+    byLevel[lvl] = byLevel[lvl] || { ok: 0, n: 0 };
+    byLevel[lvl].ok += score; byLevel[lvl].n += 1;
+  });
+  let level = null;
+  for (const s of STAGES) {
+    const b = byLevel[s.id];
+    if (!b || !b.n) break;
+    if (b.ok / b.n >= VERIFY_PASS) level = s.id; else break;
+  }
+  const asked = arr(questions).length;
+  const score = arr(grades).reduce((n, g) => n + clampNum(num(g && g.score, 0), 0, 1), 0);
+  return { level, byLevel, score: Math.round(score * 10) / 10, asked };
+}
+
+export { verifiedLevel, VERIFY_PASS, teachDue, recordTeach, sittingMinutes, sittingMinutesLeft, suspendCard, logPractice, applyDue, recordApply, reopenTopics, placeKnown, topicById, learnerAbout, learnerModel, subjectCards, topicStatus, isLearned, learnedCount, studiedCount, nextTopic, practisingTopics, currentMilestone, relearnCount, isSecure, secureCount, dueCards, stageTopics, stageProgress, firstPlannedIdx, stagePosition, isSkippedStage, daysUntil, positionText, levelCheckReady, coveredStage, dayAgo, minutesSince, checkEligible, checkMilestones, markStageReached, recordMinutes, logReview, retentionRate, paceStats, paceBasis, stageHours, remainingMinutes, estimateStage, fmtMonth, fmtWeeks, fmtWhen, fmtHours, estimateText, nextStageEstimate, activityDays, conceptKey, noteConcept, weakConcepts, lessonConceptName, areaCredit, roleReadiness, roleForSubject, probeDue, probeDueAt, probeCandidates, pickProbe, recordProbe, stageRetention, calibrateFromProbes, criterionFor, retentionFor, mixedDue, recordMixed, PROBE_MIN_ITEMS, PROBE_FIRST_DAYS, PROBE_FIRST_TARGET, PROBE_SECOND_GAP, MIXED_MIN_LEARNED, MIXED_EVERY_LEARNED };

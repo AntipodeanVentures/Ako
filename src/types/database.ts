@@ -4,7 +4,7 @@
 // once a project exists, and keep the engine types in src/engine/types.ts
 // as the source of truth for the JSON payloads.
 
-import type { Plan, RoleMap, TopicStatus } from '@/src/engine/types';
+import type { Plan, RoleMap, StageId, TopicStatus } from '@/src/engine/types';
 
 export type Profile = {
   id: string;
@@ -29,6 +29,24 @@ export type KnowItemRow = {
   source: 'typed' | 'cv' | 'photo' | 'linkedin';
   confirmed_at: string;
   created_at: string;
+};
+
+// A field the learner brought with them: a claim with its evidence, and the level a check from
+// memory showed once they have taken one. See supabase/migrations/0013_prior_fields.sql.
+export type PriorFieldRow = {
+  id: string;
+  profile_id: string;
+  field: string;
+  area: string;
+  level: StageId;
+  basis: string;
+  source: 'typed' | 'cv' | 'photo' | 'linkedin';
+  verified_level: StageId | null;
+  verified_at: string | null;
+  verified: { score: number; asked: number; byLevel: Record<string, { ok: number; n: number }> } | null;
+  evidence: { ok: number; n: number };
+  created_at: string;
+  updated_at: string;
 };
 
 export type SubjectRow = {

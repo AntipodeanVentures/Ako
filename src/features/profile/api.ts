@@ -1,5 +1,5 @@
 import { getSupabase } from '@/src/lib/supabase';
-import type { KnowItemRow, Profile } from '@/src/types/database';
+import type { KnowItemRow, PriorFieldRow, Profile } from '@/src/types/database';
 
 export async function fetchProfile(): Promise<Profile | null> {
   const { data, error } = await getSupabase()
@@ -64,8 +64,48 @@ export async function deleteAllMyData(profileId: string): Promise<{ accountDelet
   const sb = getSupabase();
   await sb.from('subjects').delete().eq('profile_id', profileId);
   await sb.from('know_items').delete().eq('profile_id', profileId);
+  await sb.from('prior_fields').delete().eq('profile_id', profileId);
   await sb.from('roles').delete().eq('profile_id', profileId);
   await sb.from('profiles').update({ about: '', model: null, display_name: '' }).eq('id', profileId);
   const { error } = await sb.rpc('delete_account');
   return { accountDeleted: !error };
+}
+
+// ---- the fields the learner brought with them ----
+
+export async function fetchPriorFields(): Promise<PriorFieldRow[]> {
+  const { data, error } = await getSupabase().from('prior_fields').select('*').order('created_at', { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as PriorFieldRow[];
+}
+
+export type NewPriorField = Pick<PriorFieldRow, 'field' | 'area' | 'level' | 'basis' | 'source'>;
+
+const sameName = (a: { field: string; area: string }, b: { field: string; area: string }) =>
+  a.field.trim().toLowerCase() === b.field.trim().toLowerCase() && a.area.trim().toLowerCase() === b.area.trim().toLowerCase();
+
+// Saves confirmed fields. One already on the map (same field and area, any case) is updated
+// rather than duplicated; a verified level is never lowered by a new claim.
+export async function savePriorFields(profileId: string, fields: NewPriorField[], existing: PriorFieldRow[]): Promise<void> {
+  const sb = getSupabase();
+  for (const f of fields) {
+    const have = existing.find((e) => sameName(e, f));
+    if (have) {
+      const { error } = await sb.from('prior_fields').update({ level: f.level, basis: f.basis || have.basis, updated_at: new Date().toISOString() }).eq('id', have.id);
+      if (error) throw error;
+    } else {
+      const { error } = await sb.from('prior_fields').insert({ ...f, profile_id: profileId });
+      if (error) throw error;
+    }
+  }
+}
+
+export async function updatePriorField(id: string, update: Partial<Pick<PriorFieldRow, 'level' | 'basis' | 'verified_level' | 'verified_at' | 'verified' | 'evidence'>>): Promise<void> {
+  const { error } = await getSupabase().from('prior_fields').update({ ...update, updated_at: new Date().toISOString() }).eq('id', id);
+  if (error) throw error;
+}
+
+export async function deletePriorField(id: string): Promise<void> {
+  const { error } = await getSupabase().from('prior_fields').delete().eq('id', id);
+  if (error) throw error;
 }

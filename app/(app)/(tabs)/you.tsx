@@ -9,11 +9,17 @@ import {
   deleteAllMyData,
   updateProfile,
   useDeleteKnowItem,
+  useDeletePriorField,
   useKnowItems,
+  usePriorFields,
   useProfile,
   useSaveKnowItems,
+  useSavePriorFields,
 } from '@/src/features/profile';
-import { KIND_LABELS, proposeItems, recomputeAbout, toRows, type ProposedItem } from '@/src/features/profile/know';
+import { KIND_LABELS, fieldNamesInUse, proposeItems, recomputeAbout, toRows, type ProposedField, type ProposedItem } from '@/src/features/profile/know';
+import { STAGES, stageName } from '@/src/engine/ladder';
+import type { StageId } from '@/src/engine/types';
+import { useRouter } from 'expo-router';
 import { VERSION, sendReport } from '@/src/features/reporting';
 import { useInvalidateSubject, useLiveSubjects, useSubjects, useUpdateSubject } from '@/src/features/subjects';
 import { assignSchemas } from '@/src/features/subjects/schema';
@@ -21,7 +27,7 @@ import { isArchived, liveSubjects } from '@/src/features/subjects/summary';
 import { KnowledgeMap } from '@/src/components/KnowledgeMap';
 import { openLegal } from '@/src/lib/legal';
 import { useTheme, type ThemePreference } from '@/src/theme';
-import type { KnowItemRow } from '@/src/types/database';
+import type { KnowItemRow, PriorFieldRow } from '@/src/types/database';
 
 // How much of what you learn the reviews are timed to keep. Higher means
 // more reviews, closer together.
@@ -43,9 +49,14 @@ export default function YouScreen() {
   const { spacing, colors, radius, preference, setPreference } = useTheme();
   const { signOut, session } = useAuth();
   const { profile, refresh } = useProfile();
+  const router = useRouter();
   const items = useKnowItems();
   const save = useSaveKnowItems(profile?.id);
   const remove = useDeleteKnowItem();
+  const priorFields = usePriorFields();
+  const prior = useMemo(() => priorFields.data ?? [], [priorFields.data]);
+  const saveFields = useSavePriorFields(profile?.id);
+  const removeField = useDeletePriorField();
   const subjects = useSubjects();
   const updateSubject = useUpdateSubject();
   const archived = (subjects.data ?? []).filter(isArchived);
@@ -58,7 +69,7 @@ export default function YouScreen() {
   const place = useCallback(async () => { await assignSchemas(mapped); invalidate(); }, [mapped, invalidate]);
 
   const [material, setMaterial] = useState('');
-  const [proposed, setProposed] = useState<{ summary: string; items: ProposedItem[] } | null>(null);
+  const [proposed, setProposed] = useState<{ summary: string; items: ProposedItem[]; fields: ProposedField[] } | null>(null);
   const [reading, setReading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -130,7 +141,9 @@ export default function YouScreen() {
     setReading(true);
     setError(null);
     try {
-      setProposed(await proposeItems(material.trim()));
+      // The names already on the map (the planner's fields and the ones confirmed so far) go with the material, so the new ones match.
+      const planned = mapped.flatMap((su) => su.plan.topics.map((t) => (t.schema && t.schema.length ? t.schema.join(' › ') : ''))).filter(Boolean);
+      setProposed(await proposeItems(material.trim(), fieldNamesInUse(prior, Array.from(new Set(planned)))));
     } catch (e) {
       setError(aiErrorCopy(e));
     } finally {
@@ -146,8 +159,11 @@ export default function YouScreen() {
       const have = new Set((items.data ?? []).map((r) => r.title.trim().toLowerCase()));
       const rows = toRows(proposed.items, material.length > 600 ? 'cv' : 'typed').filter((r) => !have.has(r.title.trim().toLowerCase()));
       await save.mutateAsync(rows);
+      const keptFields = proposed.fields.filter((f) => f.keep).map((f) => ({ field: f.field, area: f.area, level: f.level, basis: f.basis, source: (material.length > 600 ? 'cv' : 'typed') as PriorFieldRow['source'] }));
+      if (keptFields.length) await saveFields.mutateAsync({ fields: keptFields, existing: prior });
       const after = [...(items.data ?? []), ...rows.map((r, i) => ({ ...r, id: `new-${i}`, profile_id: profile.id, confirmed_at: '', created_at: '' }))] as KnowItemRow[];
-      await recomputeAbout(profile, after, proposed.summary);
+      const fieldsAfter = [...prior, ...keptFields.filter((f) => !prior.some((e) => e.field.toLowerCase() === f.field.toLowerCase() && e.area.toLowerCase() === f.area.toLowerCase())).map((f, i) => ({ ...f, id: `new-${i}`, profile_id: profile.id, verified_level: null, verified_at: null, verified: null, evidence: { ok: 0, n: 0 }, created_at: '', updated_at: '' }))] as PriorFieldRow[];
+      await recomputeAbout(profile, after, proposed.summary, fieldsAfter);
       await refresh();
       setProposed(null);
       setMaterial('');
@@ -159,9 +175,18 @@ export default function YouScreen() {
   const drop = async (row: KnowItemRow) => {
     if (!profile) return;
     await remove.mutateAsync(row.id);
-    await recomputeAbout(profile, (items.data ?? []).filter((r) => r.id !== row.id));
+    await recomputeAbout(profile, (items.data ?? []).filter((r) => r.id !== row.id), undefined, prior);
     await refresh();
   };
+  const dropField = async (row: PriorFieldRow) => {
+    if (!profile) return;
+    await removeField.mutateAsync(row.id);
+    await recomputeAbout(profile, items.data ?? [], undefined, prior.filter((f) => f.id !== row.id));
+    await refresh();
+  };
+  const setProposedField = (id: string, patch: Partial<ProposedField>) =>
+    setProposed((p) => (p ? { ...p, fields: p.fields.map((f) => (f.id === id ? { ...f, ...patch } : f)) } : p));
+  const fieldName = (f: { field: string; area: string }) => (f.area ? `${f.field} › ${f.area}` : f.field);
 
   const grouped = Object.keys(KIND_LABELS)
     .map((kind) => ({ kind, label: KIND_LABELS[kind], rows: (items.data ?? []).filter((r) => r.kind === kind) }))
@@ -174,7 +199,7 @@ export default function YouScreen() {
     <Screen scroll>
       <Text variant="title">You</Text>
 
-      {mapped.length ? (
+      {mapped.length || prior.length ? (
         <View style={{ marginTop: spacing.xxl, gap: spacing.sm }}>
           <Text variant="eyebrow" color="textMuted">
             What you know
@@ -183,7 +208,7 @@ export default function YouScreen() {
             Every subject and topic, hanging off what you brought with you. It fades where memory is fading and brightens after a review.
           </Text>
           <View style={{ marginTop: spacing.xs }}>
-            <KnowledgeMap subjects={mapped} know={knowItems} retention={Number(profile?.retention ?? 0.9)} onPlace={place} />
+            <KnowledgeMap subjects={mapped} know={knowItems} prior={prior} retention={Number(profile?.retention ?? 0.9)} onPlace={place} />
           </View>
         </View>
       ) : null}
@@ -193,9 +218,38 @@ export default function YouScreen() {
           What you already know
         </Text>
         <Text variant="body" color="textMuted">
-          Lessons draw comparisons from this and skip what you can do. Paste your CV or LinkedIn About, or type a few lines: jobs, qualifications, languages, sports, serious hobbies.
+          Lessons draw comparisons from this, the planner skips what you can do, and the map hangs new learning off it. Paste your CV or LinkedIn About, or type a few lines: jobs, qualifications, languages, sports, serious hobbies, and anything you know well that is not on paper.
         </Text>
       </View>
+
+      {prior.length ? (
+        <View style={{ marginTop: spacing.lg }}>
+          <Text variant="caption" color="textMuted" style={{ marginBottom: spacing.xs }}>
+            Fields you know
+          </Text>
+          {prior.map((f) => (
+            <View key={f.id} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md, borderTopWidth: 1, borderTopColor: colors.border }}>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text variant="body">{fieldName(f)}</Text>
+                <Text variant="caption" color={f.verified_level ? 'accent' : 'textMuted'}>
+                  {f.verified_level
+                    ? `${stageName(f.verified_level)} · shown in a check${f.verified_level !== f.level ? ` (you said ${stageName(f.level)})` : ''}`
+                    : `${stageName(f.level)} · as you described it${f.basis ? `: ${f.basis}` : ''}`}
+                </Text>
+              </View>
+              <Pressable onPress={() => router.push({ pathname: '/verify/[fieldId]', params: { fieldId: f.id } })} accessibilityRole="button" hitSlop={8}>
+                <Text variant="bodyStrong" color="primary">
+                  {f.verified_level ? 'Check again' : 'Verify'}
+                </Text>
+              </Pressable>
+              <Pressable onPress={() => dropField(f)} hitSlop={10} accessibilityRole="button" accessibilityLabel={`Remove ${fieldName(f)}`}>
+                <Ionicons name="close" size={16} color={colors.textMuted} />
+              </Pressable>
+            </View>
+          ))}
+          <View style={{ borderTopWidth: 1, borderTopColor: colors.border }} />
+        </View>
+      ) : null}
 
       {grouped.length ? (
         <View style={{ marginTop: spacing.lg }}>
@@ -251,6 +305,42 @@ export default function YouScreen() {
               {proposed.summary}
             </Text>
           ) : null}
+          {proposed.fields.length ? (
+            <View style={{ gap: spacing.xs }}>
+              <Text variant="caption" color="textMuted">
+                Fields, with the level the evidence suggests. Adjust any that are wrong; a short check later can confirm them.
+              </Text>
+              {proposed.fields.map((f) => (
+                <View key={f.id} style={{ paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border, gap: spacing.sm }}>
+                  <Pressable
+                    onPress={() => setProposedField(f.id, { keep: !f.keep })}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: f.keep }}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}
+                  >
+                    <Ionicons name={f.keep ? 'checkbox' : 'square-outline'} size={20} color={f.keep ? colors.text : colors.textMuted} />
+                    <View style={{ flex: 1 }}>
+                      <Text variant="body" color={f.keep ? 'text' : 'textMuted'}>
+                        {fieldName(f)}
+                      </Text>
+                      {f.basis ? (
+                        <Text variant="caption" color="textMuted">
+                          {f.basis}
+                        </Text>
+                      ) : null}
+                    </View>
+                  </Pressable>
+                  {f.keep ? (
+                    <Segmented
+                      options={STAGES.map((st) => ({ value: st.id as StageId, label: st.short }))}
+                      value={f.level}
+                      onChange={(v) => setProposedField(f.id, { level: v })}
+                    />
+                  ) : null}
+                </View>
+              ))}
+            </View>
+          ) : null}
           <View>
             {proposed.items.map((it) => (
               <Pressable
@@ -274,7 +364,12 @@ export default function YouScreen() {
             ))}
             <View style={{ borderTopWidth: 1, borderTopColor: colors.border }} />
           </View>
-          <Button label={`Save ${proposed.items.filter((i) => i.keep).length} items`} onPress={confirm} loading={save.isPending} disabled={!proposed.items.some((i) => i.keep)} />
+          <Button
+            label={`Save ${proposed.items.filter((i) => i.keep).length + proposed.fields.filter((f) => f.keep).length} items`}
+            onPress={confirm}
+            loading={save.isPending || saveFields.isPending}
+            disabled={!proposed.items.some((i) => i.keep) && !proposed.fields.some((f) => f.keep)}
+          />
           <Pressable onPress={() => setProposed(null)} style={{ alignSelf: 'center', padding: spacing.sm }}>
             <Text variant="caption" color="textMuted">
               Cancel

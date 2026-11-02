@@ -283,12 +283,22 @@ export default function PreviewScreen() {
           const learned = [12, 8, 5, 3, 1, 0][i];
           topics.slice(0, learned).forEach((t, j) => {
             (s.topicState as Record<string, unknown>)[t.id] = { status: 'mastered', masteredAt: Date.now() - (learned - j) * 3 * 86400000 };
-            (s.cards ??= []).push(...makeCards(t, [{ front: 'q', back: 'a', concept: 0 }], 3, 0.9, Date.now() - (learned - j) * 3 * 86400000));
+            const cards = makeCards(t, [{ front: 'q', back: 'a', concept: 0 }], 3, 0.9, Date.now() - (learned - j) * 3 * 86400000);
+            // The earliest-learned half have been recalled on three separate days, so they count as secure.
+            if (j < learned / 2) for (const c of cards as { relearnDays?: string[] }[]) c.relearnDays = ['2026-10-01', '2026-10-05', '2026-10-12'];
+            (s.cards ??= []).push(...cards);
           });
           if (learned < topics.length) (s.topicState as Record<string, unknown>)[topics[learned].id] = { status: 'learning', attempts: 1 };
           return s;
         })
       : [subj, second, third];
+    const prior = [
+      { id: 'p1', field: 'Aviation', area: 'Navigation', level: 's3', basis: 'CPL, 1,500 hours', verified_level: 's3' },
+      { id: 'p2', field: 'Aviation', area: 'Aircraft performance', level: 's3', basis: 'CPL', verified_level: null },
+      { id: 'p3', field: 'Finance', area: 'Structured lending', level: 's4', basis: '10 years in banking', verified_level: null },
+      { id: 'p4', field: 'Jiu-jitsu', area: '', level: 's2', basis: 'brown belt', verified_level: 's2' },
+    ];
+    for (const s of many) { const t0 = s.plan.topics[0]; const st = s.topicState as Record<string, { bridge?: unknown; priorScore?: number }>; if (st[t0.id]) st[t0.id] = { ...st[t0.id], bridge: { field: 'aircraft performance' }, priorScore: 1 }; }
     return (
       <Screen scroll>
         <Text variant="title">You</Text>
@@ -296,7 +306,7 @@ export default function PreviewScreen() {
           <Text variant="eyebrow" color="textMuted">
             What you know
           </Text>
-          <KnowledgeMap subjects={many} know={know} onOpen={() => {}} />
+          <KnowledgeMap subjects={many} know={know} prior={prior} onOpen={() => {}} />
         </View>
       </Screen>
     );

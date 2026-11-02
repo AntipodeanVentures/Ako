@@ -18,7 +18,7 @@
 // Response: JSON { extension: { milestones, topics } }, to append to the plan.
 //
 // Placing every topic under a field and an area for the map of what the learner knows,
-// across all their subjects at once so the names agree: { kind: 'schema', subjects: [{ id, title, topics: [{ id, title, summary }] }] }
+// across all their subjects at once so the names agree: { kind: 'schema', subjects: [{ id, title, topics: [{ id, title, summary }] }], fields?: string[] }
 // Response: JSON { schema: { [subjectId]: { [topicId]: ["Field", "Area"] } } }
 //
 // Revising the path from evidence: { kind: 'adapt', subject, reason, note?, evidence? }
@@ -65,7 +65,8 @@ Deno.serve(async (req) => {
     if (body.kind === 'schema') {
       const subjects = Array.isArray(body.subjects) ? body.subjects.slice(0, 12) : [];
       if (!subjects.length) throw new HttpError(400, 'bad_request', 'Subjects are required.');
-      const r = await sample({ model: modelFor('schema'), prompt: schemaPrompt(subjects), maxTokens: 12000 });
+      const fields = Array.isArray(body.fields) ? body.fields.slice(0, 60) : [];
+      const r = await sample({ model: modelFor('schema'), prompt: schemaPrompt(subjects, fields), maxTokens: 16000 });
       await recordUsage(caller, 'plan', r.inputTokens, r.outputTokens);
       return json({ schema: normaliseSchema(parseJson(r.text, r.stopReason)) });
     }
