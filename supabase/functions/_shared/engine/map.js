@@ -215,10 +215,16 @@ function fieldGraph({ subjects, know = [], prior = [], now = nowMs(), retention 
   for (const a of areas.values()) only.set(a.field, (only.get(a.field) || 0) + 1);
   const collapse = new Set([...areas.values()].filter((a) => only.get(a.field) === 1 && a.label === fields.get(a.field).label).map((a) => a.id));
   const kept = [...areas.values()].filter((a) => !collapse.has(a.id));
-  const outEdges = edges.filter((e) => !collapse.has(e.from)).map((e) => (collapse.has(e.to) ? { ...e, to: areas.get(e.to).field } : e));
+  // A CV item no lesson has drawn on yet would sit by the learner joined to nothing; it waits
+  // until a lesson links to it. The fields the learner confirmed are the real nodes here.
+  const linked = new Set(edges.filter((e) => e.kind === 'bridge').map((e) => e.to));
+  const shownNodes = nodes.filter((n) => n.kind !== 'know' || linked.has(n.id));
+  const outEdges = edges
+    .filter((e) => !collapse.has(e.from) && !(e.kind === 'spoke' && e.from.startsWith('k:') && !linked.has(e.from)))
+    .map((e) => (collapse.has(e.to) ? { ...e, to: areas.get(e.to).field } : e));
   for (const n of nodes) if (n.kind === 'topic' && collapse.has(n.area)) n.area = n.field;
   const byOrder = (x, y) => x.order - y.order;
-  return { nodes: [...nodes, ...[...fields.values()].sort(byOrder), ...kept.sort(byOrder)], edges: outEdges, placed: [...fields.values()].every((f) => f.placed) };
+  return { nodes: [...shownNodes, ...[...fields.values()].sort(byOrder), ...kept.sort(byOrder)], edges: outEdges, placed: [...fields.values()].every((f) => f.placed) };
 }
 
 // ---------- the layout ----------

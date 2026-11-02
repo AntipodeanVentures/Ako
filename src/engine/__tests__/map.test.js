@@ -158,6 +158,25 @@ describe('knowledge map by field', () => {
     const t = g.nodes.find((n) => n.kind === 'topic' && n.topicId === a.plan.topics[0].id);
     expect(nodeLine(t)).toContain('Brazilian Portuguese');
   });
+
+  it('shows a CV item only once a lesson has drawn on it, so nothing sits by the learner joined to nothing', () => {
+    const a = subject('s1', 'Multirotor flight physics');
+    a.plan.topics.forEach((t) => { t.schema = ['Physics', 'Forces']; });
+    // No lesson has drawn on anything the learner brought yet.
+    const first = a.plan.topics[0].id;
+    a.topicState[first] = { ...a.topicState[first], bridge: null };
+    const before = fieldGraph({ subjects: [a], know, now: T0 });
+    expect(before.nodes.some((n) => n.kind === 'know')).toBe(false);
+    expect(before.edges.some((e) => e.from.startsWith('k:'))).toBe(false);
+    // A lesson drew on the learner's flying: that item appears, with its link, and the other stays off.
+    a.topicState[first] = { ...a.topicState[first], bridge: { field: 'airline flying' } };
+    const after = fieldGraph({ subjects: [a], know, now: T0 });
+    expect(after.nodes.filter((n) => n.kind === 'know').map((n) => n.label)).toEqual(['Airline captain']);
+    expect(after.edges.filter((e) => e.kind === 'bridge' && e.to.startsWith('k:'))).toHaveLength(1);
+    expect(after.edges.filter((e) => e.kind === 'spoke' && e.from.startsWith('k:'))).toHaveLength(1);
+    const ids = new Set(after.nodes.map((n) => n.id));
+    for (const e of after.edges) { expect(ids.has(e.from)).toBe(true); expect(ids.has(e.to)).toBe(true); }
+  });
 });
 
 describe('knowledge map proficiency', () => {
