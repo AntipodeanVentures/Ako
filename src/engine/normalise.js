@@ -238,12 +238,31 @@ function normaliseRole(raw) {
   const evidence = arr(R.evidence).map((x) => (typeof x === 'string' ? { text: str(x, 200), done: false, why: '' } : x && typeof x === 'object' ? { text: str(x.text, 200), done: x.done === true, why: x.done === true ? str(x.why, 120) : '' } : null)).filter((x) => x && x.text).slice(0, 8);
   return { summary: str(R.summary, 600), areas, evidence, firstSteps: str(R.firstSteps, 600) };
 }
+// A field the learner brought with them, as the extraction (or the learner) states it.
+function normField(f) {
+  if (!f || typeof f !== 'object') return null;
+  const field = str(f.field, 40).replace(/\s+/g, ' ');
+  if (!field) return null;
+  const valid = new Set(STAGES.map((s) => s.id));
+  const area = str(f.area, 40).replace(/\s+/g, ' ');
+  return { id: rid('f'), field, area: area.toLowerCase() === field.toLowerCase() ? '' : area, level: valid.has(str(f.level, 4)) ? str(f.level, 4) : 's2', basis: str(f.basis, 120), keep: true };
+}
 function normaliseKnow(raw) {
   const K = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
   const kinds = KNOW_KINDS.map((k) => k[0]);
   const items = arr(K.items).filter((i) => i && typeof i === 'object').map((i) => ({ id: rid('k'), kind: kinds.includes(i.kind) ? i.kind : 'field', text: str(i.text, 120), level: str(i.level, 60), keep: true })).filter((i) => i.text).slice(0, 30);
-  if (!items.length) throw { code: 'invalid_json' };
-  return { summary: str(K.summary, 500), items };
+  const seen = new Set();
+  const fields = arr(K.fields).map(normField).filter((f) => f && !seen.has((f.field + '|' + f.area).toLowerCase()) && seen.add((f.field + '|' + f.area).toLowerCase())).slice(0, 20);
+  if (!items.length && !fields.length) throw { code: 'invalid_json' };
+  return { summary: str(K.summary, 500), items, fields };
+}
+// The verify check's questions, each tagged with the rung it tests.
+function normaliseVerify(raw) {
+  const R = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const valid = new Set(STAGES.map((s) => s.id));
+  const questions = arr(R.questions).map((q) => { const n = normQ(q); if (!n) return null; n.level = valid.has(str(q && q.level, 4)) ? str(q.level, 4) : 's1'; return n; }).filter(Boolean).slice(0, 12);
+  if (questions.length < 4) throw { code: 'invalid_json' };
+  return { questions };
 }
 function normaliseStart(raw) {
   const R = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
@@ -366,4 +385,4 @@ function normaliseSchema(raw) {
   return out;
 }
 
-export { DEFAULT_HOURS, cleanOutcome, normSchema, normaliseSchema, normaliseStages, normaliseTopics, normalisePlan, normaliseExtension, upgradePlan, normQ, normaliseLesson, normalisePractice, normaliseBridge, normaliseMixed, normaliseWarm, normaliseRole, normaliseKnow, normaliseStart, INTAKE_SLOTS, INTAKE_FALLBACK, normaliseIntake, normaliseAdaptation, normaliseDebrief, normaliseModel };
+export { DEFAULT_HOURS, cleanOutcome, normSchema, normaliseSchema, normField, normaliseVerify, normaliseStages, normaliseTopics, normalisePlan, normaliseExtension, upgradePlan, normQ, normaliseLesson, normalisePractice, normaliseBridge, normaliseMixed, normaliseWarm, normaliseRole, normaliseKnow, normaliseStart, INTAKE_SLOTS, INTAKE_FALLBACK, normaliseIntake, normaliseAdaptation, normaliseDebrief, normaliseModel };

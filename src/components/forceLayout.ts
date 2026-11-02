@@ -18,7 +18,7 @@ export type ForceLayout = {
   stop: () => void;
 };
 
-const R_FIELD = 150;
+const R_FIELD_MIN = 150;
 
 // A small seeded generator, so the starting guess (and so the settled map) is the same each time.
 function seeded(key: string) {
@@ -30,6 +30,8 @@ function seeded(key: string) {
 export function forceLayout(graph: { nodes: GraphNode[]; edges: GraphEdge[] }): ForceLayout {
   const rand = seeded(graph.nodes.map((n) => n.id).join('|'));
   const fields = graph.nodes.filter((n) => n.kind === 'field');
+  // The ring the fields sit on widens with their number, so nine fields have as much room each as six.
+  const R_FIELD = Math.max(R_FIELD_MIN, 26 * fields.length);
   const fieldAngle = new Map<string, number>();
   fields.forEach((f, i) => fieldAngle.set(f.id, -Math.PI / 2 + (2 * Math.PI * i) / Math.max(1, fields.length)));
   const knowIds = graph.nodes.filter((n) => n.kind === 'know').map((n) => n.id);
@@ -86,14 +88,16 @@ export function forceLayout(graph: { nodes: GraphNode[]; edges: GraphEdge[] }): 
     .alphaDecay(0.035)
     .stop();
 
+  // Positions are reported centred on the drawing's own bounding box, not on the learner, so a
+  // lopsided map (most fields to one side) still fills the box.
   const snapshot = () => {
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const n of nodes) { const x = n.x ?? 0, y = n.y ?? 0; minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); }
+    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
     const positions: Record<string, { x: number; y: number }> = {};
-    let extent = 60;
-    for (const n of nodes) {
-      positions[n.id] = { x: n.x ?? 0, y: n.y ?? 0 };
-      extent = Math.max(extent, Math.hypot(n.x ?? 0, n.y ?? 0) + 18);
-    }
-    return { positions, settled: sim.alpha() < sim.alphaMin(), extent: Math.ceil(extent) };
+    for (const n of nodes) positions[n.id] = { x: (n.x ?? 0) - cx, y: (n.y ?? 0) - cy };
+    const extent = Math.max(60, Math.ceil(Math.max(maxX - minX, maxY - minY) / 2 + 18));
+    return { positions, settled: sim.alpha() < sim.alphaMin(), extent };
   };
 
   return {

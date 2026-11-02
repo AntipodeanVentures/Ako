@@ -182,3 +182,53 @@ describe('knowledge map proficiency', () => {
     expect(g2.nodes.filter((n) => n.kind === 'field').map((n) => n.label)).toEqual(['Spanish', 'Portuguese']);
   });
 });
+
+describe('verifying a field the learner brought with them', () => {
+  it('finds the highest rung passed with every rung below it passed', async () => {
+    const { verifiedLevel } = await import('../index.js');
+    const qs = [{ level: 's1' }, { level: 's1' }, { level: 's2' }, { level: 's2' }, { level: 's3' }, { level: 's3' }, { level: 's4' }, { level: 's4' }];
+    const g = (scores) => scores.map((score) => ({ score }));
+    expect(verifiedLevel(qs, g([1, 1, 1, 0.5, 1, 1, 0, 1])).level).toBe('s3');
+    expect(verifiedLevel(qs, g([1, 1, 0, 0.5, 1, 1, 1, 1])).level).toBe('s1');
+    expect(verifiedLevel(qs, g([0, 1, 1, 1, 1, 1, 1, 1])).level).toBeNull();
+    expect(verifiedLevel(qs, g([1, 1, 1, 1, 1, 1, 1, 1])).level).toBe('s4');
+    const r = verifiedLevel(qs, g([1, 1, 1, 0.5, 1, 1, 0, 1]));
+    expect(r.score).toBe(6.5);
+    expect(r.asked).toBe(8);
+    expect(r.byLevel.s2).toEqual({ ok: 1.5, n: 2 });
+  });
+});
+
+describe('knowledge map with what the learner brought', () => {
+  it('puts prior fields on the ring first, links lessons to them and counts warm-up evidence', () => {
+    const a = subject('s1', 'Multirotor flight physics');
+    a.plan.topics.forEach((t) => { t.schema = ['Physics', 'Forces']; });
+    // The first topic's lesson drew on the learner's flying; its warm-up prior question was right.
+    a.topicState[a.plan.topics[0].id].bridge = { field: 'aviation flying' };
+    a.topicState[a.plan.topics[0].id].priorScore = 1;
+    const prior = [
+      { id: 'p1', field: 'Aviation', area: 'Navigation', level: 's3', basis: 'CPL', verified_level: null },
+      { id: 'p2', field: 'Aviation', area: 'Aircraft performance', level: 's3', basis: 'CPL', verified_level: 's4' },
+      { id: 'p3', field: 'Finance', area: '', level: 's4', basis: '10 years', verified_level: null },
+    ];
+    const g = fieldGraph({ subjects: [a], know, prior, now: T0 });
+    const fields = g.nodes.filter((n) => n.kind === 'field').map((n) => n.label);
+    expect(fields).toEqual(['Aviation', 'Finance', 'Physics']);
+    // No CV squares once the learner's fields are nodes.
+    expect(g.nodes.some((n) => n.kind === 'know')).toBe(false);
+    const aviation = g.nodes.find((n) => n.kind === 'field' && n.label === 'Aviation');
+    // The field stands at its highest area: Aircraft performance, shown at Advanced.
+    expect(aviation.prior.verifiedLevel).toBe('s4');
+    expect(aviation.mastery).toBeCloseTo(0.8, 5);
+    const finance = g.nodes.find((n) => n.kind === 'field' && n.label === 'Finance');
+    expect(finance.prior.level).toBe('s4');
+    expect(finance.mastery).toBeCloseTo(0.8 * 0.7, 5);
+    expect(nodeRadius(finance)).toBeLessThan(nodeRadius(aviation));
+    // The bridge lands on the Aviation field and the warm-up counts as evidence for it.
+    const bridge = g.edges.find((e) => e.kind === 'bridge');
+    expect(bridge.to).toBe(aviation.id);
+    expect(aviation.prior.evidence).toEqual({ ok: 1, n: 1 });
+    expect(nodeLine(aviation)).toMatch(/Advanced, shown in a check · drawn on in 1 lesson, right 1 time/);
+    expect(nodeLine(finance)).toMatch(/Advanced as you described it, not yet checked/);
+  });
+});

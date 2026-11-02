@@ -5,6 +5,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Svg, { Circle, G, Line, Path, Rect, Text as SvgText } from 'react-native-svg';
 
 import { Button, Segmented, Text } from '@/src/components/ui';
+import { STAGES } from '@/src/engine/ladder';
 import { fieldGraph, knowledgeGraph, layoutGraph, nodeLine, nodeRadius, R_HUB } from '@/src/engine/map';
 import type { LiveSubject } from '@/src/features/subjects';
 import { useReducedMotion, useTheme } from '@/src/theme';
@@ -17,15 +18,21 @@ type Node = {
   id: string; kind: 'you' | 'know' | 'subject' | 'field' | 'area' | 'topic'; label: string;
   subjectId?: string; topicId?: string; status?: string; recall?: number | null; threshold?: boolean; stageIdx?: number;
   total?: number; learned?: number; secure?: number; topics?: number; mastery?: number; field?: string; area?: string; subject?: string;
+  // A field or area the learner brought with them: the level claimed, the level a check showed.
+  prior?: { id: string; level: string; verifiedLevel: string | null; basis: string; evidence: { ok: number; n: number }; fromArea?: boolean };
 };
 type Edge = { from: string; to: string; kind: string };
 type Graph = { nodes: Node[]; edges: Edge[]; placed?: boolean };
 type Layout = { positions: Record<string, { x: number; y: number }>; extent: number };
 type Mode = 'field' | 'subject';
 
+type PriorField = { id: string; field: string; area: string; level: string; basis: string; verified_level: string | null };
+
 type Props = {
   subjects: LiveSubject[];
   know: KnowItem[];
+  // The fields the learner brought with them (prior_fields rows).
+  prior?: PriorField[];
   retention?: number;
   // Places topics the planner has not yet put under a field and an area; run once when the map
   // finds any. Absent in the dev preview.
@@ -48,7 +55,7 @@ const MODES: { value: Mode; label: string }[] = [
 // brightness is how likely it is to be recalled right now, so the map fades where memory is
 // fading. Pan with a drag, zoom with a pinch or the buttons, tap a node for its line and a way
 // to open it.
-export function KnowledgeMap({ subjects, know, retention = 0.9, onPlace, onOpen }: Props) {
+export function KnowledgeMap({ subjects, know, prior = [], retention = 0.9, onPlace, onOpen }: Props) {
   const { colors, spacing, radius: rad, typography } = useTheme();
   const reduced = useReducedMotion();
   const router = useRouter();
@@ -63,13 +70,15 @@ export function KnowledgeMap({ subjects, know, retention = 0.9, onPlace, onOpen 
   const [selected, setSelected] = useState<string | null>(null);
 
   const graph = useMemo<Graph>(
-    () => (mode === 'field' ? (fieldGraph({ subjects, know, retention }) as Graph) : (knowledgeGraph({ subjects, know, retention }) as Graph)),
-    [mode, subjects, know, retention],
+    () => (mode === 'field' ? (fieldGraph({ subjects, know, prior, retention }) as Graph) : (knowledgeGraph({ subjects, know, retention }) as Graph)),
+    [mode, subjects, know, prior, retention],
   );
   const byId = useMemo(() => new Map(graph.nodes.map((n) => [n.id, n])), [graph]);
   const hubs = useMemo(() => graph.nodes.filter((n) => n.kind === 'subject' || n.kind === 'field').map((n) => n.id), [graph]);
   // The straight-line distance between neighbouring hubs, in map units: the room a hub label has.
-  const chord = hubs.length > 1 ? 2 * (mode === 'field' ? 150 : R_HUB) * Math.sin(Math.PI / hubs.length) : 4 * R_HUB;
+  // Hub labels alternate above and below, so each has nearly twice the chord between neighbours.
+  const ringR = mode === 'field' ? Math.max(150, 26 * hubs.length) : R_HUB;
+  const chord = hubs.length > 1 ? 1.8 * 2 * ringR * Math.sin(Math.PI / hubs.length) : 4 * R_HUB;
 
   // By subject the layout is fixed; by field it settles over a second or two, drawn as it goes.
   const [layout, setLayout] = useState<Layout>(() => layoutGraph(graph) as Layout);
@@ -103,7 +112,8 @@ export function KnowledgeMap({ subjects, know, retention = 0.9, onPlace, onOpen 
 
   // The map's own units fit the box at zoom 1; everything else is relative to that.
   const height = Math.min(size.w, windowWidth > 700 ? 520 : 420) || 360;
-  const unit = size.w ? Math.min(size.w, height) / (layout.extent * 2) : 1;
+  // A little margin inside the box, so labels at the edge and the zoom buttons do not collide.
+  const unit = size.w ? (0.9 * Math.min(size.w, height)) / (layout.extent * 2) : 1;
   const cx = size.w / 2;
   const cy = height / 2;
   const toScreen = (p: { x: number; y: number }) => ({ x: cx + view.x + p.x * unit * view.k, y: cy + view.y + p.y * unit * view.k });
@@ -177,7 +187,10 @@ export function KnowledgeMap({ subjects, know, retention = 0.9, onPlace, onOpen 
   const held = (n?: Node) => {
     if (!n) return 0;
     if (n.kind === 'topic') return n.status === 'learned' || n.status === 'secure' ? (typeof n.recall === 'number' ? n.recall : 1) : n.status === 'practising' ? 0.6 : 0;
-    if (n.kind === 'field' || n.kind === 'area' || n.kind === 'subject') return (n.learned ?? 0) > 0 ? (typeof n.recall === 'number' ? n.recall : 1) : 0;
+    if (n.kind === 'field' || n.kind === 'area' || n.kind === 'subject') {
+      if ((n.learned ?? 0) > 0) return typeof n.recall === 'number' ? n.recall : 1;
+      return n.prior ? (n.prior.verifiedLevel ? 1 : 0.7) : 0;
+    }
     return n.kind === 'you' ? 1 : 0; // the fields the learner brought with them stay structural
   };
   const edgeStyle = (e: Edge, lit: boolean) => {
@@ -282,11 +295,18 @@ export function KnowledgeMap({ subjects, know, retention = 0.9, onPlace, onOpen 
                       const learnedShare = total ? (n.learned ?? 0) / total : 0;
                       const secureShare = total ? (n.secure ?? 0) / total : 0;
                       const ring = r + 3.5;
+                      // A hub the learner brought with them: its arc is the rung they stand at, muted until a
+                      // check has shown it, then in ink; the disc fills once it is shown.
+                      const pr = n.prior;
+                      const shown = !!pr?.verifiedLevel;
+                      const rung = pr ? (STAGES.findIndex((st) => st.id === (pr.verifiedLevel || pr.level)) + 1) / STAGES.length : 0;
+                      const filled = started || shown;
                       return (
                         <G key={n.id}>
-                          <Circle cx={p.x} cy={p.y} r={r} fill={started ? colors.text : colors.background} fillOpacity={started ? fillOpacity : 1} stroke={colors.text} strokeWidth={1.25} />
+                          <Circle cx={p.x} cy={p.y} r={r} fill={filled ? colors.text : colors.background} fillOpacity={filled ? (started ? fillOpacity : 0.85) : 1} stroke={colors.text} strokeWidth={1.25} strokeDasharray={pr && !shown && !started ? '3 2' : undefined} />
                           {/* The proficiency arc: the share learned in ink over a faint track, the share secure in the accent on top. */}
                           <Circle cx={p.x} cy={p.y} r={ring} fill="none" stroke={colors.border} strokeWidth={1.5} />
+                          {pr && rung > 0 && !learnedShare ? <Path d={arc(p.x, p.y, ring, rung)} fill="none" stroke={shown ? colors.text : colors.textMuted} strokeWidth={1.5} strokeLinecap="round" strokeDasharray={shown ? undefined : '2 2'} /> : null}
                           {learnedShare > 0 ? <Path d={arc(p.x, p.y, ring, learnedShare)} fill="none" stroke={colors.text} strokeWidth={1.5} strokeLinecap="round" /> : null}
                           {secureShare > 0 ? <Path d={arc(p.x, p.y, ring, secureShare)} fill="none" stroke={colors.accent} strokeWidth={2} strokeLinecap="round" /> : null}
                           {isSel ? <Circle cx={p.x} cy={p.y} r={ring + 3} fill="none" stroke={colors.text} strokeWidth={1} /> : null}
@@ -311,10 +331,15 @@ export function KnowledgeMap({ subjects, know, retention = 0.9, onPlace, onOpen 
                       const aLearned = aTotal ? (n.learned ?? 0) / aTotal : 0;
                       const aSecure = aTotal ? (n.secure ?? 0) / aTotal : 0;
                       const aRing = r + 2.5;
+                      const apr = n.prior;
+                      const aShown = !!apr?.verifiedLevel;
+                      const aRung = apr ? (STAGES.findIndex((st) => st.id === (apr.verifiedLevel || apr.level)) + 1) / STAGES.length : 0;
+                      const aFilled = started || aShown;
                       return (
                         <G key={n.id}>
-                          <Circle cx={p.x} cy={p.y} r={r} fill={started ? colors.text : colors.background} fillOpacity={started ? (recall == null ? 1 : 0.35 + 0.65 * recall) : 1} stroke={colors.text} strokeWidth={1} />
-                          {started ? <Circle cx={p.x} cy={p.y} r={aRing} fill="none" stroke={colors.border} strokeWidth={1.25} /> : null}
+                          <Circle cx={p.x} cy={p.y} r={r} fill={aFilled ? colors.text : colors.background} fillOpacity={aFilled ? (started ? (recall == null ? 1 : 0.35 + 0.65 * recall) : 0.85) : 1} stroke={colors.text} strokeWidth={1} strokeDasharray={apr && !aShown && !started ? '3 2' : undefined} />
+                          {started || apr ? <Circle cx={p.x} cy={p.y} r={aRing} fill="none" stroke={colors.border} strokeWidth={1.25} /> : null}
+                          {apr && aRung > 0 && !aLearned ? <Path d={arc(p.x, p.y, aRing, aRung)} fill="none" stroke={aShown ? colors.text : colors.textMuted} strokeWidth={1.25} strokeLinecap="round" strokeDasharray={aShown ? undefined : '2 2'} /> : null}
                           {aLearned > 0 ? <Path d={arc(p.x, p.y, aRing, aLearned)} fill="none" stroke={colors.text} strokeWidth={1.25} strokeLinecap="round" /> : null}
                           {aSecure > 0 ? <Path d={arc(p.x, p.y, aRing, aSecure)} fill="none" stroke={colors.accent} strokeWidth={1.75} strokeLinecap="round" /> : null}
                           {isSel ? <Circle cx={p.x} cy={p.y} r={aRing + 3} fill="none" stroke={colors.text} strokeWidth={1} /> : null}
@@ -396,7 +421,7 @@ export function KnowledgeMap({ subjects, know, retention = 0.9, onPlace, onOpen 
               : settling
                 ? 'Settling into place.'
                 : mode === 'field'
-                  ? 'Grouped by what each idea is, whichever subject teaches it. Hubs grow as you learn; the arc is the share learned, green where it is secure. Dark lines join things you know; they fade as memory does. Tap a field to see what is under it.'
+                  ? 'Grouped by what each idea is, whichever subject teaches it. Hubs grow as you learn; the arc is the share learned, green where it is secure. What you brought with you is dashed until a check has shown it. Dark lines join things you know; they fade as memory does. Tap a field to see what is under it.'
                   : 'Filled: learned. Green ring: secure. Dimmer: fading from memory. Dashed: a link a lesson drew to something you knew. Tap anything.'}
         </Text>
       )}

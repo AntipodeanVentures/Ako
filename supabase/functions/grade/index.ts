@@ -2,12 +2,13 @@
 //
 // Request: { kind: 'answers', title, items: [{ prompt, answer, response, conf? }], mode? }
 //        | { kind: 'check', subject, topicIds: string[], stageId? }        (writes the check questions)
+//        | { kind: 'verify', field: { field, area, level, basis } }         (writes the check of a field the learner says they know)
 //        | { kind: 'mixed', subject, topicIds: string[] }                  (writes a mixed practice set across learned topics)
 //        | { kind: 'debrief', subject, topicId, scenario, transcript }
 //        | { kind: 'photo', subject, topicId, drill, image: { mediaType, dataBase64 } }
 // Response: JSON
 
-import { placementPrompt,
+import { placementPrompt, verifyPrompt, normaliseVerify,
   gradePrompt, checkPrompt, mixedPrompt, debriefPrompt, formCheckPrompt, normaliseDebrief, normaliseMixed, topicById, METHOD, arr, str,
 } from '../_shared/engine/index.js';
 import { CORS, errorResponse, json, requireCaller, HttpError } from '../_shared/auth.ts';
@@ -37,6 +38,14 @@ Deno.serve(async (req) => {
     const { data: prof } = await caller.admin.from('profiles').select('about, model').eq('id', caller.profileId).maybeSingle();
     subject.learner = { about: prof?.about ?? '', model: prof?.model ?? null };
 
+    if (body.kind === 'verify') {
+      const f = body.field;
+      if (!f || !str(f.field)) throw new HttpError(400, 'bad_request', 'A field is required.');
+      const { data: prof } = await caller.admin.from('profiles').select('about').eq('id', caller.profileId).maybeSingle();
+      const r = await sample({ model: modelFor('placement'), system: METHOD, prompt: verifyPrompt({ field: str(f.field, 80), area: str(f.area, 80), level: str(f.level, 4) || 's2', basis: str(f.basis, 120) }, prof?.about ?? ''), maxTokens: 4000 });
+      await recordUsage(caller, 'grade', r.inputTokens, r.outputTokens);
+      return json({ verify: normaliseVerify(parseJson(r.text, r.stopReason)) });
+    }
     if (body.kind === 'placement') {
       // Skip what you already know: eight to ten questions across the plan, basic to advanced. The frontier model
       // writes them because they decide what the learner never sees.

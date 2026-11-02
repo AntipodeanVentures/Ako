@@ -12,7 +12,7 @@
 // and the topics fanning outwards from the hub by level. The same data draws the same map.
 
 import { arr, nowMs, str } from './core.js';
-import { STAGES, stageIdx } from './ladder.js';
+import { STAGES, stageIdx, stageName } from './ladder.js';
 import { isSecure, topicStatus } from './progress.js';
 import { recallChance } from './scheduling.js';
 
@@ -122,19 +122,40 @@ function knowledgeGraph({ subjects, know = [], now = nowMs(), retention = 0.9 })
 // area, area to field, field to the learner, plus the prerequisite and bridge links as before.
 // Positions come from a force layout in the app (src/components/forceLayout.ts); this is the data.
 /**
- * @param {{ subjects: any[]; know?: any[]; now?: number; retention?: number }} args
+ * @param {{ subjects: any[]; know?: any[]; prior?: any[]; now?: number; retention?: number }} args
  * @returns {{ nodes: any[]; edges: { from: string; to: string; kind: string }[]; placed: boolean }}
  */
-function fieldGraph({ subjects, know = [], now = nowMs(), retention = 0.9 }) {
-  const base = knowledgeGraph({ subjects, know, now, retention });
+function fieldGraph({ subjects, know = [], prior = [], now = nowMs(), retention = 0.9 }) {
+  const priorRows = arr(prior).filter((f) => f && str(f.field));
+  // Once the learner's own fields are on the map as nodes, the small squares for CV items are
+  // redundant; they stay in the by-subject view.
+  const base = knowledgeGraph({ subjects, know: priorRows.length ? [] : know, now, retention });
   const nodes = base.nodes.filter((n) => n.kind !== 'subject');
-  const edges = base.edges.filter((e) => e.kind !== 'root' && e.kind !== 'covers' && !(e.kind === 'spoke' && e.from.startsWith('s:')));
+  const edges = base.edges.filter((e) => e.kind !== 'root' && e.kind !== 'covers' && e.kind !== 'bridge' && !(e.kind === 'spoke' && e.from.startsWith('s:')));
   const subjectTitle = new Map(arr(subjects).map((s) => [s.id, str(s.plan && s.plan.title, 80)]));
   const fields = new Map();
   const areas = new Map();
   const slug = (x) => str(x, 40).toLowerCase().replace(/[^a-z0-9]+/g, '-');
-  // Fields and areas keep the order they first appeared in (the oldest subject's first topic
-  // first), so a new subject adds to the ring without moving the rest.
+  // What the learner brought with them comes first on the ring, then fields and areas in the
+  // order they first appeared (the oldest subject's first topic first), so a new subject adds
+  // to the ring without moving the rest.
+  priorRows.forEach((f, i) => {
+    const field = str(f.field, 40);
+    const area = str(f.area, 40);
+    const fid = 'f:' + slug(field);
+    const standing = { id: str(f.id), level: str(f.level, 4) || 's2', verifiedLevel: str(f.verified_level || f.verifiedLevel, 4) || null, basis: str(f.basis, 120), evidence: { ok: 0, n: 0 } };
+    if (!fields.has(fid)) fields.set(fid, { id: fid, kind: 'field', label: field, topics: 0, learned: 0, secure: 0, recall: [], placed: true, order: -100000 + i });
+    const fnode = fields.get(fid);
+    if (area && area.toLowerCase() !== field.toLowerCase()) {
+      const aid = 'a:' + slug(field) + '/' + slug(area);
+      if (!areas.has(aid)) areas.set(aid, { id: aid, kind: 'area', label: area, field: fid, topics: 0, learned: 0, secure: 0, recall: [], order: -100000 + i });
+      areas.get(aid).prior = standing;
+      // The field itself stands at least as high as its highest area the learner brought.
+      if (!fnode.prior || stageIdx(standing.verifiedLevel || standing.level) > stageIdx(fnode.prior.verifiedLevel || fnode.prior.level)) fnode.prior = { ...standing, fromArea: true };
+    } else {
+      fnode.prior = standing;
+    }
+  });
   const subjIdx = new Map(arr(subjects).map((s, i) => [s.id, i]));
   let seq = 0;
   for (const n of nodes) {
@@ -156,9 +177,37 @@ function fieldGraph({ subjects, know = [], now = nowMs(), retention = 0.9 }) {
     n.area = aid; n.field = fid; n.subject = subjectTitle.get(n.subjectId) || '';
     edges.push({ from: n.id, to: aid, kind: 'in' });
   }
+  // The links lessons drew to what the learner already knew, now to the field or area itself
+  // (or, with no fields on the map yet, to the CV item). Each link also carries the warm-up's
+  // "prior" question: a right answer is evidence the field is held, counted on the node.
+  const candidates = [
+    ...[...fields.values()].filter((f) => f.prior).map((f) => ({ id: f.id, title: f.label, detail: '' })),
+    ...[...areas.values()].filter((a) => a.prior).map((a) => ({ id: a.id, title: fields.get(a.field).label + ' ' + a.label, detail: '' })),
+    ...(priorRows.length ? [] : base.nodes.filter((n) => n.kind === 'know').map((n) => ({ id: n.id, title: n.label, detail: n.detail }))),
+  ];
+  for (const n of nodes) {
+    if (n.kind !== 'topic') continue;
+    const subj = arr(subjects).find((x) => x.id === n.subjectId);
+    const st = subj && subj.topicState ? subj.topicState[n.topicId] || {} : {};
+    const b = st.bridge;
+    if (!b || typeof b !== 'object') continue;
+    if (str(b.topic)) { const to = 't:' + n.subjectId + ':' + str(b.topic); if (nodes.some((x) => x.id === to) && to !== n.id) edges.push({ from: n.id, to, kind: 'bridge' }); continue; }
+    if (!str(b.field)) continue;
+    const hit = matchField(b.field, candidates);
+    if (!hit) continue;
+    edges.push({ from: n.id, to: hit.id, kind: 'bridge' });
+    const target = fields.get(hit.id) || areas.get(hit.id);
+    if (target && target.prior && typeof st.priorScore === 'number') { target.prior.evidence.n++; if (st.priorScore >= 0.75) target.prior.evidence.ok++; }
+  }
   // How much of a field or area is held: learned counts half, secure the other half, so a hub
-  // grows as topics are learned and again as they prove to stay learned.
-  const finish = (h) => { h.recall = meanOr(h.recall, null); h.mastery = h.topics ? (h.learned + h.secure) / (2 * h.topics) : 0; };
+  // grows as topics are learned and again as they prove to stay learned. A hub the learner
+  // brought with them grows with the level they stand at, a little less until a check shows it.
+  const finish = (h) => {
+    h.recall = meanOr(h.recall, null);
+    const taught = h.topics ? (h.learned + h.secure) / (2 * h.topics) : 0;
+    const brought = h.prior ? ((stageIdx(h.prior.verifiedLevel || h.prior.level) + 1) / STAGES.length) * (h.prior.verifiedLevel ? 1 : 0.7) : 0;
+    h.mastery = Math.max(taught, brought);
+  };
   for (const a of areas.values()) { finish(a); edges.push({ from: a.id, to: a.field, kind: 'in' }); }
   for (const f of fields.values()) { finish(f); edges.push({ from: f.id, to: 'you', kind: 'spoke' }); }
   // An area that is the whole of its field (no second level given) collapses into the field.
@@ -256,10 +305,16 @@ function nodeLine(n) {
   if (n.kind === 'you') return 'Everything on the map hangs off what you already knew.';
   if (n.kind === 'know') return 'Something you brought with you. Lessons draw comparisons from it.';
   if (n.kind === 'field' || n.kind === 'area') {
-    const parts = [`${n.learned} of ${n.topics} topics learned`];
+    const parts = [];
+    if (n.prior) {
+      const p = n.prior;
+      parts.push(p.verifiedLevel ? `${stageName(p.verifiedLevel)}, shown in a check` : `${stageName(p.level)} as you described it${p.fromArea ? '' : ', not yet checked'}`);
+      if (p.evidence && p.evidence.n) parts.push(`drawn on in ${p.evidence.n} ${p.evidence.n === 1 ? 'lesson' : 'lessons'}, right ${p.evidence.ok} ${p.evidence.ok === 1 ? 'time' : 'times'}`);
+    }
+    if (n.topics) parts.push(`${n.learned} of ${n.topics} topics learned`);
     if (n.secure) parts.push(`${n.secure} secure`);
     if (typeof n.recall === 'number') parts.push(`${Math.round(n.recall * 100)}% likely recalled now`);
-    return parts.join(' · ');
+    return parts.join(' · ') || 'Nothing here yet.';
   }
   if (n.kind === 'subject') {
     const parts = [`${n.learned} of ${n.total} topics learned`];

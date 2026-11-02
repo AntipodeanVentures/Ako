@@ -1,6 +1,6 @@
 // extract: the calls that read the learner's own material or map a goal, none of which store anything by themselves.
 //
-// Request: { kind: 'know', material: string, fromPhoto?: boolean, image?: { mediaType, dataBase64 } }   -> items to confirm
+// Request: { kind: 'know', material: string, fromPhoto?: boolean, image?: { mediaType, dataBase64 }, fields?: string[] }   -> items and fields to confirm
 //        | { kind: 'start', subject: string }                                                             -> a suggested starting point
 //        | { kind: 'role', title: string, description?: string }                                          -> a role map
 //        | { kind: 'model', subject, topicId, evidence }                                                   -> learner model update
@@ -27,7 +27,8 @@ Deno.serve(async (req) => {
     if (body.kind === 'know') {
       const material = str(body.material, 12000);
       if (!material && !body.image) throw new HttpError(400, 'bad_request', 'Nothing to read.');
-      const r = await sample({ model: modelFor('know'), prompt: knowPrompt(material, Boolean(body.image)), images: body.image ? [body.image] : undefined, maxTokens: 1800 });
+      const fieldsInUse = Array.isArray(body.fields) ? body.fields.slice(0, 60) : [];
+      const r = await sample({ model: modelFor('know'), prompt: knowPrompt(material, Boolean(body.image), fieldsInUse), images: body.image ? [body.image] : undefined, maxTokens: 3000 });
       await recordUsage(caller, 'extract', r.inputTokens, r.outputTokens);
       return json({ know: normaliseKnow(parseJson(r.text, r.stopReason)) });
     }
