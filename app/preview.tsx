@@ -204,7 +204,7 @@ function SessionPreview({ step }: { step: string }) {
 }
 
 export default function PreviewScreen() {
-  const { screen, built, subject, step, dense } = useLocalSearchParams<{ screen?: string; built?: string; subject?: string; step?: string; dense?: string }>();
+  const { screen, built, subject, step, dense, bare } = useLocalSearchParams<{ screen?: string; built?: string; subject?: string; step?: string; dense?: string; bare?: string }>();
   const { spacing } = useTheme();
   const subj = useMemo(fixtureSubject, []);
   if (!__DEV__) return <Redirect href="/" />;
@@ -306,6 +306,8 @@ export default function PreviewScreen() {
       { id: 'p4', field: 'Jiu-jitsu', area: '', level: 's2', basis: 'brown belt', verified_level: 's2', verified_at: '2026-10-21T18:30:00Z', verified: { score: 5.5, asked: 6 } },
     ];
     for (const s of many) { const t0 = s.plan.topics[0]; const st = s.topicState as Record<string, { bridge?: unknown; priorScore?: number }>; if (st[t0.id]) st[t0.id] = { ...st[t0.id], bridge: { field: 'aircraft performance' }, priorScore: 1 }; }
+    // ?bare=1: a learner who pasted a CV but confirmed no fields, and whose lessons have not drawn on it yet.
+    if (bare) { prior.length = 0; for (const s of many) for (const st of Object.values(s.topicState as Record<string, { bridge?: unknown }>)) delete st.bridge; }
     // The two screens that carry the thesis: the map as the home, and the record as a document
     // (live in the app, and public under its code).
     if (screen === 'home') return <MapHome subjects={many} know={know} prior={prior} onNav={() => {}} onOpen={() => {}} />;

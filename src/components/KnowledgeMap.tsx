@@ -11,6 +11,7 @@ import type { LiveSubject } from '@/src/features/subjects';
 import { useReducedMotion, useTheme } from '@/src/theme';
 
 import { forceLayout } from './forceLayout';
+import { placeLabels, type LabelItem, type Obstacle } from './labels';
 
 type KnowItem = { id: string; kind: string; title: string; detail?: string };
 // The engine is plain JavaScript; these are the fields the drawing reads.
@@ -227,9 +228,50 @@ export function KnowledgeMap({ subjects, know, prior = [], retention = 0.9, onPl
   };
 
   const labelFont = typography.caption.fontFamily;
-  const Halo = ({ x, y, w, h = 15 }: { x: number; y: number; w: number; h?: number }) => (
-    <Rect x={x - w / 2} y={y - h + 4} width={w} height={h} rx={3} fill={colors.background} fillOpacity={0.85} />
-  );
+
+  // Labels are placed after the nodes, most important first (the tapped node, then hubs, then
+  // areas, then any topics in view), each taking the first spot round its node that lands on
+  // nothing. Hubs alternate their first choice above and below, as before; a hub always shows,
+  // an area or a topic that fits nowhere waits for a pinch.
+  const width = (text: string, size: number) => text.length * (size === 11 ? 6.2 : 5.6) + 8;
+  const labelStyle = new Map<string, { size: number; fill: string }>();
+  const candidates: (LabelItem & { rank: number })[] = [];
+  const obstacles: Obstacle[] = [];
+  if (size.w) {
+    for (const n of graph.nodes) {
+      const pos = layout.positions[n.id];
+      if (!pos) continue;
+      const p = toScreen(pos);
+      const r = Math.max(2.5, nodeRadius(n) * scale);
+      const isSel = n.id === selected;
+      if (n.kind !== 'topic' && n.kind !== 'know') obstacles.push({ id: n.id, x1: p.x - r - 4, y1: p.y - r - 4, x2: p.x + r + 4, y2: p.y + r + 4 });
+      if (n.kind === 'subject' || n.kind === 'field') {
+        if (!(view.k >= 0.9 || isSel)) continue;
+        const hubIdx = hubs.indexOf(n.id);
+        const room = Math.max(40, chord * scale - 6);
+        const maxChars = Math.max(12, Math.floor((room - 8) / 6.2));
+        const text = n.label.length > maxChars ? n.label.slice(0, Math.max(6, maxChars - 1)).trimEnd() + '…' : n.label;
+        candidates.push({ id: n.id, text, x: p.x, y: p.y, r: r + 5.5, w: width(text, 11), h: 15, prefer: hubIdx % 2 === 0 ? ['below', 'above', 'right', 'left'] : ['above', 'below', 'right', 'left'], must: true, rank: isSel ? 0 : 1 });
+        labelStyle.set(n.id, { size: 11, fill: colors.text });
+      } else if (n.kind === 'area') {
+        const show = isSel || view.k >= 1.3 || ((n.topics ?? 0) >= 3 && scale >= 0.65);
+        if (!show) continue;
+        const text = n.label.length > 22 && view.k < 1.6 ? n.label.slice(0, 20).trimEnd() + '…' : n.label;
+        candidates.push({ id: n.id, text, x: p.x, y: p.y, r: r + 3.5, w: width(text, 10), h: 14, prefer: ['below', 'above', 'right', 'left'], must: isSel, rank: isSel ? 0 : 2 });
+        labelStyle.set(n.id, { size: 10, fill: colors.textMuted });
+      } else if (n.kind === 'topic') {
+        const status = n.status ?? 'later';
+        const inProgress = status === 'learning' || status === 'practising';
+        const learned = status === 'learned' || status === 'secure';
+        const labelled = isSel || (view.k >= 2.2 && (learned || inProgress || status === 'available'));
+        if (!labelled) continue;
+        const text = n.label.length > 30 ? n.label.slice(0, 28).trimEnd() + '…' : n.label;
+        candidates.push({ id: n.id, text, x: p.x, y: p.y, r: r + 3, w: width(text, 10), h: 14, prefer: ['below', 'above', 'right', 'left'], must: isSel, rank: isSel ? 0 : 3 });
+        labelStyle.set(n.id, { size: 10, fill: colors.textMuted });
+      }
+    }
+  }
+  const labels = placeLabels(candidates.sort((a, b) => a.rank - b.rank), obstacles, { x1: 0, y1: 0, x2: size.w, y2: height });
 
   return (
     <View style={{ gap: spacing.sm }}>
@@ -294,14 +336,6 @@ export function KnowledgeMap({ subjects, know, prior = [], retention = 0.9, onPl
                       const recall = typeof n.recall === 'number' ? n.recall : null;
                       const fillOpacity = recall == null ? 1 : 0.35 + 0.65 * recall;
                       const started = (n.learned ?? 0) > 0;
-                      // The label sits on a pale halo, so the dots it crosses do not break it up. Neighbouring
-                      // hubs alternate above and below, and a label is cut to the room between hubs at this zoom.
-                      const hubIdx = hubs.indexOf(n.id);
-                      const room = Math.max(40, chord * scale - 6);
-                      const maxChars = Math.max(8, Math.floor((room - 8) / 6.2));
-                      const text = n.label.length > maxChars ? n.label.slice(0, Math.max(6, maxChars - 1)).trimEnd() + '…' : n.label;
-                      const below = hubIdx % 2 === 0;
-                      const lab = { x: p.x, y: below ? p.y + r + 17 : p.y - r - 9, w: text.length * 6.2 + 8 };
                       const total = n.kind === 'field' ? n.topics ?? 0 : n.total ?? 0;
                       const learnedShare = total ? (n.learned ?? 0) / total : 0;
                       const secureShare = total ? (n.secure ?? 0) / total : 0;
@@ -321,23 +355,12 @@ export function KnowledgeMap({ subjects, know, prior = [], retention = 0.9, onPl
                           {learnedShare > 0 ? <Path d={arc(p.x, p.y, ring, learnedShare)} fill="none" stroke={colors.text} strokeWidth={1.5} strokeLinecap="round" /> : null}
                           {secureShare > 0 ? <Path d={arc(p.x, p.y, ring, secureShare)} fill="none" stroke={colors.accent} strokeWidth={2} strokeLinecap="round" /> : null}
                           {isSel ? <Circle cx={p.x} cy={p.y} r={ring + 3} fill="none" stroke={colors.text} strokeWidth={1} /> : null}
-                          {view.k >= 0.9 || isSel ? (
-                            <>
-                              <Halo x={lab.x} y={lab.y} w={lab.w} />
-                              <SvgText x={lab.x} y={lab.y} fontSize={11} fontFamily={labelFont} fill={colors.text} textAnchor="middle">
-                                {text}
-                              </SvgText>
-                            </>
-                          ) : null}
                         </G>
                       );
                     }
                     if (n.kind === 'area') {
                       const recall = typeof n.recall === 'number' ? n.recall : null;
                       const started = (n.learned ?? 0) > 0;
-                      const text = n.label.length > 22 && view.k < 1.6 ? n.label.slice(0, 20).trimEnd() + '…' : n.label;
-                      // Area labels need room: on a phone at the default zoom they wait for a pinch.
-                      const show = isSel || view.k >= 1.3 || ((n.topics ?? 0) >= 3 && scale >= 0.65);
                       const aTotal = n.topics ?? 0;
                       const aLearned = aTotal ? (n.learned ?? 0) / aTotal : 0;
                       const aSecure = aTotal ? (n.secure ?? 0) / aTotal : 0;
@@ -354,14 +377,6 @@ export function KnowledgeMap({ subjects, know, prior = [], retention = 0.9, onPl
                           {aLearned > 0 ? <Path d={arc(p.x, p.y, aRing, aLearned)} fill="none" stroke={colors.text} strokeWidth={1.25} strokeLinecap="round" /> : null}
                           {aSecure > 0 ? <Path d={arc(p.x, p.y, aRing, aSecure)} fill="none" stroke={colors.accent} strokeWidth={1.75} strokeLinecap="round" /> : null}
                           {isSel ? <Circle cx={p.x} cy={p.y} r={aRing + 3} fill="none" stroke={colors.text} strokeWidth={1} /> : null}
-                          {show ? (
-                            <>
-                              <Halo x={p.x} y={p.y + r + 14} w={text.length * 5.6 + 8} h={14} />
-                              <SvgText x={p.x} y={p.y + r + 14} fontSize={10} fontFamily={labelFont} fill={colors.textMuted} textAnchor="middle">
-                                {text}
-                              </SvgText>
-                            </>
-                          ) : null}
                         </G>
                       );
                     }
@@ -372,8 +387,6 @@ export function KnowledgeMap({ subjects, know, prior = [], retention = 0.9, onPl
                     const fillOpacity = recall == null ? 1 : 0.3 + 0.7 * recall;
                     const inProgress = status === 'learning' || status === 'practising';
                     const learned = status === 'learned' || status === 'secure';
-                    const labelled = isSel || (view.k >= 2.2 && (learned || inProgress || status === 'available'));
-                    const tlabel = n.label.length > 30 ? n.label.slice(0, 28).trimEnd() + '…' : n.label;
                     const dim = under ? !under.has(n.id) : false;
                     return (
                       <G key={n.id} opacity={dim ? 0.35 : 1}>
@@ -387,14 +400,21 @@ export function KnowledgeMap({ subjects, know, prior = [], retention = 0.9, onPl
                         {inProgress ? <Circle cx={p.x} cy={p.y} r={Math.max(1, r * 0.4)} fill={colors.text} /> : null}
                         {status === 'secure' ? <Circle cx={p.x} cy={p.y} r={r + 2.5} fill="none" stroke={colors.accent} strokeWidth={1.25} /> : null}
                         {isSel ? <Circle cx={p.x} cy={p.y} r={r + 5} fill="none" stroke={colors.text} strokeWidth={1} /> : null}
-                        {labelled ? (
-                          <>
-                            <Halo x={p.x} y={p.y + r + 11} w={tlabel.length * 5.6 + 8} h={14} />
-                            <SvgText x={p.x} y={p.y + r + 11} fontSize={10} fontFamily={labelFont} fill={colors.textMuted} textAnchor="middle">
-                              {tlabel}
-                            </SvgText>
-                          </>
-                        ) : null}
+                      </G>
+                    );
+                  })}
+                </G>
+                {/* Every label on top, each on a pale halo so the lines and dots it crosses do not break it up. */}
+                <G>
+                  {[...labels.values()].map((l) => {
+                    const st = labelStyle.get(l.id) ?? { size: 10, fill: colors.textMuted };
+                    const x1 = l.anchor === 'middle' ? l.x - l.w / 2 : l.anchor === 'start' ? l.x : l.x - l.w;
+                    return (
+                      <G key={'label:' + l.id}>
+                        <Rect x={x1} y={l.y - l.h + 4} width={l.w} height={l.h} rx={3} fill={colors.background} fillOpacity={0.85} />
+                        <SvgText x={l.x} y={l.y} fontSize={st.size} fontFamily={labelFont} fill={st.fill} textAnchor={l.anchor}>
+                          {l.text}
+                        </SvgText>
                       </G>
                     );
                   })}

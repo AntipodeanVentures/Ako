@@ -42,8 +42,9 @@ type Props = {
 const FADING = 0.7;
 const WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
 const count = (n: number, one: string, many: string) => `${WORDS[n] ?? n} ${n === 1 ? one : many}`;
-// "Propellers", "Propellers and Forces", "Propellers and elsewhere": the line stays short.
-const list = (names: string[]) => (names.length <= 2 ? names.join(' and ') : `${names[0]} and elsewhere`);
+// "Propellers", "Propellers and Forces", "Propellers and elsewhere": the line stays short. A
+// name with its own "and" (Energy and power) is set off with a comma instead.
+const list = (names: string[]) => (names.length > 2 ? `${names[0]} and elsewhere` : names.length === 2 ? names.join(names.some((n) => / and /i.test(n)) ? ', and in ' : ' and ') : names[0] ?? '');
 
 // What today's session does to the map, from the map's own data: which ideas are fading and where,
 // which are new and where, and about how long the lot takes.
