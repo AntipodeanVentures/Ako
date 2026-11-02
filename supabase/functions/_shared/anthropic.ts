@@ -11,6 +11,8 @@ type Opts = {
   prompt: string | { role: 'user' | 'assistant'; content: string }[];
   maxTokens?: number;
   images?: { mediaType: string; dataBase64: string }[];
+  // PDFs, sent as document blocks; the model reads them as it reads an image.
+  documents?: { mediaType: string; dataBase64: string }[];
   onText?: (delta: string) => void;
   signal?: AbortSignal;
 };
@@ -20,10 +22,12 @@ export type Result = { text: string; inputTokens: number; outputTokens: number; 
 export async function sample(o: Opts): Promise<Result> {
   const key = Deno.env.get('ANTHROPIC_API_KEY');
   if (!key) throw new HttpError(500, 'not_configured', 'The model key is not set on the server.');
+  const attached = [
+    ...(o.documents ?? []).map((d) => ({ type: 'document', source: { type: 'base64', media_type: d.mediaType, data: d.dataBase64 } })),
+    ...(o.images ?? []).map((im) => ({ type: 'image', source: { type: 'base64', media_type: im.mediaType, data: im.dataBase64 } })),
+  ];
   const messages = typeof o.prompt === 'string'
-    ? [{ role: 'user', content: o.images?.length
-        ? [...o.images.map((im) => ({ type: 'image', source: { type: 'base64', media_type: im.mediaType, data: im.dataBase64 } })), { type: 'text', text: o.prompt }]
-        : o.prompt }]
+    ? [{ role: 'user', content: attached.length ? [...attached, { type: 'text', text: o.prompt }] : o.prompt }]
     : o.prompt;
   const body: Record<string, unknown> = {
     model: o.model,

@@ -15,8 +15,11 @@ export type ProposedField = { id: string; field: string; area: string; level: St
 
 export const KIND_LABELS: Record<string, string> = Object.fromEntries(KNOW_KINDS as [string, string][]);
 
-export async function proposeItems(material: string, fieldsInUse: string[] = []): Promise<{ summary: string; items: ProposedItem[]; fields: ProposedField[] }> {
-  const r = await callJson<{ know: { summary: string; items: ProposedItem[]; fields?: ProposedField[] } }>('extract', { kind: 'know', material, fields: fieldsInUse });
+// A file goes with the words, or instead of them: a PDF as a document, a photo as an image.
+export type Attachment = { image?: { mediaType: string; dataBase64: string }; document?: { mediaType: string; dataBase64: string } };
+
+export async function proposeItems(material: string, fieldsInUse: string[] = [], attachment: Attachment = {}): Promise<{ summary: string; items: ProposedItem[]; fields: ProposedField[] }> {
+  const r = await callJson<{ know: { summary: string; items: ProposedItem[]; fields?: ProposedField[] } }>('extract', { kind: 'know', material, fields: fieldsInUse, ...attachment });
   return { ...r.know, fields: r.know.fields ?? [] };
 }
 

@@ -16,7 +16,8 @@ import {
   useSaveKnowItems,
   useSavePriorFields,
 } from '@/src/features/profile';
-import { KIND_LABELS, fieldNamesInUse, proposeItems, recomputeAbout, toRows, type ProposedField, type ProposedItem } from '@/src/features/profile/know';
+import { cvMaterial, pickCv, type CvFile } from '@/src/features/profile/cv';
+import { KIND_LABELS, fieldNamesInUse, proposeItems, recomputeAbout, toRows, type Attachment, type ProposedField, type ProposedItem } from '@/src/features/profile/know';
 import { STAGES, stageName } from '@/src/engine/ladder';
 import type { StageId } from '@/src/engine/types';
 import { useRouter } from 'expo-router';
@@ -64,6 +65,9 @@ export default function YouScreen() {
   const close = () => (router.canGoBack() ? router.back() : router.replace('/record'));
 
   const [material, setMaterial] = useState('');
+  // A CV as a file, chosen with the system picker; read on the device where it can be, else sent as it is.
+  const [file, setFile] = useState<CvFile | null>(null);
+  const [picking, setPicking] = useState(false);
   const [proposed, setProposed] = useState<{ summary: string; items: ProposedItem[]; fields: ProposedField[] } | null>(null);
   const [reading, setReading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -131,16 +135,38 @@ export default function YouScreen() {
     }
   };
 
+  const choose = async () => {
+    setPicking(true);
+    setError(null);
+    try {
+      const f = await pickCv();
+      if (f) { cvMaterial(f); setFile(f); }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'That file could not be read.');
+    } finally {
+      setPicking(false);
+    }
+  };
+
   const read = async () => {
-    if (!material.trim()) return;
+    if (!material.trim() && !file) return;
     setReading(true);
     setError(null);
     try {
+      // A Word or text file is read here and sent as words; a PDF or a photo goes as it is.
+      let words = material.trim();
+      const attachment: Attachment = {};
+      if (file) {
+        const m = cvMaterial(file);
+        if (m.kind === 'text') words = [m.text, words].filter(Boolean).join('\n\n');
+        else if (m.kind === 'image') attachment.image = m.image;
+        else attachment.document = m.document;
+      }
       // The names already on the map (the planner's fields and the ones confirmed so far) go with the material, so the new ones match.
       const planned = mapped.flatMap((su) => su.plan.topics.map((t) => (t.schema && t.schema.length ? t.schema.join(' › ') : ''))).filter(Boolean);
-      setProposed(await proposeItems(material.trim(), fieldNamesInUse(prior, Array.from(new Set(planned)))));
+      setProposed(await proposeItems(words, fieldNamesInUse(prior, Array.from(new Set(planned))), attachment));
     } catch (e) {
-      setError(aiErrorCopy(e));
+      setError(e instanceof Error && !('code' in e) ? e.message : aiErrorCopy(e));
     } finally {
       setReading(false);
     }
@@ -152,9 +178,10 @@ export default function YouScreen() {
     try {
       // Pasting the same CV twice should not list every job twice.
       const have = new Set((items.data ?? []).map((r) => r.title.trim().toLowerCase()));
-      const rows = toRows(proposed.items, material.length > 600 ? 'cv' : 'typed').filter((r) => !have.has(r.title.trim().toLowerCase()));
+      const source: PriorFieldRow['source'] = file ? 'cv' : material.length > 600 ? 'cv' : 'typed';
+      const rows = toRows(proposed.items, source).filter((r) => !have.has(r.title.trim().toLowerCase()));
       await save.mutateAsync(rows);
-      const keptFields = proposed.fields.filter((f) => f.keep).map((f) => ({ field: f.field, area: f.area, level: f.level, basis: f.basis, source: (material.length > 600 ? 'cv' : 'typed') as PriorFieldRow['source'] }));
+      const keptFields = proposed.fields.filter((f) => f.keep).map((f) => ({ field: f.field, area: f.area, level: f.level, basis: f.basis, source }));
       if (keptFields.length) await saveFields.mutateAsync({ fields: keptFields, existing: prior });
       const after = [...(items.data ?? []), ...rows.map((r, i) => ({ ...r, id: `new-${i}`, profile_id: profile.id, confirmed_at: '', created_at: '' }))] as KnowItemRow[];
       const fieldsAfter = [...prior, ...keptFields.filter((f) => !prior.some((e) => e.field.toLowerCase() === f.field.toLowerCase() && e.area.toLowerCase() === f.area.toLowerCase())).map((f, i) => ({ ...f, id: `new-${i}`, profile_id: profile.id, verified_level: null, verified_at: null, verified: null, evidence: { ok: 0, n: 0 }, created_at: '', updated_at: '' }))] as PriorFieldRow[];
@@ -162,6 +189,7 @@ export default function YouScreen() {
       await refresh();
       setProposed(null);
       setMaterial('');
+      setFile(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save.');
     }
@@ -276,7 +304,28 @@ export default function YouScreen() {
             multiline
             style={{ minHeight: 96, textAlignVertical: 'top' }}
           />
-          <Button label="Read it" onPress={read} loading={reading} disabled={!material.trim()} variant={grouped.length ? 'secondary' : 'primary'} />
+          {file ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md }}>
+              <Ionicons name="document-attach-outline" size={20} color={colors.textMuted} />
+              <View style={{ flex: 1 }}>
+                <Text variant="bodyStrong" numberOfLines={1}>
+                  {file.name}
+                </Text>
+                <Text variant="caption" color="textMuted">
+                  {file.size >= 1024 * 1024 ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(file.size / 1024))} KB`}
+                </Text>
+              </View>
+              <Pressable onPress={() => setFile(null)} hitSlop={10} accessibilityRole="button" accessibilityLabel="Remove the file">
+                <Ionicons name="close" size={18} color={colors.textMuted} />
+              </Pressable>
+            </View>
+          ) : (
+            <Button label="Upload a CV" variant="secondary" onPress={choose} loading={picking} />
+          )}
+          <Text variant="caption" color="textMuted">
+            A PDF, a Word file, a plain text file or a photo of a page. Nothing is saved until you confirm what it found.
+          </Text>
+          <Button label="Read it" onPress={read} loading={reading} disabled={!material.trim() && !file} variant={grouped.length && !file ? 'secondary' : 'primary'} />
           {error ? (
             <Text variant="caption" color="danger">
               {error}
