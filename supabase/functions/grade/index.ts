@@ -33,11 +33,7 @@ Deno.serve(async (req) => {
       return json({ results });
     }
 
-    const subject = body.subject;
-    if (!subject) throw new HttpError(400, 'bad_request', 'Subject is required.');
-    const { data: prof } = await caller.admin.from('profiles').select('about, model').eq('id', caller.profileId).maybeSingle();
-    subject.learner = { about: prof?.about ?? '', model: prof?.model ?? null };
-
+    // A field check stands on its own: no subject, just the field the learner says they know.
     if (body.kind === 'verify') {
       const f = body.field;
       if (!f || !str(f.field)) throw new HttpError(400, 'bad_request', 'A field is required.');
@@ -46,6 +42,12 @@ Deno.serve(async (req) => {
       await recordUsage(caller, 'grade', r.inputTokens, r.outputTokens);
       return json({ verify: normaliseVerify(parseJson(r.text, r.stopReason)) });
     }
+
+    const subject = body.subject;
+    if (!subject) throw new HttpError(400, 'bad_request', 'Subject is required.');
+    const { data: prof } = await caller.admin.from('profiles').select('about, model').eq('id', caller.profileId).maybeSingle();
+    subject.learner = { about: prof?.about ?? '', model: prof?.model ?? null };
+
     if (body.kind === 'placement') {
       // Skip what you already know: eight to ten questions across the plan, basic to advanced. The frontier model
       // writes them because they decide what the learner never sees.
