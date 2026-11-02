@@ -283,7 +283,10 @@ export default function PreviewScreen() {
           const learned = [12, 8, 5, 3, 1, 0][i];
           topics.slice(0, learned).forEach((t, j) => {
             (s.topicState as Record<string, unknown>)[t.id] = { status: 'mastered', masteredAt: Date.now() - (learned - j) * 3 * 86400000 };
-            (s.cards ??= []).push(...makeCards(t, [{ front: 'q', back: 'a', concept: 0 }], 3, 0.9, Date.now() - (learned - j) * 3 * 86400000));
+            const cards = makeCards(t, [{ front: 'q', back: 'a', concept: 0 }], 3, 0.9, Date.now() - (learned - j) * 3 * 86400000);
+            // The earliest-learned half have been recalled on three separate days, so they count as secure.
+            if (j < learned / 2) for (const c of cards as { relearnDays?: string[] }[]) c.relearnDays = ['2026-10-01', '2026-10-05', '2026-10-12'];
+            (s.cards ??= []).push(...cards);
           });
           if (learned < topics.length) (s.topicState as Record<string, unknown>)[topics[learned].id] = { status: 'learning', attempts: 1 };
           return s;

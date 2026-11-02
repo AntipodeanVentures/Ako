@@ -133,6 +133,10 @@ function fieldGraph({ subjects, know = [], now = nowMs(), retention = 0.9 }) {
   const fields = new Map();
   const areas = new Map();
   const slug = (x) => str(x, 40).toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  // Fields and areas keep the order they first appeared in (the oldest subject's first topic
+  // first), so a new subject adds to the ring without moving the rest.
+  const subjIdx = new Map(arr(subjects).map((s, i) => [s.id, i]));
+  let seq = 0;
   for (const n of nodes) {
     if (n.kind !== 'topic') continue;
     const topic = arr(subjects).find((s) => s.id === n.subjectId);
@@ -142,16 +146,21 @@ function fieldGraph({ subjects, know = [], now = nowMs(), retention = 0.9 }) {
     const area = str(schema[1], 40) || field;
     const fid = 'f:' + slug(field);
     const aid = 'a:' + slug(field) + '/' + slug(area);
-    if (!fields.has(fid)) fields.set(fid, { id: fid, kind: 'field', label: field, topics: 0, learned: 0, recall: [], placed: !!(t && arr(t.schema).length) });
-    if (!areas.has(aid)) areas.set(aid, { id: aid, kind: 'area', label: area, field: fid, topics: 0, learned: 0, recall: [] });
+    const order = (subjIdx.get(n.subjectId) || 0) * 10000 + seq++;
+    if (!fields.has(fid)) fields.set(fid, { id: fid, kind: 'field', label: field, topics: 0, learned: 0, secure: 0, recall: [], placed: !!(t && arr(t.schema).length), order });
+    if (!areas.has(aid)) areas.set(aid, { id: aid, kind: 'area', label: area, field: fid, topics: 0, learned: 0, secure: 0, recall: [], order });
     const f = fields.get(fid); const a = areas.get(aid);
     f.topics++; a.topics++;
     if (n.status === 'learned' || n.status === 'secure') { f.learned++; a.learned++; if (typeof n.recall === 'number') { f.recall.push(n.recall); a.recall.push(n.recall); } }
+    if (n.status === 'secure') { f.secure++; a.secure++; }
     n.area = aid; n.field = fid; n.subject = subjectTitle.get(n.subjectId) || '';
     edges.push({ from: n.id, to: aid, kind: 'in' });
   }
-  for (const a of areas.values()) { a.recall = meanOr(a.recall, null); edges.push({ from: a.id, to: a.field, kind: 'in' }); }
-  for (const f of fields.values()) { f.recall = meanOr(f.recall, null); edges.push({ from: f.id, to: 'you', kind: 'spoke' }); }
+  // How much of a field or area is held: learned counts half, secure the other half, so a hub
+  // grows as topics are learned and again as they prove to stay learned.
+  const finish = (h) => { h.recall = meanOr(h.recall, null); h.mastery = h.topics ? (h.learned + h.secure) / (2 * h.topics) : 0; };
+  for (const a of areas.values()) { finish(a); edges.push({ from: a.id, to: a.field, kind: 'in' }); }
+  for (const f of fields.values()) { finish(f); edges.push({ from: f.id, to: 'you', kind: 'spoke' }); }
   // An area that is the whole of its field (no second level given) collapses into the field.
   const only = new Map();
   for (const a of areas.values()) only.set(a.field, (only.get(a.field) || 0) + 1);
@@ -159,7 +168,8 @@ function fieldGraph({ subjects, know = [], now = nowMs(), retention = 0.9 }) {
   const kept = [...areas.values()].filter((a) => !collapse.has(a.id));
   const outEdges = edges.filter((e) => !collapse.has(e.from)).map((e) => (collapse.has(e.to) ? { ...e, to: areas.get(e.to).field } : e));
   for (const n of nodes) if (n.kind === 'topic' && collapse.has(n.area)) n.area = n.field;
-  return { nodes: [...nodes, ...fields.values(), ...kept], edges: outEdges, placed: [...fields.values()].every((f) => f.placed) };
+  const byOrder = (x, y) => x.order - y.order;
+  return { nodes: [...nodes, ...[...fields.values()].sort(byOrder), ...kept.sort(byOrder)], edges: outEdges, placed: [...fields.values()].every((f) => f.placed) };
 }
 
 // ---------- the layout ----------
@@ -234,8 +244,10 @@ function layoutGraph(graph) {
   return { positions: pos, extent: Math.ceil(maxR) };
 }
 
+// A hub grows with mastery: up to 1.8 times its base size when every topic under it is secure.
 function nodeRadius(n) {
   const r = RADIUS[n.kind] || 4;
+  if (n.kind === 'field' || n.kind === 'area') return r * (1 + 0.8 * (typeof n.mastery === 'number' ? n.mastery : 0));
   return n.kind === 'topic' && n.threshold ? r + 1.5 : r;
 }
 
@@ -245,6 +257,7 @@ function nodeLine(n) {
   if (n.kind === 'know') return 'Something you brought with you. Lessons draw comparisons from it.';
   if (n.kind === 'field' || n.kind === 'area') {
     const parts = [`${n.learned} of ${n.topics} topics learned`];
+    if (n.secure) parts.push(`${n.secure} secure`);
     if (typeof n.recall === 'number') parts.push(`${Math.round(n.recall * 100)}% likely recalled now`);
     return parts.join(' · ');
   }

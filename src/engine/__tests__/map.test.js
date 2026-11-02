@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { DAY, fieldGraph, knowledgeGraph, layoutGraph, makeCards, matchField, nodeLine, normalisePlan, R_HUB, R_KNOW } from '../index.js';
+import { DAY, fieldGraph, knowledgeGraph, layoutGraph, makeCards, matchField, nodeLine, nodeRadius, normalisePlan, R_HUB, R_KNOW } from '../index.js';
 import { planPortuguese } from '../fixtures.js';
 
 const intake = { subject: 'Brazilian Portuguese', current: 'Know a little', target: 's3', hours: 2, minutes: 15, why: 'travel' };
@@ -157,5 +157,28 @@ describe('knowledge map by field', () => {
     for (const e of g.edges) { expect(ids.has(e.from)).toBe(true); expect(ids.has(e.to)).toBe(true); }
     const t = g.nodes.find((n) => n.kind === 'topic' && n.topicId === a.plan.topics[0].id);
     expect(nodeLine(t)).toContain('Brazilian Portuguese');
+  });
+});
+
+describe('knowledge map proficiency', () => {
+  it('grows a hub with what is held under it and keeps fields in order of first appearance', () => {
+    const a = subject('s1', 'Brazilian Portuguese');
+    const b = subject('s2', 'Spanish');
+    a.plan.topics.forEach((t) => { t.schema = ['Portuguese', 'Verbs']; });
+    b.plan.topics.forEach((t) => { t.schema = ['Spanish', 'Verbs']; });
+    // Every topic of the second subject learned and secure.
+    for (const t of b.plan.topics) b.topicState[t.id] = { status: 'mastered', masteredAt: T0 - 30 * DAY, relearnDays: ['a', 'b', 'c'] };
+    const g = fieldGraph({ subjects: [a, b], know, now: T0 });
+    const fields = g.nodes.filter((n) => n.kind === 'field');
+    expect(fields.map((n) => n.label)).toEqual(['Portuguese', 'Spanish']);
+    const pt = fields[0]; const es = fields[1];
+    expect(pt.mastery).toBeGreaterThan(0);
+    expect(pt.mastery).toBeLessThan(0.5);
+    expect(es.learned).toBe(b.plan.topics.length);
+    expect(es.mastery).toBeGreaterThan(pt.mastery);
+    expect(nodeRadius(es)).toBeGreaterThan(nodeRadius(pt));
+    // The order survives the subjects arriving the other way round only for the one that is older.
+    const g2 = fieldGraph({ subjects: [b, a], know, now: T0 });
+    expect(g2.nodes.filter((n) => n.kind === 'field').map((n) => n.label)).toEqual(['Spanish', 'Portuguese']);
   });
 });
