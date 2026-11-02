@@ -1,6 +1,6 @@
 // extract: the calls that read the learner's own material or map a goal, none of which store anything by themselves.
 //
-// Request: { kind: 'know', material: string, fromPhoto?: boolean, image?: { mediaType, dataBase64 }, fields?: string[] }   -> items and fields to confirm
+// Request: { kind: 'know', material: string, image?: { mediaType, dataBase64 }, document?: { mediaType: 'application/pdf', dataBase64 }, fields?: string[] }   -> items and fields to confirm
 //        | { kind: 'start', subject: string }                                                             -> a suggested starting point
 //        | { kind: 'role', title: string, description?: string }                                          -> a role map
 //        | { kind: 'model', subject, topicId, evidence }                                                   -> learner model update
@@ -26,9 +26,13 @@ Deno.serve(async (req) => {
 
     if (body.kind === 'know') {
       const material = str(body.material, 12000);
-      if (!material && !body.image) throw new HttpError(400, 'bad_request', 'Nothing to read.');
+      // A PDF comes as a document block; a photo as an image. Either is read by the model as it is.
+      const doc = body.document && typeof body.document === 'object' ? body.document : null;
+      if (doc && (doc.mediaType !== 'application/pdf' || typeof doc.dataBase64 !== 'string' || !doc.dataBase64)) throw new HttpError(400, 'bad_request', 'Only a PDF can be attached as a document.');
+      if (doc && doc.dataBase64.length > 14_000_000) throw new HttpError(400, 'too_large', 'That PDF is too large. Keep it under 10 MB.');
+      if (!material && !body.image && !doc) throw new HttpError(400, 'bad_request', 'Nothing to read.');
       const fieldsInUse = Array.isArray(body.fields) ? body.fields.slice(0, 60) : [];
-      const r = await sample({ model: modelFor('know'), prompt: knowPrompt(material, Boolean(body.image), fieldsInUse), images: body.image ? [body.image] : undefined, maxTokens: 3000 });
+      const r = await sample({ model: modelFor('know'), prompt: knowPrompt(material, Boolean(body.image || doc), fieldsInUse), images: body.image ? [body.image] : undefined, documents: doc ? [doc] : undefined, maxTokens: 3000 });
       await recordUsage(caller, 'extract', r.inputTokens, r.outputTokens);
       return json({ know: normaliseKnow(parseJson(r.text, r.stopReason)) });
     }

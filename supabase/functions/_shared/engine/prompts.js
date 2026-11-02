@@ -163,8 +163,10 @@ Return ONLY JSON: the complete corrected plan in exactly the same shape as the d
 }
 
 // Turning a CV, a profile page or short answers into structured items the learner then confirms.
-function knowPrompt(material, fromPhoto, fieldsInUse) {
-  const body = fromPhoto ? ' The material is in the attached photo (a CV, a profile page or notes); read it carefully.' : '\n\nMaterial:\n"""\n' + material + '\n"""';
+function knowPrompt(material, attached, fieldsInUse) {
+  const body = attached
+    ? ' The material is attached, as a document or a photo (a CV, a profile page, a certificate or notes); read all of it carefully, every page.' + (str(material) ? '\n\nThe learner also wrote:\n"""\n' + material + '\n"""' : '')
+    : '\n\nMaterial:\n"""\n' + material + '\n"""';
   const inUse = arr(fieldsInUse).map((f) => str(f, 80)).filter(Boolean).slice(0, 60);
   return `Read what follows about one adult learner and extract what they already know well, so a learning app can build on it.${body}
 
