@@ -9,9 +9,9 @@ import type { LiveSubject } from '@/src/features/subjects';
 // as a snapshot under a code, and the public page renders that snapshot. Names and anchors
 // are applied when it is drawn, so a snapshot keeps only ids and numbers.
 
-export type RecordField = { id: string; field: string; area: string; level: StageId; basis: string; score: number | null; asked: number | null; at: string | null };
+export type RecordField = { id: string; domain: string; field: string; area: string; level: StageId; basis: string; score: number | null; asked: number | null; at: string | null };
 export type RecordSubject = { id: string; title: string; reached: StageId | null; working: StageId; learned: number; total: number; secure: number; recall: number | null; marker: string };
-export type RecordClaim = { id: string; field: string; area: string; level: StageId; basis: string };
+export type RecordClaim = { id: string; domain: string; field: string; area: string; level: StageId; basis: string };
 
 export type RecordData = {
   v: 1;
@@ -25,7 +25,7 @@ export type RecordData = {
 };
 
 type PriorField = {
-  id: string; field: string; area: string; level: string; basis: string;
+  id: string; domain?: string; field: string; area: string; level: string; basis: string;
   verified_level: string | null; verified_at?: string | null; verified?: { score: number; asked: number } | null;
 };
 
@@ -34,8 +34,8 @@ const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.l
 export function buildRecord({ name, subjects, prior, retention = 0.9, now = new Date() }: { name: string; subjects: LiveSubject[]; prior: PriorField[]; retention?: number; now?: Date }): RecordData {
   const shown: RecordField[] = prior
     .filter((f) => f.verified_level)
-    .map((f) => ({ id: f.id, field: f.field, area: f.area, level: f.verified_level as StageId, basis: f.basis, score: f.verified?.score ?? null, asked: f.verified?.asked ?? null, at: f.verified_at ?? null }));
-  const claimed: RecordClaim[] = prior.filter((f) => !f.verified_level).map((f) => ({ id: f.id, field: f.field, area: f.area, level: f.level as StageId, basis: f.basis }));
+    .map((f) => ({ id: f.id, domain: f.domain ?? '', field: f.field, area: f.area, level: f.verified_level as StageId, basis: f.basis, score: f.verified?.score ?? null, asked: f.verified?.asked ?? null, at: f.verified_at ?? null }));
+  const claimed: RecordClaim[] = prior.filter((f) => !f.verified_level).map((f) => ({ id: f.id, domain: f.domain ?? '', field: f.field, area: f.area, level: f.level as StageId, basis: f.basis }));
   const learned: RecordSubject[] = subjects
     .map((s) => {
       const pos = stagePosition(s) as { reached: number; currentIdx: number };

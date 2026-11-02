@@ -66,7 +66,9 @@ Deno.serve(async (req) => {
       const subjects = Array.isArray(body.subjects) ? body.subjects.slice(0, 12) : [];
       if (!subjects.length) throw new HttpError(400, 'bad_request', 'Subjects are required.');
       const fields = Array.isArray(body.fields) ? body.fields.slice(0, 60) : [];
-      const r = await sample({ model: modelFor('schema'), prompt: schemaPrompt(subjects, fields), maxTokens: 16000 });
+      // The fields the learner brought with them, placed under their domains in the same call.
+      const priorFields = Array.isArray(body.priorFields) ? body.priorFields.slice(0, 40) : [];
+      const r = await sample({ model: modelFor('schema'), prompt: schemaPrompt(subjects, fields, priorFields), maxTokens: 16000 });
       await recordUsage(caller, 'plan', r.inputTokens, r.outputTokens);
       return json({ schema: normaliseSchema(parseJson(r.text, r.stopReason)) });
     }

@@ -2,13 +2,14 @@ import { forceCollide, forceLink, forceManyBody, forceRadial, forceSimulation, f
 
 import { nodeRadius } from '@/src/engine/map';
 
-// The by-field map settles into place with a force simulation: fields repel each other and sit
-// on a ring around the learner, areas cluster round their field, topics round their area, and
-// the prerequisite and bridge links tug gently so related ideas end up near each other. The
-// simulation is seeded from a radial guess so it converges in a second or two and the same data
-// settles the same way (d3-force's random source is seeded).
+// The by-field map settles into place with a force simulation: domain hubs repel each other and
+// sit on a ring around the learner, disciplines cluster round their domain, areas round their
+// discipline, topics round their area, and the prerequisite and bridge links tug gently so
+// related ideas end up near each other. The simulation is seeded from a radial guess so it
+// converges in a second or two and the same data settles the same way (d3-force's random source
+// is seeded).
 
-type GraphNode = { id: string; kind: string; field?: string; area?: string; label: string };
+type GraphNode = { id: string; kind: string; field?: string; area?: string; part?: string | null; label: string };
 type GraphEdge = { from: string; to: string; kind: string };
 type Sim = SimulationNodeDatum & { id: string; kind: string; r: number };
 
@@ -54,7 +55,8 @@ export function forceLayout(graph: { nodes: GraphNode[]; edges: GraphEdge[] }): 
     }
     const a = fieldAngle.get(n.field ?? '') ?? 0;
     const jitter = () => (rand() - 0.5) * 30;
-    return { x: (R_FIELD + 95) * Math.cos(a) + jitter(), y: (R_FIELD + 95) * Math.sin(a) + jitter() };
+    if (n.kind === 'part') return { x: (R_FIELD + 80) * Math.cos(a) + jitter(), y: (R_FIELD + 80) * Math.sin(a) + jitter() };
+    return { x: (R_FIELD + 105) * Math.cos(a) + jitter(), y: (R_FIELD + 105) * Math.sin(a) + jitter() };
   };
 
   const nodes: Sim[] = graph.nodes.map((n) => ({ id: n.id, kind: n.kind, r: nodeRadius(n), ...seed(n) }));
@@ -65,7 +67,8 @@ export function forceLayout(graph: { nodes: GraphNode[]; edges: GraphEdge[] }): 
 
   const distance = (l: { kind: string; source: Sim | string | number; target: Sim | string | number }) => {
     const t = typeof l.target === 'object' ? l.target.kind : '';
-    if (l.kind === 'in') return t === 'field' ? 42 : 22;
+    const f = typeof l.source === 'object' ? l.source.kind : '';
+    if (l.kind === 'in') return t === 'field' ? 42 : f === 'part' ? 26 : t === 'part' ? 16 : 22;
     if (l.kind === 'spoke') return t === 'you' && (typeof l.source === 'object' ? l.source.kind : '') === 'field' ? R_FIELD : 45;
     return 60;
   };
@@ -78,8 +81,8 @@ export function forceLayout(graph: { nodes: GraphNode[]; edges: GraphEdge[] }): 
 
   const sim = forceSimulation<Sim>(nodes)
     .force('link', forceLink<Sim, SimulationLinkDatum<Sim> & { kind: string }>(links).id((d) => d.id).distance(distance).strength(strength))
-    .force('charge', forceManyBody<Sim>().strength((d) => (d.kind === 'field' ? -260 : d.kind === 'area' ? -70 : d.kind === 'you' ? -200 : d.kind === 'know' ? -40 : -14)).distanceMax(260))
-    .force('collide', forceCollide<Sim>().radius((d) => d.r + (d.kind === 'field' ? 14 : d.kind === 'area' ? 8 : 3)).strength(0.9))
+    .force('charge', forceManyBody<Sim>().strength((d) => (d.kind === 'field' ? -260 : d.kind === 'area' ? -70 : d.kind === 'part' ? -36 : d.kind === 'you' ? -200 : d.kind === 'know' ? -40 : -14)).distanceMax(260))
+    .force('collide', forceCollide<Sim>().radius((d) => d.r + (d.kind === 'field' ? 14 : d.kind === 'area' ? 8 : d.kind === 'part' ? 5 : 3)).strength(0.9))
     .force('ring', forceRadial<Sim>(R_FIELD, 0, 0).strength((d) => (d.kind === 'field' ? 0.35 : d.kind === 'know' ? 0.0 : 0)))
     .force('knowRing', forceRadial<Sim>(52, 0, 0).strength((d) => (d.kind === 'know' ? 1 : 0)))
     .force('x', forceX<Sim>(0).strength(0.015))

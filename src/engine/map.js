@@ -115,12 +115,16 @@ function knowledgeGraph({ subjects, know = [], now = nowMs(), retention = 0.9 })
 
 // ---------- the graph by field ----------
 
-// The same knowledge grouped by what each idea is rather than where it is taught: the learner
-// at the centre, a node per field (Physics, Portuguese), a node per area within it (Electricity,
-// Verbs), and every topic under its area, whichever subject teaches it. A topic the planner has
-// not placed yet sits under its subject's title until the backfill places it. Edges: topic to
-// area, area to field, field to the learner, plus the prerequisite and bridge links as before.
-// Positions come from a force layout in the app (src/components/forceLayout.ts); this is the data.
+// The same knowledge grouped by what each idea is rather than where it is taught, in three
+// levels: the learner at the centre, a hub per domain (Physics, Martial arts), a node per
+// discipline within it (Electromagnetism, Judo), a smaller node per area within a discipline
+// (Circuits, Throws), and every topic under its area, whichever subject teaches it. The fields
+// the learner brought with them sit in the same levels. A topic the planner placed in only two
+// levels (an older plan) is drawn as domain and discipline until the placing pass brings it up;
+// one not placed at all sits under its subject's title. Edges: topic to area, area to
+// discipline, discipline to domain, domain to the learner, plus the prerequisite and bridge
+// links as before. Positions come from a force layout in the app
+// (src/components/forceLayout.ts); this is the data.
 /**
  * @param {{ subjects: any[]; know?: any[]; prior?: any[]; now?: number; retention?: number }} args
  * @returns {{ nodes: any[]; edges: { from: string; to: string; kind: string }[]; placed: boolean }}
@@ -133,56 +137,73 @@ function fieldGraph({ subjects, know = [], prior = [], now = nowMs(), retention 
   const nodes = base.nodes.filter((n) => n.kind !== 'subject');
   const edges = base.edges.filter((e) => e.kind !== 'root' && e.kind !== 'covers' && e.kind !== 'bridge' && !(e.kind === 'spoke' && e.from.startsWith('s:')));
   const subjectTitle = new Map(arr(subjects).map((s) => [s.id, str(s.plan && s.plan.title, 80)]));
-  const fields = new Map();
-  const areas = new Map();
+  const fields = new Map();   // domains
+  const areas = new Map();    // disciplines
+  const parts = new Map();    // areas within a discipline
   const slug = (x) => str(x, 40).toLowerCase().replace(/[^a-z0-9]+/g, '-');
-  // What the learner brought with them comes first on the ring, then fields and areas in the
-  // order they first appeared (the oldest subject's first topic first), so a new subject adds
-  // to the ring without moving the rest.
+  const same = (a, b) => str(a).toLowerCase() === str(b).toLowerCase();
+  const fresh = (id, kind, label, order, extra) => ({ id, kind, label, topics: 0, learned: 0, secure: 0, recall: [], order, ...extra });
+  // The three nodes for a domain, discipline and area, made as needed. A discipline named like its
+  // domain, or an area named like its discipline, is the same thing and folds into it.
+  const levels = (domain, discipline, area, order, placed) => {
+    const d = str(domain, 40) || str(discipline, 40);
+    const fid = 'f:' + slug(d);
+    if (!fields.has(fid)) fields.set(fid, fresh(fid, 'field', d, order, { placed }));
+    const disc = str(discipline, 40) && !same(discipline, d) ? str(discipline, 40) : '';
+    const aid = disc ? 'a:' + slug(d) + '/' + slug(disc) : null;
+    if (aid && !areas.has(aid)) areas.set(aid, fresh(aid, 'area', disc, order, { field: fid }));
+    const ar = str(area, 40) && !same(area, disc || d) ? str(area, 40) : '';
+    const pid = ar && aid ? 'p:' + slug(d) + '/' + slug(disc) + '/' + slug(ar) : null;
+    if (pid && !parts.has(pid)) parts.set(pid, fresh(pid, 'part', ar, order, { field: fid, area: aid }));
+    return { fid, aid, pid };
+  };
+  // Standing from what the learner brought: the node it names stands at its level (its own row
+  // always wins over what is drawn up from below), and every level above it stands at the best
+  // of what is under it: a level shown in a check before a higher one only claimed.
+  const stand = (node, standing, fromArea) => {
+    if (!node) return;
+    const cur = node.prior;
+    const next = fromArea ? { ...standing, fromArea: true } : standing;
+    if (!cur) { node.prior = next; return; }
+    if (!cur.fromArea) { if (!fromArea) node.prior = next; return; }
+    if (!fromArea) { node.prior = next; return; }
+    const shownNow = !!cur.verifiedLevel, shownNext = !!standing.verifiedLevel;
+    if (shownNext !== shownNow) { if (shownNext) node.prior = next; return; }
+    if (stageIdx(standing.verifiedLevel || standing.level) > stageIdx(cur.verifiedLevel || cur.level)) node.prior = next;
+  };
+  // What the learner brought with them comes first on the ring, then domains in the order they
+  // first appeared (the oldest subject's first topic first), so a new subject adds to the ring
+  // without moving the rest.
   priorRows.forEach((f, i) => {
-    const field = str(f.field, 40);
-    const area = str(f.area, 40);
-    const fid = 'f:' + slug(field);
     const standing = { id: str(f.id), level: str(f.level, 4) || 's2', verifiedLevel: str(f.verified_level || f.verifiedLevel, 4) || null, basis: str(f.basis, 120), evidence: { ok: 0, n: 0 } };
-    if (!fields.has(fid)) fields.set(fid, { id: fid, kind: 'field', label: field, topics: 0, learned: 0, secure: 0, recall: [], placed: true, order: -100000 + i });
-    const fnode = fields.get(fid);
-    if (area && area.toLowerCase() !== field.toLowerCase()) {
-      const aid = 'a:' + slug(field) + '/' + slug(area);
-      if (!areas.has(aid)) areas.set(aid, { id: aid, kind: 'area', label: area, field: fid, topics: 0, learned: 0, secure: 0, recall: [], order: -100000 + i });
-      areas.get(aid).prior = standing;
-      // The field itself stands at least as high as its highest area the learner brought.
-      if (!fnode.prior || stageIdx(standing.verifiedLevel || standing.level) > stageIdx(fnode.prior.verifiedLevel || fnode.prior.level)) fnode.prior = { ...standing, fromArea: true };
-    } else {
-      fnode.prior = standing;
-    }
+    const { fid, aid, pid } = levels(f.domain, f.field, f.area, -100000 + i, !!str(f.domain));
+    if (pid) { stand(parts.get(pid), standing, false); stand(areas.get(aid), standing, true); stand(fields.get(fid), standing, true); }
+    else if (aid) { stand(areas.get(aid), standing, false); stand(fields.get(fid), standing, true); }
+    else stand(fields.get(fid), standing, false);
   });
   const subjIdx = new Map(arr(subjects).map((s, i) => [s.id, i]));
   let seq = 0;
   for (const n of nodes) {
     if (n.kind !== 'topic') continue;
-    const topic = arr(subjects).find((s) => s.id === n.subjectId);
-    const t = topic ? arr(topic.plan.topics).find((x) => x.id === n.topicId) : null;
-    const schema = t && arr(t.schema).length ? arr(t.schema) : [subjectTitle.get(n.subjectId) || 'Unsorted'];
-    const field = str(schema[0], 40);
-    const area = str(schema[1], 40) || field;
-    const fid = 'f:' + slug(field);
-    const aid = 'a:' + slug(field) + '/' + slug(area);
+    const subj = arr(subjects).find((s) => s.id === n.subjectId);
+    const t = subj ? arr(subj.plan.topics).find((x) => x.id === n.topicId) : null;
+    const schema = t && arr(t.schema).length ? arr(t.schema).map((x) => str(x, 40)) : [subjectTitle.get(n.subjectId) || 'Unsorted'];
     const order = (subjIdx.get(n.subjectId) || 0) * 10000 + seq++;
-    if (!fields.has(fid)) fields.set(fid, { id: fid, kind: 'field', label: field, topics: 0, learned: 0, secure: 0, recall: [], placed: !!(t && arr(t.schema).length), order });
-    if (!areas.has(aid)) areas.set(aid, { id: aid, kind: 'area', label: area, field: fid, topics: 0, learned: 0, secure: 0, recall: [], order });
-    const f = fields.get(fid); const a = areas.get(aid);
-    f.topics++; a.topics++;
-    if (n.status === 'learned' || n.status === 'secure') { f.learned++; a.learned++; if (typeof n.recall === 'number') { f.recall.push(n.recall); a.recall.push(n.recall); } }
-    if (n.status === 'secure') { f.secure++; a.secure++; }
-    n.area = aid; n.field = fid; n.subject = subjectTitle.get(n.subjectId) || '';
-    edges.push({ from: n.id, to: aid, kind: 'in' });
+    const { fid, aid, pid } = levels(schema[0], schema[1] || '', schema[2] || '', order, schema.length >= 3);
+    // A placed topic in fewer than three levels keeps the map drawable but asks for the pass.
+    if (schema.length < 3) fields.get(fid).placed = false;
+    const f = fields.get(fid); const a = aid ? areas.get(aid) : null; const pt = pid ? parts.get(pid) : null;
+    for (const h of [f, a, pt]) if (h) { h.topics++; if (n.status === 'learned' || n.status === 'secure') { h.learned++; if (typeof n.recall === 'number') h.recall.push(n.recall); } if (n.status === 'secure') h.secure++; }
+    n.field = fid; n.area = aid || fid; n.part = pid || null; n.subject = subjectTitle.get(n.subjectId) || '';
+    edges.push({ from: n.id, to: pid || aid || fid, kind: 'in' });
   }
-  // The links lessons drew to what the learner already knew, now to the field or area itself
-  // (or, with no fields on the map yet, to the CV item). Each link also carries the warm-up's
-  // "prior" question: a right answer is evidence the field is held, counted on the node.
+  // The links lessons drew to what the learner already knew, now to the domain, discipline or
+  // area itself (or, with no fields on the map yet, to the CV item). Each link also carries the
+  // warm-up's "prior" question: a right answer is evidence the field is held, counted on the node.
   const candidates = [
-    ...[...fields.values()].filter((f) => f.prior).map((f) => ({ id: f.id, title: f.label, detail: '' })),
+    ...[...parts.values()].filter((p) => p.prior).map((p) => ({ id: p.id, title: fields.get(p.field).label + ' ' + areas.get(p.area).label + ' ' + p.label, detail: '' })),
     ...[...areas.values()].filter((a) => a.prior).map((a) => ({ id: a.id, title: fields.get(a.field).label + ' ' + a.label, detail: '' })),
+    ...[...fields.values()].filter((f) => f.prior).map((f) => ({ id: f.id, title: f.label, detail: '' })),
     ...(priorRows.length ? [] : base.nodes.filter((n) => n.kind === 'know').map((n) => ({ id: n.id, title: n.label, detail: n.detail }))),
   ];
   for (const n of nodes) {
@@ -196,35 +217,32 @@ function fieldGraph({ subjects, know = [], prior = [], now = nowMs(), retention 
     const hit = matchField(b.field, candidates);
     if (!hit) continue;
     edges.push({ from: n.id, to: hit.id, kind: 'bridge' });
-    const target = fields.get(hit.id) || areas.get(hit.id);
+    const target = fields.get(hit.id) || areas.get(hit.id) || parts.get(hit.id);
     if (target && target.prior && typeof st.priorScore === 'number') { target.prior.evidence.n++; if (st.priorScore >= 0.75) target.prior.evidence.ok++; }
   }
-  // How much of a field or area is held: learned counts half, secure the other half, so a hub
-  // grows as topics are learned and again as they prove to stay learned. A hub the learner
-  // brought with them grows with the level they stand at, a little less until a check shows it.
+  // How much of a node is held: learned counts half, secure the other half, so a hub grows as
+  // topics are learned and again as they prove to stay learned. A node the learner brought with
+  // them grows with the level they stand at, a little less until a check shows it.
   const finish = (h) => {
     h.recall = meanOr(h.recall, null);
     const taught = h.topics ? (h.learned + h.secure) / (2 * h.topics) : 0;
     const brought = h.prior ? ((stageIdx(h.prior.verifiedLevel || h.prior.level) + 1) / STAGES.length) * (h.prior.verifiedLevel ? 1 : 0.7) : 0;
     h.mastery = Math.max(taught, brought);
   };
+  for (const p of parts.values()) { finish(p); edges.push({ from: p.id, to: p.area, kind: 'in' }); }
   for (const a of areas.values()) { finish(a); edges.push({ from: a.id, to: a.field, kind: 'in' }); }
   for (const f of fields.values()) { finish(f); edges.push({ from: f.id, to: 'you', kind: 'spoke' }); }
-  // An area that is the whole of its field (no second level given) collapses into the field.
-  const only = new Map();
-  for (const a of areas.values()) only.set(a.field, (only.get(a.field) || 0) + 1);
-  const collapse = new Set([...areas.values()].filter((a) => only.get(a.field) === 1 && a.label === fields.get(a.field).label).map((a) => a.id));
-  const kept = [...areas.values()].filter((a) => !collapse.has(a.id));
   // A CV item no lesson has drawn on yet would sit by the learner joined to nothing; it waits
   // until a lesson links to it. The fields the learner confirmed are the real nodes here.
   const linked = new Set(edges.filter((e) => e.kind === 'bridge').map((e) => e.to));
   const shownNodes = nodes.filter((n) => n.kind !== 'know' || linked.has(n.id));
-  const outEdges = edges
-    .filter((e) => !collapse.has(e.from) && !(e.kind === 'spoke' && e.from.startsWith('k:') && !linked.has(e.from)))
-    .map((e) => (collapse.has(e.to) ? { ...e, to: areas.get(e.to).field } : e));
-  for (const n of nodes) if (n.kind === 'topic' && collapse.has(n.area)) n.area = n.field;
+  const outEdges = edges.filter((e) => !(e.kind === 'spoke' && e.from.startsWith('k:') && !linked.has(e.from)));
   const byOrder = (x, y) => x.order - y.order;
-  return { nodes: [...shownNodes, ...[...fields.values()].sort(byOrder), ...kept.sort(byOrder)], edges: outEdges, placed: [...fields.values()].every((f) => f.placed) };
+  return {
+    nodes: [...shownNodes, ...[...fields.values()].sort(byOrder), ...[...areas.values()].sort(byOrder), ...[...parts.values()].sort(byOrder)],
+    edges: outEdges,
+    placed: [...fields.values()].every((f) => f.placed),
+  };
 }
 
 // ---------- the layout ----------
@@ -234,7 +252,7 @@ const R_HUB = 190;       // subject hubs
 const R_FIRST = 56;      // first ring of topics beyond its hub
 const R_STEP = 44;       // each further level
 const MIN_GAP = 12;      // least distance between neighbouring topics on a ring, in map units
-const RADIUS = { you: 9, know: 4.5, subject: 11, field: 10, area: 6.5, topic: 4.5 };
+const RADIUS = { you: 9, know: 4.5, subject: 11, field: 10, area: 6.5, part: 5, topic: 4.5 };
 
 const polar = (r, a) => ({ x: Math.round(r * Math.cos(a) * 10) / 10, y: Math.round(r * Math.sin(a) * 10) / 10 });
 
@@ -302,7 +320,7 @@ function layoutGraph(graph) {
 // A hub grows with mastery: up to 1.8 times its base size when every topic under it is secure.
 function nodeRadius(n) {
   const r = RADIUS[n.kind] || 4;
-  if (n.kind === 'field' || n.kind === 'area') return r * (1 + 0.8 * (typeof n.mastery === 'number' ? n.mastery : 0));
+  if (n.kind === 'field' || n.kind === 'area' || n.kind === 'part') return r * (1 + 0.8 * (typeof n.mastery === 'number' ? n.mastery : 0));
   return n.kind === 'topic' && n.threshold ? r + 1.5 : r;
 }
 
@@ -310,7 +328,7 @@ function nodeRadius(n) {
 function nodeLine(n) {
   if (n.kind === 'you') return 'Everything on the map hangs off what you already knew.';
   if (n.kind === 'know') return 'Something you brought with you. Lessons draw comparisons from it.';
-  if (n.kind === 'field' || n.kind === 'area') {
+  if (n.kind === 'field' || n.kind === 'area' || n.kind === 'part') {
     const parts = [];
     if (n.prior) {
       const p = n.prior;

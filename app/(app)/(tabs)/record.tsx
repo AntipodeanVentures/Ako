@@ -37,6 +37,7 @@ export default function RecordScreen() {
       url={url}
       onAccount={() => router.push('/you')}
       onVerify={(fieldId) => router.push({ pathname: '/verify/[fieldId]', params: { fieldId } })}
+      onDetail={(fieldId) => router.push({ pathname: '/enrich/[fieldId]', params: { fieldId } })}
       actions={
         <SharePanel
           url={url}

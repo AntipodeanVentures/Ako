@@ -14,7 +14,7 @@ const knowItems = (know) => arr(know && know.items);
 function renderFields(fields) {
   const xs = arr(fields).filter((f) => f && str(f.field)).map((f) => {
     const lvl = str(f.verifiedLevel) || str(f.level);
-    const name = str(f.field) + (str(f.area) && str(f.area).toLowerCase() !== str(f.field).toLowerCase() ? ' › ' + str(f.area) : '');
+    const name = (str(f.domain) && str(f.domain).toLowerCase() !== str(f.field).toLowerCase() ? str(f.domain) + ' › ' : '') + str(f.field) + (str(f.area) && str(f.area).toLowerCase() !== str(f.field).toLowerCase() ? ' › ' + str(f.area) : '');
     return name + (lvl ? ' (' + stageName(lvl) + (str(f.verifiedLevel) ? ', shown in a check' : ', self-reported') + ')' : '');
   });
   return xs.length ? 'Fields they know, with their level on the five-rung ladder (' + STAGES.map((s) => s.name).join(', ') + '): ' + xs.join('; ') + '.' : '';

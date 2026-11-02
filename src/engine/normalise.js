@@ -27,8 +27,9 @@ function normaliseStages(raw, fallback) {
   return out;
 }
 // A topic's place on the learner's map: ["Field", "Area"], each a short name; [] when the planner gave none.
+// Three levels: domain, discipline, area. Older plans carry two; the placing pass brings them up.
 function normSchema(x) {
-  return arr(x).map((s) => str(s, 40).replace(/\s+/g, ' ')).filter(Boolean).slice(0, 2);
+  return arr(x).map((s) => str(s, 40).replace(/\s+/g, ' ')).filter(Boolean).slice(0, 3);
 }
 
 function normaliseTopics(rawTopics, msIds, existingIds, defaultStage, startIndex) {
@@ -239,13 +240,17 @@ function normaliseRole(raw) {
   return { summary: str(R.summary, 600), areas, evidence, firstSteps: str(R.firstSteps, 600) };
 }
 // A field the learner brought with them, as the extraction (or the learner) states it.
+const tidy = (x) => str(x, 40).replace(/\s+/g, ' ');
+// A field the learner brought: its domain, the discipline (kept as "field" throughout the app)
+// and the area. The model may write "discipline" or "field" for the middle level.
 function normField(f) {
   if (!f || typeof f !== 'object') return null;
-  const field = str(f.field, 40).replace(/\s+/g, ' ');
+  const field = tidy(f.discipline) || tidy(f.field);
   if (!field) return null;
   const valid = new Set(STAGES.map((s) => s.id));
-  const area = str(f.area, 40).replace(/\s+/g, ' ');
-  return { id: rid('f'), field, area: area.toLowerCase() === field.toLowerCase() ? '' : area, level: valid.has(str(f.level, 4)) ? str(f.level, 4) : 's2', basis: str(f.basis, 120), keep: true };
+  const area = tidy(f.area);
+  const domain = tidy(f.domain);
+  return { id: rid('f'), domain: domain.toLowerCase() === field.toLowerCase() ? '' : domain, field, area: area.toLowerCase() === field.toLowerCase() ? '' : area, level: valid.has(str(f.level, 4)) ? str(f.level, 4) : 's2', basis: str(f.basis, 120), keep: true };
 }
 function normaliseKnow(raw) {
   const K = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
@@ -367,6 +372,8 @@ function normaliseModel(raw) {
 }
 
 // The backfill's answer: subject id -> topic id -> ["Field", "Area"]. Unknown ids are dropped.
+// The placing pass: every topic's three levels by subject, and a domain (and, where the model
+// found the name was really an area, a discipline) for each field the learner brought.
 function normaliseSchema(raw) {
   const r = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
   const out = {};
@@ -381,8 +388,41 @@ function normaliseSchema(raw) {
     }
     if (Object.keys(topics).length) out[sid] = topics;
   }
-  if (!Object.keys(out).length) throw { code: 'invalid_json' };
-  return out;
+  const fields = {};
+  for (const f of arr(r.fields).filter((x) => x && typeof x === 'object')) {
+    const id = str(f.id, 60);
+    const domain = tidy(f.domain);
+    if (!id || !domain) continue;
+    fields[id] = { domain, field: tidy(f.discipline) || tidy(f.field), area: tidy(f.area) };
+  }
+  if (!Object.keys(out).length && !Object.keys(fields).length) throw { code: 'invalid_json' };
+  return Object.keys(fields).length ? Object.assign(out, { __fields: fields }) : out;
 }
 
-export { DEFAULT_HOURS, cleanOutcome, normSchema, normaliseSchema, normField, normaliseVerify, normaliseStages, normaliseTopics, normalisePlan, normaliseExtension, upgradePlan, normQ, normaliseLesson, normalisePractice, normaliseBridge, normaliseMixed, normaliseWarm, normaliseRole, normaliseKnow, normaliseStart, INTAKE_SLOTS, INTAKE_FALLBACK, normaliseIntake, normaliseAdaptation, normaliseDebrief, normaliseModel };
+// The questions that open a field into its parts: up to three, each with quick answers.
+const ENRICH_SLOTS = ['parts', 'standing', 'siblings'];
+function normaliseEnrich(raw) {
+  const R = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const questions = arr(R.questions).filter((q) => q && typeof q === 'object').map((q) => ({
+    slot: ENRICH_SLOTS.includes(q.slot) ? q.slot : 'parts',
+    q: str(q.q || q.question, 200),
+    options: Array.from(new Set(arr(q.options).map((o) => str(o, 60)).filter(Boolean))).slice(0, 6),
+    multi: q.multi === true,
+  })).filter((q) => q.q).slice(0, 3);
+  if (!questions.length) throw { code: 'invalid_json' };
+  return { questions };
+}
+// The answers turned into areas of the discipline, sibling disciplines, and the field's own basis and level.
+function normaliseEnrichApply(raw) {
+  const R = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const valid = new Set(STAGES.map((s) => s.id));
+  const level = (x, d) => (valid.has(str(x, 4)) ? str(x, 4) : d);
+  const seen = new Set();
+  const areas = arr(R.areas).filter((a) => a && typeof a === 'object').map((a) => ({ area: tidy(a.area), level: level(a.level, 's2'), basis: str(a.basis, 120) }))
+    .filter((a) => a.area && !seen.has(a.area.toLowerCase()) && seen.add(a.area.toLowerCase())).slice(0, 6);
+  const siblings = arr(R.siblings).filter((a) => a && typeof a === 'object').map((a) => ({ discipline: tidy(a.discipline) || tidy(a.field), level: level(a.level, 's1'), basis: str(a.basis, 120) }))
+    .filter((a) => a.discipline && !seen.has('s:' + a.discipline.toLowerCase()) && seen.add('s:' + a.discipline.toLowerCase())).slice(0, 6);
+  return { areas, siblings, basis: str(R.basis, 120), level: level(R.level, '') };
+}
+
+export { DEFAULT_HOURS, cleanOutcome, normSchema, normaliseSchema, normaliseEnrich, normaliseEnrichApply, normField, normaliseVerify, normaliseStages, normaliseTopics, normalisePlan, normaliseExtension, upgradePlan, normQ, normaliseLesson, normalisePractice, normaliseBridge, normaliseMixed, normaliseWarm, normaliseRole, normaliseKnow, normaliseStart, INTAKE_SLOTS, INTAKE_FALLBACK, normaliseIntake, normaliseAdaptation, normaliseDebrief, normaliseModel };

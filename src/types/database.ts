@@ -36,6 +36,9 @@ export type KnowItemRow = {
 export type PriorFieldRow = {
   id: string;
   profile_id: string;
+  // The body of knowledge the discipline belongs to (Martial arts for Judo); '' until placed.
+  domain: string;
+  // The discipline (kept as "field" throughout the app) and the area within it.
   field: string;
   area: string;
   level: StageId;

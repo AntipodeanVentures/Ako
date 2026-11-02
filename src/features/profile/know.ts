@@ -11,7 +11,7 @@ import { updateProfile, type NewKnowItem } from './api';
 
 export type ProposedItem = { id: string; kind: KnowItemRow['kind']; text: string; level: string; keep: boolean };
 // A field the extraction placed on the map, with the level it judged from the evidence.
-export type ProposedField = { id: string; field: string; area: string; level: StageId; basis: string; keep: boolean };
+export type ProposedField = { id: string; domain: string; field: string; area: string; level: StageId; basis: string; keep: boolean };
 
 export const KIND_LABELS: Record<string, string> = Object.fromEntries(KNOW_KINDS as [string, string][]);
 
@@ -27,7 +27,7 @@ export function aboutFrom(items: KnowItemRow[], summary: string, fields: PriorFi
   return renderKnow({
     summary,
     items: items.map((r) => ({ kind: r.kind, text: r.title, level: r.detail })),
-    fields: fields.map((f) => ({ field: f.field, area: f.area, level: f.level, verifiedLevel: f.verified_level ?? '' })),
+    fields: fields.map((f) => ({ domain: f.domain, field: f.field, area: f.area, level: f.level, verifiedLevel: f.verified_level ?? '' })),
   });
 }
 
@@ -40,10 +40,13 @@ export async function recomputeAbout(profile: Profile, items: KnowItemRow[], sum
 }
 
 // The names already on the map, from the planner's schemas and the fields confirmed so far, so
-// a new extraction reuses them.
+// a new extraction reuses them: "Domain › Discipline › Area".
+export const fieldName = (f: { domain?: string; field: string; area: string }) =>
+  `${f.domain && f.domain.toLowerCase() !== f.field.toLowerCase() ? `${f.domain} › ` : ''}${f.field}${f.area ? ` › ${f.area}` : ''}`;
+
 export function fieldNamesInUse(fields: PriorFieldRow[], planned: string[] = []): string[] {
   const names = new Set<string>(planned);
-  for (const f of fields) names.add(f.area ? `${f.field} › ${f.area}` : f.field);
+  for (const f of fields) names.add(fieldName(f));
   return Array.from(names).slice(0, 60);
 }
 

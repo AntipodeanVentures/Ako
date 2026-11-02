@@ -16,9 +16,9 @@ import { placeLabels, type LabelItem, type Obstacle } from './labels';
 type KnowItem = { id: string; kind: string; title: string; detail?: string };
 // The engine is plain JavaScript; these are the fields the drawing reads.
 type Node = {
-  id: string; kind: 'you' | 'know' | 'subject' | 'field' | 'area' | 'topic'; label: string;
+  id: string; kind: 'you' | 'know' | 'subject' | 'field' | 'area' | 'part' | 'topic'; label: string;
   subjectId?: string; topicId?: string; status?: string; recall?: number | null; threshold?: boolean; stageIdx?: number;
-  total?: number; learned?: number; secure?: number; topics?: number; mastery?: number; field?: string; area?: string; subject?: string;
+  total?: number; learned?: number; secure?: number; topics?: number; mastery?: number; field?: string; area?: string; part?: string | null; subject?: string;
   // A field or area the learner brought with them: the level claimed, the level a check showed.
   prior?: { id: string; level: string; verifiedLevel: string | null; basis: string; evidence: { ok: number; n: number }; fromArea?: boolean };
 };
@@ -27,7 +27,7 @@ type Graph = { nodes: Node[]; edges: Edge[]; placed?: boolean };
 type Layout = { positions: Record<string, { x: number; y: number }>; extent: number };
 type Mode = 'field' | 'subject';
 
-type PriorField = { id: string; field: string; area: string; level: string; basis: string; verified_level: string | null };
+type PriorField = { id: string; domain?: string; field: string; area: string; level: string; basis: string; verified_level: string | null };
 
 type Props = {
   subjects: LiveSubject[];
@@ -185,11 +185,11 @@ export function KnowledgeMap({ subjects, know, prior = [], retention = 0.9, onPl
   const open = (n: Node) => (onOpen ? onOpen(n) : openNode(router, n));
 
   // Lines first, so every node sits on top of them. The selected node's lines are drawn in ink;
-  // selecting a field or an area lights everything under it.
+  // selecting a domain, a discipline or an area lights everything under it.
   const under = useMemo(() => {
-    if (!sel || (sel.kind !== 'field' && sel.kind !== 'area')) return null;
+    if (!sel || (sel.kind !== 'field' && sel.kind !== 'area' && sel.kind !== 'part')) return null;
     const ids = new Set<string>([sel.id]);
-    for (const n of graph.nodes) if ((sel.kind === 'field' && (n.field === sel.id || n.id === sel.id)) || (sel.kind === 'area' && n.area === sel.id)) ids.add(n.id);
+    for (const n of graph.nodes) if ((sel.kind === 'field' && (n.field === sel.id || n.id === sel.id)) || (sel.kind === 'area' && n.area === sel.id) || (sel.kind === 'part' && n.part === sel.id)) ids.add(n.id);
     return ids;
   }, [sel, graph]);
   const isLit = (e: Edge) => (under ? under.has(e.from) && (under.has(e.to) || e.to === sel?.id) : selected != null && (e.from === selected || e.to === selected));
@@ -199,7 +199,7 @@ export function KnowledgeMap({ subjects, know, prior = [], retention = 0.9, onPl
   const held = (n?: Node) => {
     if (!n) return 0;
     if (n.kind === 'topic') return n.status === 'learned' || n.status === 'secure' ? (typeof n.recall === 'number' ? n.recall : 1) : n.status === 'practising' ? 0.6 : 0;
-    if (n.kind === 'field' || n.kind === 'area' || n.kind === 'subject') {
+    if (n.kind === 'field' || n.kind === 'area' || n.kind === 'part' || n.kind === 'subject') {
       if ((n.learned ?? 0) > 0) return typeof n.recall === 'number' ? n.recall : 1;
       return n.prior ? (n.prior.verifiedLevel ? 1 : 0.7) : 0;
     }
@@ -253,11 +253,12 @@ export function KnowledgeMap({ subjects, know, prior = [], retention = 0.9, onPl
         const text = n.label.length > maxChars ? n.label.slice(0, Math.max(6, maxChars - 1)).trimEnd() + '…' : n.label;
         candidates.push({ id: n.id, text, x: p.x, y: p.y, r: r + 5.5, w: width(text, 11), h: 15, prefer: hubIdx % 2 === 0 ? ['below', 'above', 'right', 'left'] : ['above', 'below', 'right', 'left'], must: true, rank: isSel ? 0 : 1 });
         labelStyle.set(n.id, { size: 11, fill: colors.text });
-      } else if (n.kind === 'area') {
-        const show = isSel || view.k >= 1.3 || ((n.topics ?? 0) >= 3 && scale >= 0.65);
+      } else if (n.kind === 'area' || n.kind === 'part') {
+        // Discipline labels wait for a little zoom on a phone; area labels for a little more.
+        const show = isSel || (n.kind === 'area' ? view.k >= 1.3 || ((n.topics ?? 0) >= 3 && scale >= 0.65) : view.k >= 1.8 || ((n.topics ?? 0) >= 3 && scale >= 0.9));
         if (!show) continue;
         const text = n.label.length > 22 && view.k < 1.6 ? n.label.slice(0, 20).trimEnd() + '…' : n.label;
-        candidates.push({ id: n.id, text, x: p.x, y: p.y, r: r + 3.5, w: width(text, 10), h: 14, prefer: ['below', 'above', 'right', 'left'], must: isSel, rank: isSel ? 0 : 2 });
+        candidates.push({ id: n.id, text, x: p.x, y: p.y, r: r + 3.5, w: width(text, 10), h: 14, prefer: ['below', 'above', 'right', 'left'], must: isSel, rank: isSel ? 0 : n.kind === 'area' ? 2 : 2.5 });
         labelStyle.set(n.id, { size: 10, fill: colors.textMuted });
       } else if (n.kind === 'topic') {
         const status = n.status ?? 'later';
@@ -358,7 +359,7 @@ export function KnowledgeMap({ subjects, know, prior = [], retention = 0.9, onPl
                         </G>
                       );
                     }
-                    if (n.kind === 'area') {
+                    if (n.kind === 'area' || n.kind === 'part') {
                       const recall = typeof n.recall === 'number' ? n.recall : null;
                       const started = (n.learned ?? 0) > 0;
                       const aTotal = n.topics ?? 0;
