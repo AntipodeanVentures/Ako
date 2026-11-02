@@ -16,8 +16,8 @@ import { ThemeProvider, useTheme } from '@/src/theme';
 // first and the session hangs off it. Dark, so the network reads as a network.
 
 type KnowItem = { id: string; kind: string; title: string; detail?: string };
-type PriorField = { id: string; field: string; area: string; level: string; basis: string; verified_level: string | null };
-type MapNode = { id: string; kind: string; label: string; status?: string; recall?: number | null; field?: string; area?: string; subjectId?: string; topicId?: string; prior?: { verifiedLevel: string | null } };
+type PriorField = { id: string; domain?: string; field: string; area: string; level: string; basis: string; verified_level: string | null };
+type MapNode = { id: string; kind: string; label: string; status?: string; recall?: number | null; field?: string; area?: string; part?: string | null; subjectId?: string; topicId?: string; prior?: { verifiedLevel: string | null } };
 
 type Props = {
   subjects: LiveSubject[];
@@ -58,10 +58,10 @@ export function todayOnMap(subjects: LiveSubject[], know: KnowItem[], prior: Pri
   const fresh = topics.filter((n) => n.status === 'available' || n.status === 'learning');
   const fields = g.nodes.filter((n) => n.kind === 'field');
   const shown = fields.filter((n) => n.prior?.verifiedLevel).length;
-  // The place most of a set sits: its field, or its area when the field has several.
+  // The place most of a set sits: its area, else its discipline, else its domain.
   const where = (set: MapNode[]) => {
     const tally = new Map<string, number>();
-    for (const n of set) { const k = n.area && label(n.area) !== label(n.field) ? label(n.area) : label(n.field); if (k) tally.set(k, (tally.get(k) ?? 0) + 1); }
+    for (const n of set) { const k = (n.part && label(n.part)) || (n.area && label(n.area) !== label(n.field) ? label(n.area) : label(n.field)); if (k) tally.set(k, (tally.get(k) ?? 0) + 1); }
     return list([...tally.entries()].sort((a, b) => b[1] - a[1]).map((e) => e[0]));
   };
   const due = subjects.reduce((n, s) => n + dueCards(s.cards ?? []).length, 0);

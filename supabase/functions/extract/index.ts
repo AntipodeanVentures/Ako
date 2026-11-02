@@ -1,6 +1,8 @@
 // extract: the calls that read the learner's own material or map a goal, none of which store anything by themselves.
 //
 // Request: { kind: 'know', material: string, image?: { mediaType, dataBase64 }, document?: { mediaType: 'application/pdf', dataBase64 }, fields?: string[] }   -> items and fields to confirm
+//        | { kind: 'enrich', field: { domain, field, area, level, basis } }                               -> questions that open a field into its parts
+//        | { kind: 'enrich_apply', field, answers: [{ q, a }] }                                           -> areas, siblings, basis, level
 //        | { kind: 'start', subject: string }                                                             -> a suggested starting point
 //        | { kind: 'role', title: string, description?: string }                                          -> a role map
 //        | { kind: 'model', subject, topicId, evidence }                                                   -> learner model update
@@ -8,7 +10,7 @@
 // Response: JSON
 
 import {
-  knowPrompt, startPrompt, rolePrompt, modelPrompt, intakePrompt, normaliseKnow, normaliseStart, normaliseRole, normaliseModel, normaliseIntake, topicById, METHOD, str,
+  knowPrompt, startPrompt, rolePrompt, modelPrompt, intakePrompt, normaliseKnow, normaliseStart, normaliseRole, normaliseModel, normaliseIntake, topicById, METHOD, str, enrichPrompt, enrichApplyPrompt, normaliseEnrich, normaliseEnrichApply,
 } from '../_shared/engine/index.js';
 import { CORS, errorResponse, json, requireCaller, HttpError } from '../_shared/auth.ts';
 import { modelFor } from '../_shared/limits.ts';
@@ -35,6 +37,22 @@ Deno.serve(async (req) => {
       const r = await sample({ model: modelFor('know'), prompt: knowPrompt(material, Boolean(body.image || doc), fieldsInUse), images: body.image ? [body.image] : undefined, documents: doc ? [doc] : undefined, maxTokens: 3000 });
       await recordUsage(caller, 'extract', r.inputTokens, r.outputTokens);
       return json({ know: normaliseKnow(parseJson(r.text, r.stopReason)) });
+    }
+    // A field the learner brought with them opens into its parts: a few questions, then the answers
+    // turned into areas with levels, other disciplines of the domain, and a better basis line.
+    if (body.kind === 'enrich' || body.kind === 'enrich_apply') {
+      const f = body.field;
+      if (!f || !str(f.field)) throw new HttpError(400, 'bad_request', 'A field is required.');
+      const field = { domain: str(f.domain, 80), field: str(f.field, 80), area: str(f.area, 80), level: str(f.level, 4) || 's2', basis: str(f.basis, 120) };
+      if (body.kind === 'enrich') {
+        const r = await sample({ model: modelFor('intake'), prompt: enrichPrompt(field, about), maxTokens: 900 });
+        await recordUsage(caller, 'extract', r.inputTokens, r.outputTokens);
+        return json({ enrich: normaliseEnrich(parseJson(r.text, r.stopReason)) });
+      }
+      const answers = Array.isArray(body.answers) ? body.answers.slice(0, 6) : [];
+      const r = await sample({ model: modelFor('know'), prompt: enrichApplyPrompt(field, answers), maxTokens: 1500 });
+      await recordUsage(caller, 'extract', r.inputTokens, r.outputTokens);
+      return json({ enriched: normaliseEnrichApply(parseJson(r.text, r.stopReason)) });
     }
     if (body.kind === 'start') {
       const r = await sample({ model: modelFor('start'), prompt: startPrompt(str(body.subject, 160), about), maxTokens: 600 });

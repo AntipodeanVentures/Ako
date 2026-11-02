@@ -255,10 +255,10 @@ export default function PreviewScreen() {
     subj.cards = subj.plan.topics.slice(0, 2).flatMap((t, i) => makeCards(t, [{ front: 'q', back: 'a', concept: 0 }, { front: 'q2', back: 'a2', concept: 0 }], 3, 0.9, Date.now() - [26, 9][i] * day));
     // Fields and areas, as the planner would set them: the two language subjects share a field.
     const langAreas = ['Sounds', 'Greetings', 'Verbs', 'Verbs', 'Verbs', 'Vocabulary'];
-    subj.plan.topics.forEach((t, i) => { t.schema = ['Portuguese', langAreas[i] ?? 'Vocabulary']; });
-    second.plan.topics.forEach((t, i) => { t.schema = ['Spanish', langAreas[i] ?? 'Vocabulary']; });
-    const physAreas = [['Physics', 'Forces'], ['Physics', 'Forces'], ['Aerodynamics', 'Propellers'], ['Aerodynamics', 'Propellers'], ['Physics', 'Electricity'], ['Engineering', 'Sizing']];
-    third.plan.topics.forEach((t, i) => { t.schema = physAreas[i] ?? ['Physics', 'Forces']; });
+    subj.plan.topics.forEach((t, i) => { t.schema = ['Languages', 'Portuguese', langAreas[i] ?? 'Vocabulary']; });
+    second.plan.topics.forEach((t, i) => { t.schema = ['Languages', 'Spanish', langAreas[i] ?? 'Vocabulary']; });
+    const physAreas = [['Physics', 'Mechanics', 'Forces'], ['Physics', 'Mechanics', 'Forces'], ['Physics', 'Aerodynamics', 'Propellers'], ['Physics', 'Aerodynamics', 'Propellers'], ['Physics', 'Electromagnetism', 'Circuits'], ['Engineering', 'Aircraft design', 'Sizing']];
+    third.plan.topics.forEach((t, i) => { t.schema = physAreas[i] ?? ['Physics', 'Mechanics', 'Forces']; });
     const know = [
       { id: 'k1', kind: 'job', title: 'Airline captain', detail: '12 years' },
       { id: 'k2', kind: 'qualification', title: 'Commercial pilot licence', detail: '' },
@@ -277,12 +277,12 @@ export default function PreviewScreen() {
           s.plan = { ...s.plan, title: ['Lithium battery engineering', 'DC electrical systems', 'Multirotor flight physics', 'Electric propulsion', 'How solar panels work', 'Roman Stoicism'][i], topics };
           // Fields and areas shared across the subjects, as the planner would place them.
           const fieldsFor = [
-            [['Chemistry', 'Electrochemistry'], ['Physics', 'Electricity'], ['Engineering', 'Energy storage'], ['Engineering', 'Thermal']],
-            [['Physics', 'Electricity'], ['Engineering', 'Wiring'], ['Physics', 'Electricity'], ['Engineering', 'Protection']],
-            [['Physics', 'Forces'], ['Aerodynamics', 'Rotors'], ['Physics', 'Forces'], ['Engineering', 'Sizing']],
-            [['Physics', 'Electricity'], ['Aerodynamics', 'Propellers'], ['Engineering', 'Motors'], ['Engineering', 'Motors']],
-            [['Physics', 'Light'], ['Physics', 'Electricity'], ['Engineering', 'Grid'], ['Chemistry', 'Semiconductors']],
-            [['Philosophy', 'Ethics'], ['Philosophy', 'Logic'], ['History', 'Rome'], ['Philosophy', 'Ethics']],
+            [['Chemistry', 'Electrochemistry', 'Cells'], ['Physics', 'Electromagnetism', 'Circuits'], ['Engineering', 'Electrical engineering', 'Energy storage'], ['Engineering', 'Mechanical engineering', 'Thermal']],
+            [['Physics', 'Electromagnetism', 'Circuits'], ['Engineering', 'Electrical engineering', 'Wiring'], ['Physics', 'Electromagnetism', 'Circuits'], ['Engineering', 'Electrical engineering', 'Protection']],
+            [['Physics', 'Mechanics', 'Forces'], ['Physics', 'Aerodynamics', 'Rotors'], ['Physics', 'Mechanics', 'Forces'], ['Engineering', 'Aircraft design', 'Sizing']],
+            [['Physics', 'Electromagnetism', 'Circuits'], ['Physics', 'Aerodynamics', 'Propellers'], ['Engineering', 'Electrical engineering', 'Motors'], ['Engineering', 'Electrical engineering', 'Motors']],
+            [['Physics', 'Optics', 'Light'], ['Physics', 'Electromagnetism', 'Circuits'], ['Engineering', 'Electrical engineering', 'Grid'], ['Chemistry', 'Materials', 'Semiconductors']],
+            [['Philosophy', 'Ethics', 'Virtue'], ['Philosophy', 'Logic', 'Argument'], ['History', 'Ancient history', 'Rome'], ['Philosophy', 'Ethics', 'Stoicism']],
           ][i];
           topics.forEach((t, j) => { t.schema = fieldsFor[j % fieldsFor.length]; });
           s.topicState = {};
@@ -300,10 +300,12 @@ export default function PreviewScreen() {
         })
       : [subj, second, third];
     const prior = [
-      { id: 'p1', field: 'Aviation', area: 'Navigation', level: 's3', basis: 'CPL, 1,500 hours', verified_level: 's3', verified_at: '2026-10-14T09:00:00Z', verified: { score: 8, asked: 10 } },
-      { id: 'p2', field: 'Aviation', area: 'Aircraft performance', level: 's3', basis: 'CPL', verified_level: null },
-      { id: 'p3', field: 'Finance', area: 'Structured lending', level: 's4', basis: '10 years in banking', verified_level: null },
-      { id: 'p4', field: 'Jiu-jitsu', area: '', level: 's2', basis: 'brown belt', verified_level: 's2', verified_at: '2026-10-21T18:30:00Z', verified: { score: 5.5, asked: 6 } },
+      { id: 'p1', domain: 'Aviation', field: 'Flying', area: 'Navigation', level: 's3', basis: 'CPL, 1,500 hours', verified_level: 's3', verified_at: '2026-10-14T09:00:00Z', verified: { score: 8, asked: 10 } },
+      { id: 'p2', domain: 'Aviation', field: 'Flying', area: 'Aircraft performance', level: 's3', basis: 'CPL', verified_level: null },
+      { id: 'p3', domain: 'Finance', field: 'Structured finance', area: 'Lending', level: 's4', basis: '10 years in banking', verified_level: null },
+      { id: 'p4', domain: 'Martial arts', field: 'Brazilian jiu-jitsu', area: '', level: 's2', basis: 'brown belt', verified_level: 's2', verified_at: '2026-10-21T18:30:00Z', verified: { score: 5.5, asked: 6 } },
+      { id: 'p5', domain: 'Martial arts', field: 'Brazilian jiu-jitsu', area: 'Guard', level: 's3', basis: 'strongest from guard', verified_level: null },
+      { id: 'p6', domain: 'Martial arts', field: 'Judo', area: '', level: 's1', basis: 'a year of classes', verified_level: null },
     ];
     for (const s of many) { const t0 = s.plan.topics[0]; const st = s.topicState as Record<string, { bridge?: unknown; priorScore?: number }>; if (st[t0.id]) st[t0.id] = { ...st[t0.id], bridge: { field: 'aircraft performance' }, priorScore: 1 }; }
     // ?bare=1: a learner who pasted a CV but confirmed no fields, and whose lessons have not drawn on it yet.

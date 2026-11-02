@@ -17,7 +17,7 @@ import {
   useSavePriorFields,
 } from '@/src/features/profile';
 import { cvMaterial, pickCv, type CvFile } from '@/src/features/profile/cv';
-import { KIND_LABELS, fieldNamesInUse, proposeItems, recomputeAbout, toRows, type Attachment, type ProposedField, type ProposedItem } from '@/src/features/profile/know';
+import { KIND_LABELS, fieldName, fieldNamesInUse, proposeItems, recomputeAbout, toRows, type Attachment, type ProposedField, type ProposedItem } from '@/src/features/profile/know';
 import { STAGES, stageName } from '@/src/engine/ladder';
 import type { StageId } from '@/src/engine/types';
 import { useRouter } from 'expo-router';
@@ -181,7 +181,7 @@ export default function YouScreen() {
       const source: PriorFieldRow['source'] = file ? 'cv' : material.length > 600 ? 'cv' : 'typed';
       const rows = toRows(proposed.items, source).filter((r) => !have.has(r.title.trim().toLowerCase()));
       await save.mutateAsync(rows);
-      const keptFields = proposed.fields.filter((f) => f.keep).map((f) => ({ field: f.field, area: f.area, level: f.level, basis: f.basis, source }));
+      const keptFields = proposed.fields.filter((f) => f.keep).map((f) => ({ domain: f.domain, field: f.field, area: f.area, level: f.level, basis: f.basis, source }));
       if (keptFields.length) await saveFields.mutateAsync({ fields: keptFields, existing: prior });
       const after = [...(items.data ?? []), ...rows.map((r, i) => ({ ...r, id: `new-${i}`, profile_id: profile.id, confirmed_at: '', created_at: '' }))] as KnowItemRow[];
       const fieldsAfter = [...prior, ...keptFields.filter((f) => !prior.some((e) => e.field.toLowerCase() === f.field.toLowerCase() && e.area.toLowerCase() === f.area.toLowerCase())).map((f, i) => ({ ...f, id: `new-${i}`, profile_id: profile.id, verified_level: null, verified_at: null, verified: null, evidence: { ok: 0, n: 0 }, created_at: '', updated_at: '' }))] as PriorFieldRow[];
@@ -209,7 +209,6 @@ export default function YouScreen() {
   };
   const setProposedField = (id: string, patch: Partial<ProposedField>) =>
     setProposed((p) => (p ? { ...p, fields: p.fields.map((f) => (f.id === id ? { ...f, ...patch } : f)) } : p));
-  const fieldName = (f: { field: string; area: string }) => (f.area ? `${f.field} › ${f.area}` : f.field);
 
   const grouped = Object.keys(KIND_LABELS)
     .map((kind) => ({ kind, label: KIND_LABELS[kind], rows: (items.data ?? []).filter((r) => r.kind === kind) }))
@@ -242,23 +241,34 @@ export default function YouScreen() {
             Fields you know
           </Text>
           {prior.map((f) => (
-            <View key={f.id} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md, borderTopWidth: 1, borderTopColor: colors.border }}>
-              <View style={{ flex: 1, gap: 2 }}>
-                <Text variant="body">{fieldName(f)}</Text>
-                <Text variant="caption" color={f.verified_level ? 'accent' : 'textMuted'}>
-                  {f.verified_level
-                    ? `${stageName(f.verified_level)} · shown in a check${f.verified_level !== f.level ? ` (you said ${stageName(f.level)})` : ''}`
-                    : `${stageName(f.level)} · as you described it${f.basis ? `: ${f.basis}` : ''}`}
-                </Text>
+            <View key={f.id} style={{ paddingVertical: spacing.md, borderTopWidth: 1, borderTopColor: colors.border, gap: spacing.xs }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text variant="body">{fieldName(f)}</Text>
+                  <Text variant="caption" color={f.verified_level ? 'accent' : 'textMuted'}>
+                    {f.verified_level
+                      ? `${stageName(f.verified_level)} · shown in a check${f.verified_level !== f.level ? ` (you said ${stageName(f.level)})` : ''}`
+                      : `${stageName(f.level)} · as you described it${f.basis ? `: ${f.basis}` : ''}`}
+                  </Text>
+                </View>
+                <Pressable onPress={() => dropField(f)} hitSlop={10} accessibilityRole="button" accessibilityLabel={`Remove ${fieldName(f)}`}>
+                  <Ionicons name="close" size={16} color={colors.textMuted} />
+                </Pressable>
               </View>
-              <Pressable onPress={() => router.push({ pathname: '/verify/[fieldId]', params: { fieldId: f.id } })} accessibilityRole="button" hitSlop={8}>
-                <Text variant="bodyStrong" color="primary">
-                  {f.verified_level ? 'Check again' : 'Verify'}
-                </Text>
-              </Pressable>
-              <Pressable onPress={() => dropField(f)} hitSlop={10} accessibilityRole="button" accessibilityLabel={`Remove ${fieldName(f)}`}>
-                <Ionicons name="close" size={16} color={colors.textMuted} />
-              </Pressable>
+              <View style={{ flexDirection: 'row', gap: spacing.lg }}>
+                <Pressable onPress={() => router.push({ pathname: '/verify/[fieldId]', params: { fieldId: f.id } })} accessibilityRole="button" hitSlop={8}>
+                  <Text variant="caption" color="primary" style={{ fontSize: 13 }}>
+                    {f.verified_level ? 'Check again' : 'Verify'}
+                  </Text>
+                </Pressable>
+                {!f.area ? (
+                  <Pressable onPress={() => router.push({ pathname: '/enrich/[fieldId]', params: { fieldId: f.id } })} accessibilityRole="button" hitSlop={8}>
+                    <Text variant="caption" color="primary" style={{ fontSize: 13 }}>
+                      Add detail
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
             </View>
           ))}
           <View style={{ borderTopWidth: 1, borderTopColor: colors.border }} />

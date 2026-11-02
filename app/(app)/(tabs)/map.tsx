@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 
@@ -26,8 +27,9 @@ export default function MapScreen() {
   const probe = useProbeStatus(profile?.id ?? null, subjects);
   const resume = useOpenSitting(subjects);
   const invalidate = useInvalidateSubject();
-  // Topics written before the map existed are placed under their fields once, then the plans reload.
-  const place = useCallback(async () => { await assignSchemas(subjects); invalidate(); }, [subjects, invalidate]);
+  const qc = useQueryClient();
+  // Topics placed in fewer than three levels, and fields brought without a domain, are placed once, then everything reloads.
+  const place = useCallback(async () => { await assignSchemas(subjects, prior); invalidate(); qc.invalidateQueries({ queryKey: ['prior_fields'] }); }, [subjects, prior, invalidate, qc]);
   const step = nextStep(subjects, { probe, resume });
   // A sitting left halfway, a level check or a retention probe outranks the map's own reading of the day.
   const line = step.kind === 'resume' ? `Pick up ${step.topic.title} where you left off.` : step.kind === 'probe' ? 'A five-minute check on what you learned weeks ago.' : step.kind === 'check' ? `The ${step.stageName} level check in ${step.subject.plan.title}.` : step.kind === 'mixed' ? `Mixed practice across ${step.topics.length} earlier topics in ${step.subject.plan.title}.` : undefined;

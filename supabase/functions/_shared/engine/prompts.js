@@ -90,11 +90,11 @@ function elsewhereLines(intake) {
 // Every topic is placed in the learner's own map of knowledge under a field and an area, so the
 // map groups what belongs together across subjects (the volts of one subject beside the batteries
 // of another). The names must be reused across subjects, so the ones already in use are listed.
-const SCHEMA_RULE = '"schema" is ["Field", "Area"]: the broad discipline the idea belongs to (Physics, Electrical engineering, Mathematics, Aerodynamics, Chemistry, Portuguese, Philosophy, Jiu-jitsu, Finance) and the area within it (Electricity, Energy storage, Propellers, Verbs, Ethics). Choose by what the idea IS, not by which subject it is taught in: a topic on voltage in an aircraft-wiring subject is ["Physics", "Electricity"]. Use the same names for the same field and area everywhere; 2 to 12 fields across a learner, 2 to 8 areas per field.';
+const SCHEMA_RULE = '"schema" is ["Domain", "Discipline", "Area"], three levels. The domain is the broad body of knowledge, named the way a university faculty, a professional body or a sports federation names it (Physics, Engineering, Mathematics, Chemistry, Martial arts, Aviation, Finance, Languages, Medicine, Philosophy, Music). The discipline is the branch within it (Electromagnetism, Aerodynamics, Brazilian jiu-jitsu, Judo, Structured finance, Portuguese, Ethics). The area is the part of that discipline the idea belongs to (Circuits, Propellers, Guard, Throws, Lending, Verbs). Choose by what the idea IS, not by which subject it is taught in: a topic on voltage in an aircraft-wiring subject is ["Physics", "Electromagnetism", "Circuits"]. Use the conventional name at every level, in sentence case, 1 to 3 words, and the same name for the same thing everywhere, so Judo and Brazilian jiu-jitsu both sit under Martial arts and two subjects that touch circuits share one area. Keep it to 2 to 10 domains across a learner, 1 to 6 disciplines per domain, 2 to 8 areas per discipline.';
 function schemaLines(intake) {
   const names = [];
   for (const s of arr(intake && intake.elsewhere)) for (const f of arr(s.fields)) if (str(f) && !names.includes(str(f, 80))) names.push(str(f, 80));
-  return names.length ? ' Fields and areas already in use on the learner\'s map, to reuse where they fit: ' + names.slice(0, 60).join('; ') + '.' : '';
+  return names.length ? ' Domains, disciplines and areas already in use on the learner\'s map, to reuse where they fit: ' + names.slice(0, 60).join('; ') + '.' : '';
 }
 
 function planPrompt(intake, coverTo) {
@@ -134,7 +134,7 @@ Design backwards from what the learner must be able to do. Work in this order:
 10. If the subject is a human language, set "language" to its BCP 47 code (for example "pt-BR"); otherwise null.
 
 Return ONLY JSON, with no commentary, in exactly this shape:
-{"title":"short subject name","subjectType":"knowledge","language":null,"summary":"2 sentences on the approach","stages":[{"id":"s1","means":"...","basis":"...","equivalent":"...","outcomes":["can ..."],"external":"...","hours":40},{"id":"s2","means":"...","basis":"...","equivalent":"...","outcomes":["..."],"external":"...","hours":150},{"id":"s3","means":"...","basis":"...","equivalent":"...","outcomes":["..."],"external":"...","hours":600},{"id":"s4","means":"...","basis":"...","equivalent":"...","outcomes":["..."],"external":"...","hours":1500},{"id":"s5","means":"...","basis":"...","equivalent":"...","outcomes":["..."],"external":"...","hours":5000}],"rules":["..."],"milestones":[{"id":"m1","title":"...","test":"how to check it","stage":"s1"}],"topics":[{"id":"t1","title":"...","summary":"at most 20 plain words","kind":"concept","stage":"s1","outcome":0,"threshold":false,"milestone":"m1","prereqs":[],"minutes":30,"schema":["Field","Area"]}],"resources":[{"title":"...","creator":"...","type":"book","why":"at most 15 words","search":"search phrase"}],"safety":[]}
+{"title":"short subject name","subjectType":"knowledge","language":null,"summary":"2 sentences on the approach","stages":[{"id":"s1","means":"...","basis":"...","equivalent":"...","outcomes":["can ..."],"external":"...","hours":40},{"id":"s2","means":"...","basis":"...","equivalent":"...","outcomes":["..."],"external":"...","hours":150},{"id":"s3","means":"...","basis":"...","equivalent":"...","outcomes":["..."],"external":"...","hours":600},{"id":"s4","means":"...","basis":"...","equivalent":"...","outcomes":["..."],"external":"...","hours":1500},{"id":"s5","means":"...","basis":"...","equivalent":"...","outcomes":["..."],"external":"...","hours":5000}],"rules":["..."],"milestones":[{"id":"m1","title":"...","test":"how to check it","stage":"s1"}],"topics":[{"id":"t1","title":"...","summary":"at most 20 plain words","kind":"concept","stage":"s1","outcome":0,"threshold":false,"milestone":"m1","prereqs":[],"minutes":30,"schema":["Domain","Discipline","Area"]}],"resources":[{"title":"...","creator":"...","type":"book","why":"at most 15 words","search":"search phrase"}],"safety":[]}
 "subjectType" is one of "knowledge", "language", "physical", "mixed", "interpersonal". "prereqs" lists earlier topic ids.`;
 }
 
@@ -177,9 +177,9 @@ Extract "items", each with:
 Rules: at most 30 items, most useful first; merge duplicates; never include contact details, addresses, dates of birth, references, salary, or anything about health. Do not invent: only what the material states or clearly implies.
 Also write "summary": 2 sentences on their strongest areas of knowledge and skill, in plain words.
 
-Then place what they know on their map of knowledge as "fields": for each distinct body of knowledge the material shows, {"field": the broad discipline (Aviation, Finance, Physics, Jiu-jitsu, Portuguese), "area": the part of it they know (Navigation, Structured lending, Guard; or "" when it is the whole field), "level": where they stand on the five-rung ladder as one of ${STAGES.map((s) => '"' + s.id + '" ' + s.name).join(', ')} (s1 can follow with a model to copy; s2 handles routine tasks alone; s3 handles unfamiliar situations and knows why things work; s4 fluent, fast, able to teach it; s5 sets standards others learn from), "basis": the evidence in the material, under 12 words (a licence, years in a role, a belt, a degree)}. Judge the level from the evidence, not the wording: a professional licence or several years in the role is s3 or s4; a degree alone is s2 or s3; a hobby mentioned in passing is s1 or s2. Prefer several specific areas to one vague field. At most 20 fields.${inUse.length ? ' Fields and areas already on their map, to reuse where they fit: ' + inUse.join('; ') + '.' : ''}
+Then place what they know on their map of knowledge as "fields": for each distinct body of knowledge the material shows, {"domain": the broad body of knowledge, named the way a university faculty, a professional body or a sports federation names it (Aviation, Finance, Physics, Martial arts, Languages), "discipline": the branch within it (Flying, Structured finance, Electromagnetism, Brazilian jiu-jitsu, Judo, Portuguese), "area": the part of the discipline they know (Navigation, Lending, Guard; or "" when it is the whole discipline), "level": where they stand on the five-rung ladder as one of ${STAGES.map((s) => '"' + s.id + '" ' + s.name).join(', ')} (s1 can follow with a model to copy; s2 handles routine tasks alone; s3 handles unfamiliar situations and knows why things work; s4 fluent, fast, able to teach it; s5 sets standards others learn from), "basis": the evidence in the material, under 12 words (a licence, years in a role, a belt, a degree)}. Use conventional names, in sentence case, 1 to 3 words, the same name for the same thing everywhere: Judo and Brazilian jiu-jitsu both sit under Martial arts. Judge the level from the evidence, not the wording: a professional licence or several years in the role is s3 or s4; a degree alone is s2 or s3; a hobby mentioned in passing is s1 or s2. Prefer several specific areas to one vague discipline. At most 20 fields.${inUse.length ? ' Domains, disciplines and areas already on their map, to reuse where they fit: ' + inUse.join('; ') + '.' : ''}
 
-Return ONLY JSON: {"summary":"...","items":[{"kind":"job","text":"...","level":"..."}],"fields":[{"field":"...","area":"...","level":"s3","basis":"..."}]}`;
+Return ONLY JSON: {"summary":"...","items":[{"kind":"job","text":"...","level":"..."}],"fields":[{"domain":"...","discipline":"...","area":"...","level":"s3","basis":"..."}]}`;
 }
 
 // A short check from memory of a field the learner says they know, to set the level the map
@@ -188,7 +188,7 @@ function verifyPrompt(field, about) {
   const claim = stageIdx(field.level);
   const top = Math.min(STAGES.length - 1, claim + 1);
   const rungs = STAGES.slice(0, top + 1);
-  const name = str(field.field, 80) + (str(field.area) ? ' › ' + str(field.area, 80) : '');
+  const name = (str(field.domain) ? str(field.domain, 80) + ' › ' : '') + str(field.field, 80) + (str(field.area) ? ' › ' + str(field.area, 80) : '');
   return `An adult says they know "${name}" at the ${stageName(field.level)} level${str(field.basis) ? ' (' + str(field.basis, 120) + ')' : ''}. Write a short check from memory that finds the rung of the ladder they are really at, so a learning app can rely on it when it plans other subjects and draws comparisons.
 
 What else they know: ${str(about, 1200) || 'not given'}.
@@ -340,7 +340,7 @@ ${METHOD}
 
 Write the topics for stage ${stageId} ${stageName(stageId)} only: 10 to 20 topics, each one core idea learnable in 20 to 45 minutes with at most 3 to 5 new terms, ordered from the familiar to the unfamiliar with prerequisites first, every outcome served ("outcome" is its index), and the core ideas of earlier stages revisited at greater depth where they matter. Leave out anything the learner's other subjects above already cover. Mark at most one in five topics "threshold": true. "prereqs" may name existing topic ids or new ones. Group them into 2 to 4 milestones, each a capability with a concrete test. Number new topic ids from t${plan.topics.length + 1} and milestone ids from m${plan.milestones.length + 1}. Topic kinds: "concept", "procedure", "vocabulary", "motor", "strategy" or "roleplay". ${SCHEMA_RULE}${schemaLines(subj.intake)}
 
-Return ONLY JSON: {"milestones":[{"id":"m9","title":"...","test":"...","stage":"${stageId}"}],"topics":[{"id":"t31","title":"...","summary":"at most 20 plain words","kind":"concept","stage":"${stageId}","outcome":0,"threshold":false,"milestone":"m9","prereqs":["t12"],"minutes":35,"schema":["Field","Area"]}]}`;
+Return ONLY JSON: {"milestones":[{"id":"m9","title":"...","test":"...","stage":"${stageId}"}],"topics":[{"id":"t31","title":"...","summary":"at most 20 plain words","kind":"concept","stage":"${stageId}","outcome":0,"threshold":false,"milestone":"m9","prereqs":["t12"],"minutes":35,"schema":["Domain","Discipline","Area"]}]}`;
 }
 
 function placementPrompt(subj) {
@@ -673,19 +673,61 @@ function lessonDigest(lesson) {
   return pts.filter(Boolean).join('; ').slice(0, 1500);
 }
 
-// Placing every topic of every subject on the map at once, so the grouping is consistent across them.
-function schemaPrompt(subjects, fields) {
+// Placing every topic of every subject on the map at once, so the grouping is consistent across
+// them, and every field the learner brought with them under its domain.
+function schemaPrompt(subjects, fields, priorFields) {
   const rows = arr(subjects).slice(0, 12).map((s) => `Subject ${str(s.id, 60)}: "${str(s.title, 120)}"\n` + arr(s.topics).slice(0, 80).map((t) => `  ${str(t.id, 16)}: ${str(t.title, 120)}${str(t.summary) ? ' (' + str(t.summary, 160) + ')' : ''}`).join('\n')).join('\n\n');
   const inUse = arr(fields).map((f) => str(f, 80)).filter(Boolean).slice(0, 60);
-  return `An adult is learning the subjects below on one app. Place every topic in their map of knowledge.
+  const brought = arr(priorFields).filter((f) => f && str(f.id) && str(f.field)).slice(0, 40).map((f) => `  ${str(f.id, 60)}: ${str(f.field, 80)}${str(f.area) ? ' › ' + str(f.area, 80) : ''}${str(f.basis) ? ' (' + str(f.basis, 120) + ')' : ''}`);
+  return `An adult is learning the subjects below on one app${brought.length ? ', and brought the fields listed after them with them' : ''}. Place every topic${brought.length ? ' and every field they brought' : ''} in their map of knowledge.
 
-${SCHEMA_RULE}${inUse.length ? ' Fields and areas already on their map, to reuse where they fit: ' + inUse.join('; ') + '.' : ''}
+${SCHEMA_RULE}${inUse.length ? ' Domains, disciplines and areas already on their map, to reuse where they fit: ' + inUse.join('; ') + '.' : ''}
 
-Group logically: a field is a discipline, an area is a coherent part of it, and topics that belong together across different subjects get the same field and area. Keep names short (1 to 3 words), in sentence case, consistent, and in plain English.
+Group logically: a domain is a body of knowledge, a discipline is a branch of it, an area is a coherent part of a discipline, and topics that belong together across different subjects get the same domain, discipline and area. Keep names short (1 to 3 words), in sentence case, consistent, and in plain English.
 
-${rows}
+${rows}${brought.length ? '\n\nFields the learner brought with them (id: name, with their evidence). For each, give the domain it belongs to and, where the name is a discipline, keep it as the discipline; where the name is really an area of a discipline, name that discipline and keep the name as the area:\n' + brought.join('\n') : ''}
 
-Return ONLY JSON: {"subjects":[{"id":"<subject id, copied exactly as given above>","topics":[{"id":"t1","schema":["Field","Area"]}]}]}. Every subject above appears once with its id copied exactly, and every topic listed above appears exactly once under it. Nothing else.`;
+Return ONLY JSON: {"subjects":[{"id":"<subject id, copied exactly as given above>","topics":[{"id":"t1","schema":["Domain","Discipline","Area"]}]}]${brought.length ? ',"fields":[{"id":"<field id, copied exactly>","domain":"...","discipline":"...","area":"..."}]' : ''}}. Every subject above appears once with its id copied exactly, and every topic listed above appears exactly once under it${brought.length ? '; every field brought appears once with its id copied exactly' : ''}. Nothing else.`;
 }
 
-export { METHOD, schemaPrompt, SCHEMA_RULE, verifyPrompt, checkQuestionsPrompt, checkLessonPrompt, intakePrompt, intakeLines, briefLines, elsewhereLines, adaptPrompt, learnerLines, stageLines, FRAMEWORK_GUIDE, planPrompt, reviewPlanPrompt, knowPrompt, startPrompt, rolePrompt, debriefPrompt, formCheckPrompt, extendPrompt, placementPrompt, warmupPrompt, lessonPrompt, practicePrompt, bridgePrompt, mixedPrompt, morePracticePrompt, gradePrompt, checkPrompt, modelPrompt, tutorRules, lessonDigest };
+// A short conversation about a field the learner brought with them, so it can open into its parts:
+// the parts they are strongest in (the discipline's own divisions, as options), their standing (belt,
+// grade, years, teaching, competing, who graded them), and other disciplines of the same domain
+// they also know.
+function enrichPrompt(field, about) {
+  const name = (str(field.domain) ? str(field.domain, 80) + ' › ' : '') + str(field.field, 80) + (str(field.area) ? ' › ' + str(field.area, 80) : '');
+  return `An adult says they know "${name}" at the ${stageName(field.level)} level${str(field.basis) ? ' (' + str(field.basis, 120) + ')' : ''}. A learning app wants to draw this on their map of knowledge in more detail. Ask at most three short questions whose answers would most improve the map.
+
+What else they know: ${str(about, 1200) || 'not given'}.
+
+Ask, in this order, only what is not already known from the evidence above:
+1. "parts": which parts of ${str(field.field, 80)} they are strongest in. Offer the discipline's own conventional divisions as options (for Brazilian jiu-jitsu: guard, passing, submissions, takedowns, competition; for structured finance: origination, credit analysis, documentation, syndication; for a language: speaking, listening, reading, writing), 4 to 6 options, several may apply.
+2. "standing": their standing in it in the terms the discipline uses (belt or grade and who awarded it, years, whether they teach or compete, a licence or rating), as options where the field has standard ones, otherwise typed.
+3. "siblings": other disciplines of ${str(field.domain, 80) || 'the same domain'} they also know (for Martial arts: judo, wrestling, boxing, Muay Thai, MMA, none), as options, several may apply, always including "None".
+
+For each question: "slot" (one of "parts", "standing", "siblings"), "q" (under 20 words, plain British English), "options" (2 to 6 short answers, under 6 words each; [] only where options make no sense), "multi" (true if several may apply).
+
+Return ONLY JSON: {"questions":[{"slot":"parts","q":"...","options":["...","..."],"multi":true}]}`;
+}
+
+// The answers turned into what goes on the map: areas of the discipline with a level each, other
+// disciplines of the domain, and a better basis line for the field itself.
+function enrichApplyPrompt(field, answers) {
+  const name = (str(field.domain) ? str(field.domain, 80) + ' › ' : '') + str(field.field, 80) + (str(field.area) ? ' › ' + str(field.area, 80) : '');
+  const qa = arr(answers).filter((a) => a && str(a.q)).slice(0, 6).map((a) => `Q: ${str(a.q, 200)}\nA: ${str(a.a, 400) || '(no answer)'}`).join('\n');
+  return `An adult says they know "${name}" at the ${stageName(field.level)} level${str(field.basis) ? ' (' + str(field.basis, 120) + ')' : ''}. They answered a few questions about it:
+
+${qa || '(no answers)'}
+
+The five-rung ladder: ${STAGES.map((s) => '"' + s.id + '" ' + s.name).join(', ')} (s1 can follow with a model to copy; s2 handles routine tasks alone; s3 handles unfamiliar situations and knows why things work; s4 fluent, fast, able to teach it; s5 sets standards others learn from).
+
+Write:
+- "areas": the parts of ${str(field.field, 80)} the answers show they know, each {"area": the conventional name of the part (1 to 3 words, sentence case), "level": their rung in that part, judged from the answers and the standing (a part they named as strongest sits at or one above the field's level; a part not named sits one below), "basis": the evidence, under 12 words}. 2 to 6 areas; only parts the answers support.
+- "siblings": other disciplines of the same domain they said they know, each {"discipline": its conventional name, "level": a rung judged from what they said (s1 or s2 unless they gave a grade or years), "basis": under 12 words}. [] when none.
+- "basis": one line, under 15 words, for the field itself that folds in the standing they gave (belt, years, who graded them, teaching or competing).
+- "level": the field's rung after what they said, as one of the five ids; keep ${str(field.level, 4)} unless the standing clearly says otherwise.
+
+Return ONLY JSON: {"areas":[{"area":"...","level":"s3","basis":"..."}],"siblings":[{"discipline":"...","level":"s2","basis":"..."}],"basis":"...","level":"s3"}`;
+}
+
+export { METHOD, schemaPrompt, enrichPrompt, enrichApplyPrompt, SCHEMA_RULE, verifyPrompt, checkQuestionsPrompt, checkLessonPrompt, intakePrompt, intakeLines, briefLines, elsewhereLines, adaptPrompt, learnerLines, stageLines, FRAMEWORK_GUIDE, planPrompt, reviewPlanPrompt, knowPrompt, startPrompt, rolePrompt, debriefPrompt, formCheckPrompt, extendPrompt, placementPrompt, warmupPrompt, lessonPrompt, practicePrompt, bridgePrompt, mixedPrompt, morePracticePrompt, gradePrompt, checkPrompt, modelPrompt, tutorRules, lessonDigest };

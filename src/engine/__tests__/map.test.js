@@ -159,6 +159,51 @@ describe('knowledge map by field', () => {
     expect(nodeLine(t)).toContain('Brazilian Portuguese');
   });
 
+  it('draws three levels: a domain hub, a discipline node, an area node, and folds a level named like its parent', () => {
+    const a = subject('s1', 'Multirotor flight physics');
+    const [t0, t1, t2, t3] = a.plan.topics;
+    t0.schema = ['Physics', 'Electromagnetism', 'Circuits'];
+    t1.schema = ['Physics', 'Electromagnetism', 'Circuits'];
+    t2.schema = ['Physics', 'Aerodynamics', 'Propellers'];
+    t3.schema = ['Physics', 'Physics', 'Physics']; // the model repeating itself folds into the hub
+    a.plan.topics.slice(4).forEach((t) => { t.schema = ['Physics', 'Aerodynamics', 'Lift']; });
+    const prior = [
+      { id: 'p1', domain: 'Martial arts', field: 'Brazilian jiu-jitsu', area: 'Guard', level: 's3', basis: 'brown belt', verified_level: null },
+      { id: 'p2', domain: 'Martial arts', field: 'Judo', area: '', level: 's2', basis: 'blue belt', verified_level: 's2' },
+      { id: 'p3', domain: '', field: 'Finance', area: '', level: 's4', basis: '10 years', verified_level: null },
+    ];
+    const g = fieldGraph({ subjects: [a], know, prior, now: T0 });
+    const labels = (kind) => g.nodes.filter((n) => n.kind === kind).map((n) => n.label);
+    expect(labels('field')).toEqual(['Martial arts', 'Finance', 'Physics']);
+    expect(labels('area').sort()).toEqual(['Aerodynamics', 'Brazilian jiu-jitsu', 'Electromagnetism', 'Judo']);
+    expect(labels('part').sort()).toEqual(['Circuits', 'Guard', 'Lift', 'Propellers']);
+    // Every level hangs off the one above it, and the learner's standing climbs the levels.
+    const guard = g.nodes.find((n) => n.kind === 'part' && n.label === 'Guard');
+    const bjj = g.nodes.find((n) => n.kind === 'area' && n.label === 'Brazilian jiu-jitsu');
+    const ma = g.nodes.find((n) => n.kind === 'field' && n.label === 'Martial arts');
+    expect(g.edges.some((e) => e.kind === 'in' && e.from === guard.id && e.to === bjj.id)).toBe(true);
+    expect(g.edges.some((e) => e.kind === 'in' && e.from === bjj.id && e.to === ma.id)).toBe(true);
+    expect(guard.prior.level).toBe('s3');
+    expect(bjj.prior.fromArea).toBe(true);
+    expect(bjj.prior.level).toBe('s3');
+    // Judo's own standing was shown in a check; the domain stands at what was shown (Judo, Capable)
+    // ahead of what was only claimed higher (Guard, Proficient).
+    const judo = g.nodes.find((n) => n.kind === 'area' && n.label === 'Judo');
+    expect(judo.prior.verifiedLevel).toBe('s2');
+    expect(ma.prior.verifiedLevel).toBe('s2');
+    expect(ma.prior.fromArea).toBe(true);
+    // Topics sit under their area, and the folded topic under the hub itself.
+    const circuits = g.nodes.find((n) => n.kind === 'part' && n.label === 'Circuits');
+    expect(circuits.topics).toBe(2);
+    expect(g.edges.filter((e) => e.kind === 'in' && e.to === 'f:physics' && e.from.startsWith('t:'))).toHaveLength(1);
+    const ids = new Set(g.nodes.map((n) => n.id));
+    for (const e of g.edges) { expect(ids.has(e.from)).toBe(true); expect(ids.has(e.to)).toBe(true); }
+    // Placed: every topic has three levels, every field brought has a domain. Finance has none yet.
+    expect(g.placed).toBe(false);
+    prior[2].domain = 'Finance';
+    expect(fieldGraph({ subjects: [a], know, prior, now: T0 }).placed).toBe(true);
+  });
+
   it('shows a CV item only once a lesson has drawn on it, so nothing sits by the learner joined to nothing', () => {
     const a = subject('s1', 'Multirotor flight physics');
     a.plan.topics.forEach((t) => { t.schema = ['Physics', 'Forces']; });

@@ -79,7 +79,7 @@ export async function fetchPriorFields(): Promise<PriorFieldRow[]> {
   return (data ?? []) as PriorFieldRow[];
 }
 
-export type NewPriorField = Pick<PriorFieldRow, 'field' | 'area' | 'level' | 'basis' | 'source'>;
+export type NewPriorField = Pick<PriorFieldRow, 'domain' | 'field' | 'area' | 'level' | 'basis' | 'source'>;
 
 const sameName = (a: { field: string; area: string }, b: { field: string; area: string }) =>
   a.field.trim().toLowerCase() === b.field.trim().toLowerCase() && a.area.trim().toLowerCase() === b.area.trim().toLowerCase();
@@ -91,7 +91,8 @@ export async function savePriorFields(profileId: string, fields: NewPriorField[]
   for (const f of fields) {
     const have = existing.find((e) => sameName(e, f));
     if (have) {
-      const { error } = await sb.from('prior_fields').update({ level: f.level, basis: f.basis || have.basis, updated_at: new Date().toISOString() }).eq('id', have.id);
+      // A domain already placed stays; a new one fills a blank.
+      const { error } = await sb.from('prior_fields').update({ level: f.level, basis: f.basis || have.basis, domain: have.domain || f.domain || '', updated_at: new Date().toISOString() }).eq('id', have.id);
       if (error) throw error;
     } else {
       const { error } = await sb.from('prior_fields').insert({ ...f, profile_id: profileId });
@@ -100,7 +101,7 @@ export async function savePriorFields(profileId: string, fields: NewPriorField[]
   }
 }
 
-export async function updatePriorField(id: string, update: Partial<Pick<PriorFieldRow, 'level' | 'basis' | 'verified_level' | 'verified_at' | 'verified' | 'evidence'>>): Promise<void> {
+export async function updatePriorField(id: string, update: Partial<Pick<PriorFieldRow, 'domain' | 'field' | 'area' | 'level' | 'basis' | 'verified_level' | 'verified_at' | 'verified' | 'evidence'>>): Promise<void> {
   const { error } = await getSupabase().from('prior_fields').update({ ...update, updated_at: new Date().toISOString() }).eq('id', id);
   if (error) throw error;
 }

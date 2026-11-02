@@ -25,6 +25,7 @@ type Props = {
   actions?: ReactNode;
   onAccount?: () => void;
   onVerify?: (fieldId: string) => void;
+  onDetail?: (fieldId: string) => void;
   // The public page is a document and stays light; the live tab follows the app.
   mode?: ThemeMode;
 };
@@ -34,6 +35,8 @@ const fmtDate = (d: string | null | undefined) => (d ? new Date(d).toLocaleDateS
 const ANCHOR: Record<string, string> = { s1: 'FHEQ 4 · CEFR A2', s2: 'FHEQ 5 · CEFR B1', s3: 'FHEQ 6 · CEFR B2', s4: 'FHEQ 7 · CEFR C1', s5: 'FHEQ 8 · CEFR C2' };
 const rung = (id: string) => `Rung ${stageIdx(id) + 1} of ${STAGES.length}`;
 const fmtScore = (n: number) => (n % 1 ? n.toFixed(1) : String(n));
+// "Martial arts · " before the rung, when the field has a domain of its own.
+const domainOf = (f: { domain?: string; field: string }) => (f.domain && f.domain.toLowerCase() !== f.field.toLowerCase() ? `${f.domain} · ` : '');
 
 export function RecordView(props: Props) {
   if (props.mode) {
@@ -46,7 +49,7 @@ export function RecordView(props: Props) {
   return <Record {...props} />;
 }
 
-function Record({ data, status, code, url, actions, onAccount, onVerify }: Props) {
+function Record({ data, status, code, url, actions, onAccount, onVerify, onDetail }: Props) {
   const { colors, spacing } = useTheme();
   const first = data.name.split(' ')[0] || 'this learner';
   const recallNow = data.totals.recall == null ? null : Math.round(data.totals.recall * 100);
@@ -104,7 +107,7 @@ function Record({ data, status, code, url, actions, onAccount, onVerify }: Props
             leftSub={f.basis}
             right={stageName(f.level)}
             rightSub={[f.score != null && f.asked ? `${fmtScore(f.score)} of ${f.asked}` : '', fmtDate(f.at)].filter(Boolean).join(' · ')}
-            anchor={`${rung(f.level)} · ${ANCHOR[f.level] ?? ''}`}
+            anchor={`${domainOf(f)}${rung(f.level)} · ${ANCHOR[f.level] ?? ''}`}
           />
         )) : <Empty text={live ? 'Nothing shown yet. Verify a field below to put it here.' : 'Nothing shown in a check yet.'} />}
       </Section>
@@ -130,9 +133,9 @@ function Record({ data, status, code, url, actions, onAccount, onVerify }: Props
             leftSub={f.basis}
             right={stageName(f.level)}
             rightSub="self-reported"
-            anchor={rung(f.level)}
+            anchor={`${domainOf(f)}${rung(f.level)}`}
             muted
-            action={live && onVerify ? { label: 'Verify', onPress: () => onVerify(f.id) } : undefined}
+            actions={live ? [...(onVerify ? [{ label: 'Verify', onPress: () => onVerify(f.id) }] : []), ...(onDetail && !f.area ? [{ label: 'Add detail', onPress: () => onDetail(f.id) }] : [])] : []}
           />
         )) : <Empty text={live ? 'Every field has been checked.' : 'Every field listed has been checked.'} />}
       </Section>
@@ -175,7 +178,7 @@ function Section({ title, note, children }: { title: string; note: string; child
   );
 }
 
-function Row({ left, leftSub, right, rightSub, anchor, muted, action }: { left: string; leftSub: string; right: string; rightSub: string; anchor: string; muted?: boolean; action?: { label: string; onPress: () => void } }) {
+function Row({ left, leftSub, right, rightSub, anchor, muted, actions = [] }: { left: string; leftSub: string; right: string; rightSub: string; anchor: string; muted?: boolean; actions?: { label: string; onPress: () => void }[] }) {
   const { colors, spacing } = useTheme();
   return (
     <View style={{ paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border, gap: 2 }}>
@@ -201,12 +204,16 @@ function Row({ left, leftSub, right, rightSub, anchor, muted, action }: { left: 
             {anchor}
           </Text>
         ) : <View style={{ flex: 1 }} />}
-        {action ? (
-          <Pressable onPress={action.onPress} accessibilityRole="button" hitSlop={8}>
-            <Text variant="caption" color="primary" style={{ fontSize: 12 }}>
-              {action.label}
-            </Text>
-          </Pressable>
+        {actions.length ? (
+          <View style={{ flexDirection: 'row', gap: spacing.md }}>
+            {actions.map((a) => (
+              <Pressable key={a.label} onPress={a.onPress} accessibilityRole="button" hitSlop={8}>
+                <Text variant="caption" color="primary" style={{ fontSize: 12 }}>
+                  {a.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
         ) : null}
       </View>
     </View>
