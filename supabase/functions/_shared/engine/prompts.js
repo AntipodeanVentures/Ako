@@ -649,17 +649,18 @@ function lessonDigest(lesson) {
 }
 
 // Placing every topic of every subject on the map at once, so the grouping is consistent across them.
-function schemaPrompt(subjects) {
+function schemaPrompt(subjects, fields) {
   const rows = arr(subjects).slice(0, 12).map((s) => `Subject ${str(s.id, 60)}: "${str(s.title, 120)}"\n` + arr(s.topics).slice(0, 80).map((t) => `  ${str(t.id, 16)}: ${str(t.title, 120)}${str(t.summary) ? ' (' + str(t.summary, 160) + ')' : ''}`).join('\n')).join('\n\n');
+  const inUse = arr(fields).map((f) => str(f, 80)).filter(Boolean).slice(0, 60);
   return `An adult is learning the subjects below on one app. Place every topic in their map of knowledge.
 
-${SCHEMA_RULE}
+${SCHEMA_RULE}${inUse.length ? ' Fields and areas already on their map, to reuse where they fit: ' + inUse.join('; ') + '.' : ''}
 
 Group logically: a field is a discipline, an area is a coherent part of it, and topics that belong together across different subjects get the same field and area. Keep names short (1 to 3 words), in sentence case, consistent, and in plain English.
 
 ${rows}
 
-Return ONLY JSON: {"subjects":[{"id":"<subject id>","topics":[{"id":"t1","schema":["Field","Area"]}]}]}, with every topic listed above present exactly once.`;
+Return ONLY JSON: {"subjects":[{"id":"<subject id, copied exactly as given above>","topics":[{"id":"t1","schema":["Field","Area"]}]}]}. Every subject above appears once with its id copied exactly, and every topic listed above appears exactly once under it. Nothing else.`;
 }
 
 export { METHOD, schemaPrompt, SCHEMA_RULE, checkQuestionsPrompt, checkLessonPrompt, intakePrompt, intakeLines, briefLines, elsewhereLines, adaptPrompt, learnerLines, stageLines, FRAMEWORK_GUIDE, planPrompt, reviewPlanPrompt, knowPrompt, startPrompt, rolePrompt, debriefPrompt, formCheckPrompt, extendPrompt, placementPrompt, warmupPrompt, lessonPrompt, practicePrompt, bridgePrompt, mixedPrompt, morePracticePrompt, gradePrompt, checkPrompt, modelPrompt, tutorRules, lessonDigest };
