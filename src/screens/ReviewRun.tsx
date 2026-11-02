@@ -194,13 +194,13 @@ export function ReviewRun({ items, total, retention, title }: { items: ReviewIte
       if (!ok) return;
     }
     if (then === 'review') router.replace('/review');
-    else router.replace('/learn');
+    else router.replace('/map');
   };
 
   const close = () => {
     if (results.current.pending.length) void leave('learn');
     else if (router.canGoBack()) router.back();
-    else router.replace('/learn');
+    else router.replace('/map');
   };
 
   // ---- the end of the run: teach-back when due, then the summary ----

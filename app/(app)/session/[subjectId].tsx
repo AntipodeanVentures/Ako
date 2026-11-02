@@ -38,7 +38,7 @@ function SessionScreen({ subj, topicId, retention }: { subj: LiveSubject; topicI
   const S = useSession(subj, topicId, retention, invalidate);
   const { s, topic, currentItem } = S;
 
-  const leave = () => (router.canGoBack() ? router.back() : router.replace('/learn'));
+  const leave = () => (router.canGoBack() ? router.back() : router.replace('/map'));
   // Closing part-way through is allowed (the place is kept and offered again
   // from Today), but a stray tap on the cross should not end a lesson, so it
   // asks once. On the Done step there is nothing to lose.
@@ -88,7 +88,7 @@ function SessionScreen({ subj, topicId, retention }: { subj: LiveSubject; topicI
         {s.step === 'drill' && s.lesson?.drill ? <DrillStep S={S} /> : null}
         {s.step === 'practice' ? <PracticeStep S={S} item={currentItem} /> : null}
         {s.step === 'roleplay' ? <RoleplayStep S={S} /> : null}
-        {s.step === 'done' ? <DoneStep S={S} onClose={() => router.replace('/learn')} /> : null}
+        {s.step === 'done' ? <DoneStep S={S} onClose={() => router.replace('/map')} /> : null}
       </View>
     </Screen>
   );

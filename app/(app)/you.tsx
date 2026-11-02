@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { Button, Screen, Segmented, SwitchRow, Text, TextField } from '@/src/components/ui';
@@ -21,10 +21,8 @@ import { STAGES, stageName } from '@/src/engine/ladder';
 import type { StageId } from '@/src/engine/types';
 import { useRouter } from 'expo-router';
 import { VERSION, sendReport } from '@/src/features/reporting';
-import { useInvalidateSubject, useLiveSubjects, useSubjects, useUpdateSubject } from '@/src/features/subjects';
-import { assignSchemas } from '@/src/features/subjects/schema';
+import { useLiveSubjects, useSubjects, useUpdateSubject } from '@/src/features/subjects';
 import { isArchived, liveSubjects } from '@/src/features/subjects/summary';
-import { KnowledgeMap } from '@/src/components/KnowledgeMap';
 import { openLegal } from '@/src/lib/legal';
 import { useTheme, type ThemePreference } from '@/src/theme';
 import type { KnowItemRow, PriorFieldRow } from '@/src/types/database';
@@ -43,8 +41,9 @@ const THEMES: { value: ThemePreference; label: string }[] = [
   { value: 'dark', label: 'Dark' },
 ];
 
-// You: what you already know (which every lesson builds on), your account
-// and its settings, subjects put away, and sign out.
+// Account: what you already know (which every lesson builds on and the
+// record draws from), your name and settings, subjects put away, and sign
+// out. Reached from the record; the map of what you know is the home.
 export default function YouScreen() {
   const { spacing, colors, radius, preference, setPreference } = useTheme();
   const { signOut, session } = useAuth();
@@ -61,12 +60,8 @@ export default function YouScreen() {
   const updateSubject = useUpdateSubject();
   const archived = (subjects.data ?? []).filter(isArchived);
   const live = useLiveSubjects(profile);
-  // Memoised: the map re-settles its layout whenever this array changes.
   const mapped = useMemo(() => liveSubjects(live.subjects), [live.subjects]);
-  const invalidate = useInvalidateSubject();
-  const knowItems = useMemo(() => items.data ?? [], [items.data]);
-  // Topics written before the map existed are placed under their fields once, then the plans reload.
-  const place = useCallback(async () => { await assignSchemas(mapped); invalidate(); }, [mapped, invalidate]);
+  const close = () => (router.canGoBack() ? router.back() : router.replace('/record'));
 
   const [material, setMaterial] = useState('');
   const [proposed, setProposed] = useState<{ summary: string; items: ProposedItem[]; fields: ProposedField[] } | null>(null);
@@ -197,28 +192,19 @@ export default function YouScreen() {
 
   return (
     <Screen scroll>
-      <Text variant="title">You</Text>
-
-      {mapped.length || prior.length ? (
-        <View style={{ marginTop: spacing.xxl, gap: spacing.sm }}>
-          <Text variant="eyebrow" color="textMuted">
-            What you know
-          </Text>
-          <Text variant="body" color="textMuted">
-            Every subject and topic, hanging off what you brought with you. It fades where memory is fading and brightens after a review.
-          </Text>
-          <View style={{ marginTop: spacing.xs }}>
-            <KnowledgeMap subjects={mapped} know={knowItems} prior={prior} retention={Number(profile?.retention ?? 0.9)} onPlace={place} />
-          </View>
-        </View>
-      ) : null}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text variant="title">Account</Text>
+        <Pressable onPress={close} accessibilityRole="button" accessibilityLabel="Close" hitSlop={12} style={{ padding: 4 }}>
+          <Ionicons name="close" size={22} color={colors.textMuted} />
+        </Pressable>
+      </View>
 
       <View style={{ marginTop: spacing.xxl, gap: spacing.sm }}>
         <Text variant="eyebrow" color="textMuted">
           What you already know
         </Text>
         <Text variant="body" color="textMuted">
-          Lessons draw comparisons from this, the planner skips what you can do, and the map hangs new learning off it. Paste your CV or LinkedIn About, or type a few lines: jobs, qualifications, languages, sports, serious hobbies, and anything you know well that is not on paper.
+          Lessons draw comparisons from this, the planner skips what you can do, the map hangs new learning off it, and the record lists it. Paste your CV or LinkedIn About, or type a few lines: jobs, qualifications, languages, sports, serious hobbies, and anything you know well that is not on paper.
         </Text>
       </View>
 

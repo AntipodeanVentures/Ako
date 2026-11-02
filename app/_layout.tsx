@@ -57,6 +57,8 @@ function useRouteGuard() {
     const group = path[0];
     // Development only: fixture-rendered screens for layout checks (app/preview.tsx).
     if (__DEV__ && group === 'preview') return;
+    // A record of knowledge opened by its code is public: no sign-in, no redirect.
+    if (group === 'r') return;
     // The reset link signs the learner in and must stay on its own screen.
     if (group === '(auth)' && path[1] === 'reset-password') return;
     if (!session) {
@@ -66,7 +68,7 @@ function useRouteGuard() {
       // exists, so nothing is lost if they stop here.
       if (group !== '(onboarding)') router.replace('/goal');
     } else if (group !== '(app)' && group !== '(onboarding)') {
-      router.replace('/learn');
+      router.replace('/map');
     }
   }, [
     configured,

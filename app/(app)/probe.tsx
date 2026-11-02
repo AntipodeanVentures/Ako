@@ -39,7 +39,7 @@ export default function ProbeRoute() {
     [entries],
   );
 
-  const close = () => (router.canGoBack() ? router.back() : router.replace('/learn'));
+  const close = () => (router.canGoBack() ? router.back() : router.replace('/map'));
 
   const onMarked = async (results: RunResult[]) => {
     if (!entries) return;
@@ -134,7 +134,7 @@ export default function ProbeRoute() {
           </View>
         ) : null
       }
-      onDone={() => router.replace('/learn')}
+      onDone={() => router.replace('/map')}
     />
   );
 }

@@ -39,10 +39,25 @@ type Props = {
   onPlace?: () => Promise<void>;
   // The dev preview renders without navigation.
   onOpen?: (node: Node) => void;
+  // As a canvas: no frame, no mode switch and no line underneath, the map fills the box it is
+  // given (height) and the screen around it decides what to say about a tapped node (onSelect).
+  canvas?: boolean;
+  height?: number;
+  onSelect?: (node: Node | null) => void;
 };
 
 const MIN_K = 0.5;
 const MAX_K = 6;
+
+// Where a tapped node leads: a subject to its page, a learned topic to its page, a topic not yet
+// learned to a sitting on it.
+export function openNode(router: ReturnType<typeof useRouter>, n: { kind: string; subjectId?: string; topicId?: string; status?: string }) {
+  if (n.kind === 'subject' && n.subjectId) router.push({ pathname: '/subject/[subjectId]', params: { subjectId: n.subjectId } });
+  else if (n.kind === 'topic' && n.subjectId && n.topicId) {
+    const learned = n.status === 'learned' || n.status === 'secure' || n.status === 'practising';
+    router.push(learned ? { pathname: '/topic/[subjectId]/[topicId]', params: { subjectId: n.subjectId, topicId: n.topicId } } : { pathname: '/session/[subjectId]', params: { subjectId: n.subjectId, topicId: n.topicId } });
+  }
+}
 const MODES: { value: Mode; label: string }[] = [
   { value: 'field', label: 'By field' },
   { value: 'subject', label: 'By subject' },
@@ -55,7 +70,7 @@ const MODES: { value: Mode; label: string }[] = [
 // brightness is how likely it is to be recalled right now, so the map fades where memory is
 // fading. Pan with a drag, zoom with a pinch or the buttons, tap a node for its line and a way
 // to open it.
-export function KnowledgeMap({ subjects, know, prior = [], retention = 0.9, onPlace, onOpen }: Props) {
+export function KnowledgeMap({ subjects, know, prior = [], retention = 0.9, onPlace, onOpen, canvas = false, height: givenHeight, onSelect }: Props) {
   const { colors, spacing, radius: rad, typography } = useTheme();
   const reduced = useReducedMotion();
   const router = useRouter();
@@ -68,6 +83,8 @@ export function KnowledgeMap({ subjects, know, prior = [], retention = 0.9, onPl
   viewRef.current = view;
   const startRef = useRef(view);
   const [selected, setSelected] = useState<string | null>(null);
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
 
   const graph = useMemo<Graph>(
     () => (mode === 'field' ? (fieldGraph({ subjects, know, prior, retention }) as Graph) : (knowledgeGraph({ subjects, know, retention }) as Graph)),
@@ -111,7 +128,7 @@ export function KnowledgeMap({ subjects, know, prior = [], retention = 0.9, onPl
   }, [onPlace, graph.placed, placing, subjects.length]);
 
   // The map's own units fit the box at zoom 1; everything else is relative to that.
-  const height = Math.min(size.w, windowWidth > 700 ? 520 : 420) || 360;
+  const height = givenHeight ?? (Math.min(size.w, windowWidth > 700 ? 520 : 420) || 360);
   // A little margin inside the box, so labels at the edge and the zoom buttons do not collide.
   const unit = size.w ? (0.9 * Math.min(size.w, height)) / (layout.extent * 2) : 1;
   const cx = size.w / 2;
@@ -163,14 +180,8 @@ export function KnowledgeMap({ subjects, know, prior = [], retention = 0.9, onPl
   const switchMode = (m: Mode) => { setMode(m); setSelected(null); reset(); };
 
   const sel = selected ? byId.get(selected) : null;
-  const open = (n: Node) => {
-    if (onOpen) return onOpen(n);
-    if (n.kind === 'subject' && n.subjectId) router.push({ pathname: '/subject/[subjectId]', params: { subjectId: n.subjectId } });
-    else if (n.kind === 'topic' && n.subjectId && n.topicId) {
-      const learned = n.status === 'learned' || n.status === 'secure' || n.status === 'practising';
-      router.push(learned ? { pathname: '/topic/[subjectId]/[topicId]', params: { subjectId: n.subjectId, topicId: n.topicId } } : { pathname: '/session/[subjectId]', params: { subjectId: n.subjectId, topicId: n.topicId } });
-    }
-  };
+  useEffect(() => { onSelectRef.current?.(sel ?? null); }, [sel]);
+  const open = (n: Node) => (onOpen ? onOpen(n) : openNode(router, n));
 
   // Lines first, so every node sits on top of them. The selected node's lines are drawn in ink;
   // selecting a field or an area lights everything under it.
@@ -222,10 +233,10 @@ export function KnowledgeMap({ subjects, know, prior = [], retention = 0.9, onPl
 
   return (
     <View style={{ gap: spacing.sm }}>
-      <Segmented options={MODES} value={mode} onChange={switchMode} />
+      {canvas ? null : <Segmented options={MODES} value={mode} onChange={switchMode} />}
       <View
         onLayout={onLayout}
-        style={{ height, borderWidth: 1, borderColor: colors.border, borderRadius: rad.md, overflow: 'hidden', backgroundColor: colors.background }}
+        style={canvas ? { height, overflow: 'hidden', backgroundColor: colors.background } : { height, borderWidth: 1, borderColor: colors.border, borderRadius: rad.md, overflow: 'hidden', backgroundColor: colors.background }}
       >
         {size.w ? (
           <GestureDetector gesture={gesture}>
@@ -400,7 +411,7 @@ export function KnowledgeMap({ subjects, know, prior = [], retention = 0.9, onPl
         </View>
       </View>
 
-      {sel ? (
+      {canvas ? null : sel ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md, borderWidth: 1, borderColor: colors.border, borderRadius: rad.md }}>
           <View style={{ flex: 1, gap: 2 }}>
             <Text variant="bodyStrong" numberOfLines={2}>

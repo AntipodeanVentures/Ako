@@ -328,7 +328,7 @@ export default function PlaceScreen() {
           <>
             <Button
               label={canStart ? 'Start' : 'Writing your path'}
-              onPress={() => router.replace('/learn')}
+              onPress={() => router.replace('/map')}
               loading={!canStart}
             />
             {canStart && current !== 'Complete beginner' && build.subjectId ? (

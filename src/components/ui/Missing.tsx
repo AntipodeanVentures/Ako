@@ -20,7 +20,7 @@ type Props = {
 export function Missing({ loading, title, body }: Props) {
   const { spacing } = useTheme();
   const router = useRouter();
-  const back = () => (router.canGoBack() ? router.back() : router.replace('/learn'));
+  const back = () => (router.canGoBack() ? router.back() : router.replace('/map'));
   return (
     <Screen>
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>

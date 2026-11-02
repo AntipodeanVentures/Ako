@@ -4,25 +4,27 @@ import type { ComponentProps } from 'react';
 import { Platform, Pressable, View, useWindowDimensions } from 'react-native';
 
 import { Text } from '@/src/components/ui';
-import { useTheme } from '@/src/theme';
+import { palettes, useTheme } from '@/src/theme';
 
 // The three tabs. On a phone they fill the width as usual. On a laptop
 // browser the bar keeps its full-width top rule, but the tabs sit in a
-// column no wider than the content above them, so Learn, Path and You are
-// not flung to the corners of a wide window.
+// column no wider than the content above them, so Map, Session and Record
+// are not flung to the corners of a wide window.
 const MAX_WIDTH = 560;
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 const ICONS: Record<string, [IconName, IconName]> = {
-  learn: ['book-outline', 'book'],
-  path: ['reorder-four-outline', 'reorder-four'],
-  you: ['person-outline', 'person'],
+  map: ['git-network-outline', 'git-network'],
+  session: ['play-circle-outline', 'play-circle'],
+  record: ['document-text-outline', 'document-text'],
 };
 
 export function TabBar({ state, descriptors, navigation, insets }: BottomTabBarProps) {
-  const { colors, spacing } = useTheme();
+  const { colors: themed, spacing } = useTheme();
   const { width } = useWindowDimensions();
   const wide = width > MAX_WIDTH + spacing.xl * 2;
+  // The map is a dark canvas whatever the app's mode, and the bar under it matches.
+  const colors = state.routes[state.index]?.name === 'map' ? palettes.dark : themed;
   return (
     <View
       style={{
@@ -62,7 +64,7 @@ export function TabBar({ state, descriptors, navigation, insets }: BottomTabBarP
               })}
             >
               <Ionicons name={focused ? filled : outline} size={22} color={focused ? colors.text : colors.textMuted} />
-              <Text variant="caption" color={focused ? 'text' : 'textMuted'} style={{ fontSize: 11, lineHeight: 14 }}>
+              <Text variant="caption" style={{ fontSize: 11, lineHeight: 14, color: focused ? colors.text : colors.textMuted }}>
                 {label}
               </Text>
             </Pressable>

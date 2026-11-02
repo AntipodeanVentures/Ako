@@ -6,10 +6,13 @@ import { useProfile } from '@/src/features/profile';
 import { useProbeStatus } from '@/src/features/probe';
 import { useOpenSitting } from '@/src/features/session/useOpenSitting';
 import { saveSubject, useInvalidateSubject, useLiveSubjects } from '@/src/features/subjects';
-import { liveSubjects, type nextStep } from '@/src/features/subjects/summary';
+import { routeForStep } from '@/src/features/subjects/start';
+import { liveSubjects } from '@/src/features/subjects/summary';
 import { LearnView, type ApplyPrompt } from '@/src/screens/LearnView';
 
-export default function LearnScreen() {
+// The session: what is next and how long it takes, how today is going, and where each subject
+// stands. The map is the home; this is where the work is listed.
+export default function SessionScreen() {
   const router = useRouter();
   const { profile } = useProfile();
   const all = useLiveSubjects(profile);
@@ -31,16 +34,6 @@ export default function LearnScreen() {
     saveSubject(p.subject).then(() => invalidate()).catch(() => {});
   };
 
-  const start = (step: ReturnType<typeof nextStep>) => {
-    if (step.kind === 'resume') router.push({ pathname: '/session/[subjectId]', params: { subjectId: step.subject.id, topicId: step.topic.id } });
-    else if (step.kind === 'review') router.push('/review');
-    else if (step.kind === 'probe') router.push('/probe');
-    else if (step.kind === 'mixed') router.push({ pathname: '/mixed/[subjectId]', params: { subjectId: step.subject.id } });
-    else if (step.kind === 'check') router.push({ pathname: '/check/[subjectId]', params: { subjectId: step.subject.id, stageId: step.stageId } });
-    else if (step.kind === 'topic') router.push({ pathname: '/session/[subjectId]', params: { subjectId: step.subject.id, topicId: step.topic.id } });
-    else router.push('/goal');
-  };
-
   return (
     <LearnView
       subjects={subjects}
@@ -48,7 +41,7 @@ export default function LearnScreen() {
       extras={{ probe, resume }}
       apply={apply}
       onApply={answerApply}
-      onStart={start}
+      onStart={(step) => routeForStep(router, step)}
       onOpenSubject={(subjectId) => router.push({ pathname: '/subject/[subjectId]', params: { subjectId } })}
       onAddSubject={() => router.push('/goal')}
     />

@@ -116,7 +116,7 @@ function VerifyScreen({ field }: { field: PriorFieldRow }) {
     }
   };
 
-  const close = () => (router.canGoBack() ? router.back() : router.replace('/you'));
+  const close = () => (router.canGoBack() ? router.back() : router.replace('/record'));
 
   if (grades && questions && result) {
     const claimed = stageName(field.level);
@@ -172,7 +172,7 @@ function VerifyScreen({ field }: { field: PriorFieldRow }) {
             <View style={{ borderTopWidth: 1, borderTopColor: colors.border }} />
           </View>
 
-          <Button label="Back to You" onPress={() => router.replace('/you')} />
+          <Button label="Back to the record" onPress={() => router.replace('/record')} />
         </View>
       </Screen>
     );

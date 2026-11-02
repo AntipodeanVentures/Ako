@@ -5,14 +5,17 @@ import { ScrollView, View } from 'react-native';
 
 import { KnowledgeMap } from '@/src/components/KnowledgeMap';
 import { TabBar } from '@/src/components/TabBar';
-import { Screen, Text } from '@/src/components/ui';
+import { Button, Screen, Text } from '@/src/components/ui';
 import { makeCards } from '@/src/engine/scheduling';
 import type { Plan } from '@/src/engine/types';
+import { buildRecord } from '@/src/features/record';
 import { buildSubject, type LiveSubject } from '@/src/features/subjects';
 import { planPortuguese } from '@/src/engine/fixtures';
 import { seedBuildForPreview } from '@/src/features/subjects/planBuilder';
 import { LearnView } from '@/src/screens/LearnView';
+import { MapHome } from '@/src/screens/MapHome';
 import { SubjectPath } from '@/src/screens/PathView';
+import { RecordView } from '@/src/screens/RecordView';
 import { ReviewRun } from '@/src/screens/ReviewRun';
 import { DoneStep, LearnStep, PracticeStep, RecallStep, StepStrip, WarmStep, type SessionApi } from '@/src/screens/SessionSteps';
 import { useTheme } from '@/src/theme';
@@ -224,7 +227,7 @@ export default function PreviewScreen() {
     );
   }
   if (screen === 'subject') return <SubjectScreen subj={subj} />;
-  if (screen === 'map') {
+  if (screen === 'map' || screen === 'home' || screen === 'record' || screen === 'public') {
     // Three subjects at different stages, two planned on each other, and a few fields the learner brought.
     const second = fixtureSubject();
     second.id = 'fixture-2';
@@ -246,6 +249,10 @@ export default function PreviewScreen() {
     });
     state[third.plan.topics[4].id] = { status: 'learning', attempts: 1 };
     (subj.topicState as Record<string, { bridge?: unknown }>).p1 = { ...(subj.topicState.p1 as object), bridge: { field: 'Brazilian jiu-jitsu' } };
+    // A pace a daily slot can hold, so the session's promised minutes are representative.
+    subj.stats = { ...subj.stats, lessonMinutes: 28 };
+    // The Portuguese cards were learned a while ago, so their recall is a real number rather than fresh.
+    subj.cards = subj.plan.topics.slice(0, 2).flatMap((t, i) => makeCards(t, [{ front: 'q', back: 'a', concept: 0 }, { front: 'q2', back: 'a2', concept: 0 }], 3, 0.9, Date.now() - [26, 9][i] * day));
     // Fields and areas, as the planner would set them: the two language subjects share a field.
     const langAreas = ['Sounds', 'Greetings', 'Verbs', 'Verbs', 'Verbs', 'Vocabulary'];
     subj.plan.topics.forEach((t, i) => { t.schema = ['Portuguese', langAreas[i] ?? 'Vocabulary']; });
@@ -293,12 +300,18 @@ export default function PreviewScreen() {
         })
       : [subj, second, third];
     const prior = [
-      { id: 'p1', field: 'Aviation', area: 'Navigation', level: 's3', basis: 'CPL, 1,500 hours', verified_level: 's3' },
+      { id: 'p1', field: 'Aviation', area: 'Navigation', level: 's3', basis: 'CPL, 1,500 hours', verified_level: 's3', verified_at: '2026-10-14T09:00:00Z', verified: { score: 8, asked: 10 } },
       { id: 'p2', field: 'Aviation', area: 'Aircraft performance', level: 's3', basis: 'CPL', verified_level: null },
       { id: 'p3', field: 'Finance', area: 'Structured lending', level: 's4', basis: '10 years in banking', verified_level: null },
-      { id: 'p4', field: 'Jiu-jitsu', area: '', level: 's2', basis: 'brown belt', verified_level: 's2' },
+      { id: 'p4', field: 'Jiu-jitsu', area: '', level: 's2', basis: 'brown belt', verified_level: 's2', verified_at: '2026-10-21T18:30:00Z', verified: { score: 5.5, asked: 6 } },
     ];
     for (const s of many) { const t0 = s.plan.topics[0]; const st = s.topicState as Record<string, { bridge?: unknown; priorScore?: number }>; if (st[t0.id]) st[t0.id] = { ...st[t0.id], bridge: { field: 'aircraft performance' }, priorScore: 1 }; }
+    // The two screens that carry the thesis: the map as the home, and the record as a document
+    // (live in the app, and public under its code).
+    if (screen === 'home') return <MapHome subjects={many} know={know} prior={prior} onNav={() => {}} onOpen={() => {}} />;
+    const record = buildRecord({ name: 'Stuart Pearson', subjects: many, prior });
+    if (screen === 'record') return <RecordView data={record} status="live" code="KQ4M-7PXT" url="https://ako-eight.vercel.app/r/KQ4M-7PXT" onAccount={() => {}} onVerify={() => {}} actions={<Button label="Share the link" onPress={() => {}} />} />;
+    if (screen === 'public') return <RecordView data={record} status="public" code="KQ4M-7PXT" url="https://ako-eight.vercel.app/r/KQ4M-7PXT" mode="light" />;
     return (
       <Screen scroll>
         <Text variant="title">You</Text>
@@ -313,9 +326,9 @@ export default function PreviewScreen() {
   }
   if (screen === 'tabs') {
     // The tab bar on its own, under the Learn screen, to check its width on a laptop.
-    const routes = [{ key: 'learn', name: 'learn' }, { key: 'path', name: 'path' }, { key: 'you', name: 'you' }];
+    const routes = [{ key: 'map', name: 'map' }, { key: 'session', name: 'session' }, { key: 'record', name: 'record' }];
     const props = {
-      state: { index: 0, routes },
+      state: { index: 1, routes },
       descriptors: Object.fromEntries(routes.map((r) => [r.key, { options: { title: r.name[0].toUpperCase() + r.name.slice(1) } }])),
       navigation: { emit: () => ({ defaultPrevented: false }), navigate: () => {} },
       insets: { top: 0, bottom: 0, left: 0, right: 0 },
@@ -337,7 +350,7 @@ export default function PreviewScreen() {
     <ScrollView contentContainerStyle={{ padding: spacing.xl, gap: spacing.md }}>
       <Text variant="title">Preview</Text>
       <View style={{ gap: spacing.xs }}>
-        {['learn', 'empty', 'path', 'subject', 'tabs', 'map', 'goal', 'place', 'review', 'session&step=warm', 'session&step=learn', 'session&step=recall', 'session&step=practice', 'session&step=practice-marked', 'session&step=done'].map((s) => (
+        {['learn', 'empty', 'path', 'subject', 'tabs', 'map', 'home', 'home&dense=1', 'record', 'record&dense=1', 'public', 'goal', 'place', 'review', 'session&step=warm', 'session&step=learn', 'session&step=recall', 'session&step=practice', 'session&step=practice-marked', 'session&step=done'].map((s) => (
           <Text key={s} variant="body">
             /preview?screen={s}
           </Text>
