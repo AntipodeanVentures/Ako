@@ -1,3 +1,4 @@
+import { StatusBar } from 'expo-status-bar';
 import { useMemo, useState } from 'react';
 import { Pressable, View, type LayoutChangeEvent } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,8 +17,7 @@ import { ThemeProvider, useTheme } from '@/src/theme';
 
 type KnowItem = { id: string; kind: string; title: string; detail?: string };
 type PriorField = { id: string; field: string; area: string; level: string; basis: string; verified_level: string | null };
-type MapNode = { id: string; kind: string; label: string; status?: string; recall?: number | null; field?: string; area?: string; prior?: { verifiedLevel: string | null } };
-type Selected = { label: string; line: string } | null;
+type MapNode = { id: string; kind: string; label: string; status?: string; recall?: number | null; field?: string; area?: string; subjectId?: string; topicId?: string; prior?: { verifiedLevel: string | null } };
 
 type Props = {
   subjects: LiveSubject[];
@@ -25,7 +25,16 @@ type Props = {
   prior: PriorField[];
   retention?: number;
   now?: Date;
+  // What the Start button says, when the screen knows better than the map (a sitting to resume,
+  // a level check due); otherwise the map's own estimate.
+  startLabel?: string;
+  line?: string;
   onStart?: () => void;
+  // Opens a subject or a topic tapped on the map.
+  onOpen?: (node: MapNode) => void;
+  // Places topics the planner has not put under a field yet (see KnowledgeMap).
+  onPlace?: () => Promise<void>;
+  // The dev preview draws its own tab row; in the app the tab bar is underneath.
   onNav?: (to: 'map' | 'session' | 'record') => void;
 };
 
@@ -60,7 +69,7 @@ export function todayOnMap(subjects: LiveSubject[], know: KnowItem[], prior: Pri
   const parts: string[] = [];
   if (fading.length) parts.push(`${count(fading.length, 'idea', 'ideas')} fading in ${where(fading)}`);
   if (fresh.length) parts.push(`${parts.length ? count(Math.min(fresh.length, 2), 'new', 'new') : count(Math.min(fresh.length, 2), 'new idea', 'new ideas')} in ${where(fresh.slice(0, 2))}`);
-  const line = parts.length ? parts.join(', ') : held.length ? 'Nothing is fading and nothing is due.' : 'Add a subject to begin.';
+  const line = parts.length ? parts.join(', ') : held.length ? 'Nothing is fading and nothing is due.' : subjects.length ? 'Nothing due right now.' : 'Add a subject to begin.';
   return {
     line: line.charAt(0).toUpperCase() + line.slice(1) + (/[.!?]$/.test(line) ? '' : '.'),
     minutes,
@@ -79,16 +88,18 @@ export function MapHome(props: Props) {
   );
 }
 
-function Home({ subjects, know, prior, retention = 0.9, now = new Date(), onStart, onNav }: Props) {
+function Home({ subjects, know, prior, retention = 0.9, now = new Date(), startLabel, line, onStart, onOpen, onPlace, onNav }: Props) {
   const { colors, spacing } = useTheme();
   const [mapHeight, setMapHeight] = useState(0);
-  const [sel, setSel] = useState<Selected>(null);
+  const [sel, setSel] = useState<MapNode | null>(null);
   const today = useMemo(() => todayOnMap(subjects, know, prior, retention), [subjects, know, prior, retention]);
   const date = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
   const onMapLayout = (e: LayoutChangeEvent) => { const h = Math.round(e.nativeEvent.layout.height); if (h && h !== mapHeight) setMapHeight(h); };
+  const openable = sel && onOpen && ((sel.kind === 'topic' && sel.topicId) || sel.kind === 'subject');
 
   return (
-    <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: colors.background }}>
+    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.background }}>
+      <StatusBar style="light" />
       <View style={{ paddingHorizontal: spacing.xl, paddingTop: spacing.md, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <Logo size={20} />
         <Text variant="caption" color="textMuted">
@@ -106,38 +117,49 @@ function Home({ subjects, know, prior, retention = 0.9, now = new Date(), onStar
       {/* The map fills whatever is left between the numbers and the session. */}
       <View style={{ flex: 1, marginTop: spacing.sm }} onLayout={onMapLayout}>
         {mapHeight ? (
-          <KnowledgeMap subjects={subjects} know={know} prior={prior} retention={retention} canvas height={mapHeight} onSelect={(n) => setSel(n ? { label: n.label, line: nodeLine(n) } : null)} onOpen={() => {}} />
+          <KnowledgeMap subjects={subjects} know={know} prior={prior} retention={retention} canvas height={mapHeight} onSelect={(n) => setSel(n as MapNode | null)} onOpen={onOpen ?? (() => {})} onPlace={onPlace} />
         ) : null}
       </View>
 
       {/* Today: what the session does to the map, and one button. A tapped node takes the line over. */}
-      <View style={{ paddingHorizontal: spacing.xl, paddingTop: spacing.lg, paddingBottom: spacing.md, gap: spacing.md, borderTopWidth: 1, borderTopColor: colors.border }}>
+      <View style={{ paddingHorizontal: spacing.xl, paddingTop: spacing.lg, paddingBottom: spacing.lg, gap: spacing.md, borderTopWidth: 1, borderTopColor: colors.border }}>
         <View style={{ gap: spacing.xs }}>
-          <Text variant="eyebrow" color="textMuted">
-            {sel ? 'On the map' : 'Today'}
-          </Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
+            <Text variant="eyebrow" color="textMuted">
+              {sel ? 'On the map' : 'Today'}
+            </Text>
+            {openable ? (
+              <Pressable onPress={() => onOpen?.(sel)} accessibilityRole="button" hitSlop={8}>
+                <Text variant="caption" color="text">
+                  Open
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
           <Text variant="subtitle" numberOfLines={3}>
-            {sel ? sel.label : today.line}
+            {sel ? sel.label : line ?? today.line}
           </Text>
           {sel ? (
             <Text variant="caption" color="textMuted">
-              {sel.line}
+              {nodeLine(sel)}
             </Text>
           ) : null}
         </View>
-        <Button label={today.minutes ? `Start · ${today.minutes} min` : 'Start'} onPress={onStart ?? (() => {})} />
+        <Button label={startLabel ?? (today.minutes ? `Start · ${today.minutes} min` : 'Start')} onPress={onStart ?? (() => {})} />
       </View>
 
-      {/* Three places: the map, the session, the record. */}
-      <View style={{ flexDirection: 'row', borderTopWidth: 1, borderTopColor: colors.border }}>
-        {(['map', 'session', 'record'] as const).map((to) => (
-          <Pressable key={to} onPress={() => onNav?.(to)} accessibilityRole="tab" accessibilityState={{ selected: to === 'map' }} style={{ flex: 1, paddingVertical: spacing.md, alignItems: 'center' }}>
-            <Text variant="caption" color={to === 'map' ? 'text' : 'textMuted'}>
-              {to === 'map' ? 'Map' : to === 'session' ? 'Session' : 'Record'}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
+      {/* Three places: the map, the session, the record (the dev preview only; the app has its tab bar). */}
+      {onNav ? (
+        <View style={{ flexDirection: 'row', borderTopWidth: 1, borderTopColor: colors.border }}>
+          {(['map', 'session', 'record'] as const).map((to) => (
+            <Pressable key={to} onPress={() => onNav(to)} accessibilityRole="tab" accessibilityState={{ selected: to === 'map' }} style={{ flex: 1, paddingVertical: spacing.md, alignItems: 'center' }}>
+              <Text variant="caption" color={to === 'map' ? 'text' : 'textMuted'}>
+                {to === 'map' ? 'Map' : to === 'session' ? 'Session' : 'Record'}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }

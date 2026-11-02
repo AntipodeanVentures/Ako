@@ -53,7 +53,7 @@ export default function MixedRoute() {
       .catch((e) => setError(aiErrorCopy(e)));
   }, [subj, topics]);
 
-  const close = () => (router.canGoBack() ? router.back() : router.replace('/learn'));
+  const close = () => (router.canGoBack() ? router.back() : router.replace('/map'));
 
   const onMarked = async (results: RunResult[]) => {
     if (!subj || !questions) return;
@@ -118,7 +118,7 @@ export default function MixedRoute() {
           </View>
         ) : null
       }
-      onDone={() => router.replace('/learn')}
+      onDone={() => router.replace('/map')}
     />
   );
 }

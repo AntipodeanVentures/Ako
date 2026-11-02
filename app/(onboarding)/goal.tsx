@@ -87,8 +87,8 @@ export default function GoalScreen() {
         </View>
 
         {hasSubjects ? (
-          <Pressable onPress={() => router.replace('/learn')} style={{ alignSelf: 'center' }}>
-            <Text variant="bodyStrong">Back to today</Text>
+          <Pressable onPress={() => router.replace('/map')} style={{ alignSelf: 'center' }}>
+            <Text variant="bodyStrong">Back to the map</Text>
           </Pressable>
         ) : null}
       </View>

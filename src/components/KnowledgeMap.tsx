@@ -48,6 +48,16 @@ type Props = {
 
 const MIN_K = 0.5;
 const MAX_K = 6;
+
+// Where a tapped node leads: a subject to its page, a learned topic to its page, a topic not yet
+// learned to a sitting on it.
+export function openNode(router: ReturnType<typeof useRouter>, n: { kind: string; subjectId?: string; topicId?: string; status?: string }) {
+  if (n.kind === 'subject' && n.subjectId) router.push({ pathname: '/subject/[subjectId]', params: { subjectId: n.subjectId } });
+  else if (n.kind === 'topic' && n.subjectId && n.topicId) {
+    const learned = n.status === 'learned' || n.status === 'secure' || n.status === 'practising';
+    router.push(learned ? { pathname: '/topic/[subjectId]/[topicId]', params: { subjectId: n.subjectId, topicId: n.topicId } } : { pathname: '/session/[subjectId]', params: { subjectId: n.subjectId, topicId: n.topicId } });
+  }
+}
 const MODES: { value: Mode; label: string }[] = [
   { value: 'field', label: 'By field' },
   { value: 'subject', label: 'By subject' },
@@ -171,14 +181,7 @@ export function KnowledgeMap({ subjects, know, prior = [], retention = 0.9, onPl
 
   const sel = selected ? byId.get(selected) : null;
   useEffect(() => { onSelectRef.current?.(sel ?? null); }, [sel]);
-  const open = (n: Node) => {
-    if (onOpen) return onOpen(n);
-    if (n.kind === 'subject' && n.subjectId) router.push({ pathname: '/subject/[subjectId]', params: { subjectId: n.subjectId } });
-    else if (n.kind === 'topic' && n.subjectId && n.topicId) {
-      const learned = n.status === 'learned' || n.status === 'secure' || n.status === 'practising';
-      router.push(learned ? { pathname: '/topic/[subjectId]/[topicId]', params: { subjectId: n.subjectId, topicId: n.topicId } } : { pathname: '/session/[subjectId]', params: { subjectId: n.subjectId, topicId: n.topicId } });
-    }
-  };
+  const open = (n: Node) => (onOpen ? onOpen(n) : openNode(router, n));
 
   // Lines first, so every node sits on top of them. The selected node's lines are drawn in ink;
   // selecting a field or an area lights everything under it.

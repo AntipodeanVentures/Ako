@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
@@ -11,6 +12,7 @@ import { useTheme } from '@/src/theme';
 
 // The ladder is the page: where you stand, what the next level means for
 // this subject, when it is expected, and every topic with its state.
+// Opened from a subject's page; the map is the home.
 export default function PathScreen() {
   const { colors, radius, spacing } = useTheme();
   const router = useRouter();
@@ -25,10 +27,22 @@ export default function PathScreen() {
     if (subjectId) setPicked(subjectId);
   }, [subjectId]);
   const subj = subjects.find((s) => s.id === picked) || subjects[0];
+  const back = () => (router.canGoBack() ? router.back() : router.replace('/map'));
+  const header = (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.lg }}>
+      <Pressable onPress={back} accessibilityRole="button" accessibilityLabel="Back" hitSlop={12} style={{ padding: 4, marginLeft: -4 }}>
+        <Ionicons name="chevron-back" size={22} color={colors.textMuted} />
+      </Pressable>
+      <Text variant="eyebrow" color="textMuted">
+        Path
+      </Text>
+    </View>
+  );
 
   if (!loading && !subj) {
     return (
       <Screen scroll>
+        {header}
         <Text variant="title">Path</Text>
         <View style={{ marginTop: spacing.xl }}>
           <EmptyState title="No subject yet" body="Your levels, outcomes and expected dates appear here." />
@@ -54,6 +68,7 @@ export default function PathScreen() {
 
   return (
     <Screen scroll>
+      {header}
       {subjects.length > 1 ? (
         // Subject titles are long, so the switcher is a row of chips sized
         // to their text that scrolls sideways, rather than equal cells that

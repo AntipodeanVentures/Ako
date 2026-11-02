@@ -32,7 +32,7 @@ type Props = {
 };
 
 // The one button's label: what it starts, and about how long it takes.
-function startLabel(step: ReturnType<typeof nextStep>): string {
+export function startLabel(step: ReturnType<typeof nextStep>): string {
   const base =
     step.kind === 'resume'
       ? 'Continue'
@@ -102,7 +102,7 @@ function subline(step: ReturnType<typeof nextStep>, line: string): string {
 
 // The daily screen: what is next and how long it takes, one button, how
 // today is going, and where each subject stands. Pure presentation;
-// app/(app)/(tabs)/learn.tsx feeds it, and the dev preview renders it with
+// app/(app)/(tabs)/session.tsx feeds it, and the dev preview renders it with
 // fixtures.
 export function LearnView({ subjects, loading, extras = {}, apply, onApply, onStart, onOpenSubject, onAddSubject }: Props) {
   const { colors, spacing, radius } = useTheme();

@@ -172,7 +172,7 @@ function CheckScreen({ subj, stageId }: { subj: LiveSubject; stageId: StageId })
     }
   };
 
-  const close = () => (router.canGoBack() ? router.back() : router.replace('/learn'));
+  const close = () => (router.canGoBack() ? router.back() : router.replace('/map'));
 
   // ---- results ----
   if (grades && questions) {
@@ -251,7 +251,7 @@ function CheckScreen({ subj, stageId }: { subj: LiveSubject; stageId: StageId })
             <View style={{ borderTopWidth: 1, borderTopColor: colors.border }} />
           </View>
 
-          <Button label="Back to today" onPress={() => router.replace('/learn')} disabled={Boolean(busy)} />
+          <Button label="Back to the map" onPress={() => router.replace('/map')} disabled={Boolean(busy)} />
         </View>
       </Screen>
     );

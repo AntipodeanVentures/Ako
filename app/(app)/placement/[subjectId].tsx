@@ -133,7 +133,7 @@ function PlacementScreen({ subj }: { subj: LiveSubject }) {
     }
   };
 
-  const close = () => (router.canGoBack() ? router.back() : router.replace('/learn'));
+  const close = () => (router.canGoBack() ? router.back() : router.replace('/map'));
 
   if (grades && questions) {
     const score = grades.reduce((n, x) => n + x.score, 0);
@@ -179,7 +179,7 @@ function PlacementScreen({ subj }: { subj: LiveSubject }) {
             <View style={{ borderTopWidth: 1, borderTopColor: colors.border }} />
           </View>
 
-          <Button label="Back to today" onPress={() => router.replace('/learn')} />
+          <Button label="Back to the map" onPress={() => router.replace('/map')} />
         </View>
       </Screen>
     );

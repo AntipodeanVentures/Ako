@@ -49,6 +49,17 @@ export type PriorFieldRow = {
   updated_at: string;
 };
 
+// A record of knowledge the learner issued under a code. The snapshot is the record's content
+// at the moment it was issued (src/features/record/build.ts). See supabase/migrations/0014_records.sql.
+export type RecordRow = {
+  code: string;
+  profile_id: string;
+  name: string;
+  snapshot: Record<string, unknown>;
+  issued_at: string;
+  revoked_at: string | null;
+};
+
 export type SubjectRow = {
   id: string;
   profile_id: string;

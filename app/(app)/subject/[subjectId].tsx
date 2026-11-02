@@ -34,7 +34,7 @@ export default function SubjectRoute() {
             <Skeleton height={20} width="80%" />
           </View>
         ) : (
-          <NotFound onBack={() => (router.canGoBack() ? router.back() : router.replace('/learn'))} />
+          <NotFound onBack={() => (router.canGoBack() ? router.back() : router.replace('/map'))} />
         )}
       </Screen>
     );
@@ -50,7 +50,7 @@ function NotFound({ onBack }: { onBack: () => void }) {
       <Text variant="body" color="textMuted">
         It may have been deleted on another device.
       </Text>
-      <Button label="Back to today" onPress={onBack} fullWidth={false} variant="secondary" />
+      <Button label="Back to the map" onPress={onBack} fullWidth={false} variant="secondary" />
     </View>
   );
 }
@@ -105,7 +105,7 @@ export function SubjectScreen({ subj }: { subj: LiveSubject }) {
     setError(null);
     try {
       await update.mutateAsync({ id: subj.id, stats: { ...subj.stats, archived: on } });
-      if (on) router.replace('/learn');
+      if (on) router.replace('/map');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save. Check your connection and try again.');
     }
@@ -115,7 +115,7 @@ export function SubjectScreen({ subj }: { subj: LiveSubject }) {
     setError(null);
     try {
       await remove.mutateAsync(subj.id);
-      router.replace('/learn');
+      router.replace('/map');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not delete. Check your connection and try again.');
     }
@@ -124,7 +124,7 @@ export function SubjectScreen({ subj }: { subj: LiveSubject }) {
   return (
     <Screen scroll>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace('/learn'))} accessibilityRole="button" accessibilityLabel="Back" hitSlop={12} style={{ padding: 4 }}>
+        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace('/map'))} accessibilityRole="button" accessibilityLabel="Back" hitSlop={12} style={{ padding: 4 }}>
           <Ionicons name="arrow-back" size={22} color={colors.text} />
         </Pressable>
         {!editing ? (
